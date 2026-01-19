@@ -183,4 +183,43 @@ const googleLogin = async (req, res) => {
     }
 };
 
-module.exports = { loginUser, getMe, registerOwner, googleLogin };
+// @desc    Get public college details by slug
+// @route   GET /api/auth/college/:slug
+// @access  Public
+const getCollegeBySlug = async (req, res) => {
+    try {
+        const slug = req.params.slug;
+        const collegesRef = db.collection('colleges');
+        // Assuming slug matches doc ID or we query by 'slug' field
+
+        // Strategy 1: If doc ID IS the slug (which we did in ownerController)
+        let doc = await collegesRef.doc(slug).get();
+
+        // Strategy 2: If doc ID is distinct, query by slug field
+        if (!doc.exists) {
+            const snapshot = await collegesRef.where('slug', '==', slug).limit(1).get();
+            if (!snapshot.empty) {
+                doc = snapshot.docs[0];
+            }
+        }
+
+        if (doc.exists) {
+            const data = doc.data();
+            // Return only public info
+            res.json({
+                collegeId: data.collegeId, // keeping consistent with schema
+                collegeName: data.collegeName,
+                slug: data.slug,
+                logo: data.logo || null, // placeholder if we add logos later
+                status: data.status
+            });
+        } else {
+            res.status(404).json({ message: 'Organization not found' });
+        }
+    } catch (error) {
+        console.error("Get College By Slug Error:", error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
+module.exports = { loginUser, getMe, registerOwner, googleLogin, getCollegeBySlug };
