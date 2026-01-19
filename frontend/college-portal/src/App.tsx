@@ -1,13 +1,18 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
+import Home from './pages/Home';
+import FindOrganization from './pages/FindOrganization';
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Redirect root to a generic login or specific org if known (for now generic) */}
-        <Route path="/" element={<div className="h-screen flex items-center justify-center">Please use your Organization URL</div>} />
+        {/* Home Page */}
+        <Route path="/" element={<Home />} />
+
+        {/* Find Organization */}
+        <Route path="/find-organization" element={<FindOrganization />} />
 
         {/* Dynamic Organization Login */}
         <Route path="/:orgSlug/login" element={<Login />} />

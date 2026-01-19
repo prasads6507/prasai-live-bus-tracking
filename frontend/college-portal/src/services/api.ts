@@ -31,4 +31,10 @@ export const getBuses = async () => {
     return response.data;
 };
 
+// Search Organizations
+export const searchOrganizations = async (query: string) => {
+    const response = await api.get('/auth/colleges/search', { params: { q: query } });
+    return response.data;
+};
+
 export default api;

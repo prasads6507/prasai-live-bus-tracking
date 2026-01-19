@@ -222,4 +222,45 @@ const getCollegeBySlug = async (req, res) => {
     }
 };
 
-module.exports = { loginUser, getMe, registerOwner, googleLogin, getCollegeBySlug };
+};
+
+// @desc    Search colleges by name
+// @route   GET /api/auth/colleges/search?q=query
+// @access  Public
+const searchColleges = async (req, res) => {
+    try {
+        const query = req.query.q || '';
+
+        if (query.trim().length < 2) {
+            return res.json([]);
+        }
+
+        const collegesRef = db.collection('colleges');
+
+        // Firestore doesn't support full-text search, so we fetch all and filter
+        // For production, consider using Algolia or similar for better performance
+        const snapshot = await collegesRef.where('status', '==', 'ACTIVE').get();
+
+        const results = [];
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            // Case-insensitive partial match
+            if (data.collegeName && data.collegeName.toLowerCase().includes(query.toLowerCase())) {
+                results.push({
+                    collegeId: data.collegeId,
+                    collegeName: data.collegeName,
+                    slug: data.slug,
+                    status: data.status
+                });
+            }
+        });
+
+        // Limit to 10 results
+        res.json(results.slice(0, 10));
+    } catch (error) {
+        console.error("Search Colleges Error:", error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
+module.exports = { loginUser, getMe, registerOwner, googleLogin, getCollegeBySlug, searchColleges };
