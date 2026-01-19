@@ -11,4 +11,3 @@ router.get('/colleges/search', authController.searchColleges);
 router.get('/me', protect, authController.getMe);
 
 module.exports = router;
-```

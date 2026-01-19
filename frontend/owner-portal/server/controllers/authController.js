@@ -222,8 +222,6 @@ const getCollegeBySlug = async (req, res) => {
     }
 };
 
-};
-
 // @desc    Search colleges by name
 // @route   GET /api/auth/colleges/search?q=query
 // @access  Public
