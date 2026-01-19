@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Bus, Search, MapPin, Shield, ArrowRight, Users, Clock } from 'lucide-react';
+import { Bus, Search, MapPin, ArrowRight, Users, Clock } from 'lucide-react';
 
 const Home = () => {
     const navigate = useNavigate();
