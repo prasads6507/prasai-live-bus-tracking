@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-    baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3001/api', // Hardcoded for now, should be env var
+    baseURL: '/api', // Relative path for self-contained deployment
 });
 
 // Add a request interceptor to attach the token
