@@ -19,7 +19,10 @@ console.log("Firebase Mode: Database connection handled via Admin SDK");
 
 // Middleware
 app.use(helmet());
-app.use(cors());
+app.use(cors({
+    origin: process.env.CORS_ORIGIN || '*',
+    credentials: true
+}));
 app.use(express.json());
 
 // Rate Limiting

@@ -1,8 +1,5 @@
-const Bus = require('../models/Bus');
-const Route = require('../models/Route');
-const Stop = require('../models/Stop');
-const User = require('../models/User');
-const Assignment = require('../models/Assignment');
+const { db } = require('../config/firebase');
+const bcrypt = require('bcryptjs');
 
 // --- BUSES ---
 
@@ -13,14 +10,19 @@ const createBus = async (req, res) => {
     const { busNumber, plateNumber, capacity } = req.body;
 
     try {
-        const bus = await Bus.create({
-            busId: 'bus-' + Date.now(),
-            collegeId: req.collegeId, // Enforced by tenantMiddleware
+        const busId = 'bus-' + Date.now();
+        const newBus = {
+            busId,
+            collegeId: req.collegeId,
             busNumber,
             plateNumber,
-            capacity
-        });
-        res.status(201).json(bus);
+            capacity: capacity || 0,
+            status: 'ACTIVE',
+            createdAt: new Date().toISOString()
+        };
+
+        await db.collection('buses').doc(busId).set(newBus);
+        res.status(201).json({ _id: busId, ...newBus });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
@@ -28,7 +30,10 @@ const createBus = async (req, res) => {
 
 const getBuses = async (req, res) => {
     try {
-        const buses = await Bus.find({ collegeId: req.collegeId });
+        const snapshot = await db.collection('buses')
+            .where('collegeId', '==', req.collegeId)
+            .get();
+        const buses = snapshot.docs.map(doc => ({ _id: doc.id, ...doc.data() }));
         res.json(buses);
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -41,32 +46,40 @@ const getBuses = async (req, res) => {
 // @route   POST /api/admin/routes
 // @access  Private (College Admin)
 const createRoute = async (req, res) => {
-    const { routeName, startPoint, endPoint, stops } = req.body; // stops is array of logic objects
+    const { routeName, startPoint, endPoint, stops } = req.body;
 
     try {
         const routeId = 'route-' + Date.now();
-        const route = await Route.create({
+        const newRoute = {
             routeId,
             collegeId: req.collegeId,
             routeName,
             startPoint,
-            endPoint
-        });
+            endPoint,
+            createdAt: new Date().toISOString()
+        };
+
+        const batch = db.batch();
+        batch.set(db.collection('routes').doc(routeId), newRoute);
 
         if (stops && stops.length > 0) {
-            const stopDocs = stops.map((stop, index) => ({
-                stopId: 'stop-' + Date.now() + '-' + index,
-                collegeId: req.collegeId,
-                routeId: routeId,
-                stopName: stop.stopName,
-                latitude: stop.latitude,
-                longitude: stop.longitude,
-                order: index + 1
-            }));
-            await Stop.insertMany(stopDocs);
+            stops.forEach((stop, index) => {
+                const stopId = 'stop-' + Date.now() + '-' + index;
+                const stopData = {
+                    stopId,
+                    collegeId: req.collegeId,
+                    routeId,
+                    stopName: stop.stopName,
+                    latitude: stop.latitude,
+                    longitude: stop.longitude,
+                    order: index + 1
+                };
+                batch.set(db.collection('stops').doc(stopId), stopData);
+            });
         }
 
-        res.status(201).json(route);
+        await batch.commit();
+        res.status(201).json({ _id: routeId, ...newRoute });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
@@ -74,7 +87,10 @@ const createRoute = async (req, res) => {
 
 const getRoutes = async (req, res) => {
     try {
-        const routes = await Route.find({ collegeId: req.collegeId });
+        const snapshot = await db.collection('routes')
+            .where('collegeId', '==', req.collegeId)
+            .get();
+        const routes = snapshot.docs.map(doc => ({ _id: doc.id, ...doc.data() }));
         res.json(routes);
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -85,36 +101,59 @@ const getRoutes = async (req, res) => {
 
 const createUser = async (req, res) => {
     const { name, email, password, phone, role } = req.body;
-    // Ensure only DRIVER or STUDENT are created here
+
     if (!['DRIVER', 'STUDENT'].includes(role)) {
         return res.status(400).json({ message: 'Invalid role for college admin creation' });
     }
 
     try {
-        const user = await User.create({
-            userId: role.toLowerCase() + '-' + Date.now(),
+        // Check if user exists
+        const existingUser = await db.collection('users').where('email', '==', email).limit(1).get();
+        if (!existingUser.empty) {
+            return res.status(400).json({ message: 'User with this email already exists' });
+        }
+
+        const userId = role.toLowerCase() + '-' + Date.now();
+        const salt = await bcrypt.genSalt(10);
+        const passwordHash = await bcrypt.hash(password, salt);
+
+        const newUser = {
+            userId,
             collegeId: req.collegeId,
             name,
             email,
             phone,
-            passwordHash: password,
-            role
-        });
-        res.status(201).json(user);
+            passwordHash,
+            role,
+            createdAt: new Date().toISOString()
+        };
+
+        await db.collection('users').doc(userId).set(newUser);
+
+        // Return without password
+        const { passwordHash: _, ...userResponse } = newUser;
+        res.status(201).json({ _id: userId, ...userResponse });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
 };
 
 const getUsersByRole = async (req, res) => {
-    const { role } = req.params; // 'driver' or 'student'
+    const { role } = req.params;
     const filterRole = role.toUpperCase();
 
     try {
-        const users = await User.find({
-            collegeId: req.collegeId,
-            role: filterRole
-        }).select('-passwordHash');
+        const snapshot = await db.collection('users')
+            .where('collegeId', '==', req.collegeId)
+            .where('role', '==', filterRole)
+            .get();
+
+        const users = snapshot.docs.map(doc => {
+            const data = doc.data();
+            const { passwordHash, ...userData } = data;
+            return { _id: doc.id, ...userData };
+        });
+
         res.json(users);
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -127,14 +166,19 @@ const assignDriver = async (req, res) => {
     const { busId, userId, routeId } = req.body;
 
     try {
-        const assignment = await Assignment.create({
+        const assignmentId = 'assign-' + Date.now();
+        const assignment = {
+            assignmentId,
             collegeId: req.collegeId,
             userId,
             busId,
             routeId,
-            role: 'DRIVER'
-        });
-        res.status(201).json(assignment);
+            role: 'DRIVER',
+            createdAt: new Date().toISOString()
+        };
+
+        await db.collection('assignments').doc(assignmentId).set(assignment);
+        res.status(201).json({ _id: assignmentId, ...assignment });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
@@ -142,7 +186,10 @@ const assignDriver = async (req, res) => {
 
 const getAssignments = async (req, res) => {
     try {
-        const assignments = await Assignment.find({ collegeId: req.collegeId });
+        const snapshot = await db.collection('assignments')
+            .where('collegeId', '==', req.collegeId)
+            .get();
+        const assignments = snapshot.docs.map(doc => ({ _id: doc.id, ...doc.data() }));
         res.json(assignments);
     } catch (error) {
         res.status(500).json({ message: error.message });

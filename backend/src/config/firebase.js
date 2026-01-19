@@ -3,28 +3,23 @@ const dotenv = require('dotenv');
 
 dotenv.config();
 
-// Initialize Firebase Admin with Service Account
-// Found at: src/config/live-bus-tracking-2ec59-firebase-adminsdk-fbsvc-12aa6fcdd6.json
+// Initialize Firebase Admin with Service Account from Environment Variable
+// SECURITY: Never commit service account credentials to version control
 try {
-    let serviceAccount;
-
-    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-        // Production: Use Env Var
-        serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-    } else {
-        // Development: Use Local File
-        serviceAccount = require('./live-bus-tracking-2ec59-firebase-adminsdk-fbsvc-12aa6fcdd6.json');
+    if (!process.env.FIREBASE_SERVICE_ACCOUNT) {
+        throw new Error('FIREBASE_SERVICE_ACCOUNT environment variable is required');
     }
+
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 
     admin.initializeApp({
         credential: admin.credential.cert(serviceAccount)
     });
-    console.log(`Firebase Admin Initialized (${process.env.FIREBASE_SERVICE_ACCOUNT ? 'Env Var' : 'Local File'}) - Project: ${serviceAccount.project_id}`);
+
+    console.log(`Firebase Admin Initialized - Project: ${serviceAccount.project_id}`);
 } catch (error) {
-    console.error("Firebase Initialization Error:", error);
-    // Fallback to default if file moved
-    admin.initializeApp();
-    console.log("Firebase Admin Initialized (Default Fallback)");
+    console.error("Firebase Initialization Error:", error.message);
+    process.exit(1); // Exit if Firebase can't initialize - critical failure
 }
 
 const db = admin.firestore();
