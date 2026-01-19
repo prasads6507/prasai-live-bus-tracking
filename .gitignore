@@ -30,3 +30,4 @@ Thumbs.db
 
 # Secrets
 backend/src/config/*.json
+frontend/owner-portal/server/config/*.json

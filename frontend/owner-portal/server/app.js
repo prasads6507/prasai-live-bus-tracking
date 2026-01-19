@@ -53,9 +53,12 @@ app.use(errorHandler);
 // initSocket(server); // Disabled for Firebase Migration
 
 // Start Server
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-});
+// Start Server only if run directly
+const PORT = process.env.PORT || 3001;
+if (require.main === module) {
+    server.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`);
+    });
+}
 
 module.exports = app;
