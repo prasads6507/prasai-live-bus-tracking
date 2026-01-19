@@ -13,7 +13,7 @@ const FindOrganization = () => {
 
     useEffect(() => {
         const searchHandler = async () => {
-            if (query.trim().length < 2) {
+            if (query.trim().length < 1) {
                 setResults([]);
                 return;
             }
@@ -125,7 +125,7 @@ const FindOrganization = () => {
                         </AnimatePresence>
 
                         {/* No Results */}
-                        {query.length >= 2 && !loading && results.length === 0 && (
+                        {query.length >= 1 && !loading && results.length === 0 && (
                             <div className="mt-4 text-center text-slate-400 py-8">
                                 <Building2 size={48} className="mx-auto mb-3 opacity-20" />
                                 <p>No organizations found matching "{query}"</p>
@@ -140,8 +140,8 @@ const FindOrganization = () => {
                         onClick={handleSearch}
                         disabled={!selectedOrg}
                         className={`w-full mt-6 py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-all ${selectedOrg
-                                ? 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg shadow-blue-500/30'
-                                : 'bg-slate-700/50 text-slate-500 cursor-not-allowed'
+                            ? 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg shadow-blue-500/30'
+                            : 'bg-slate-700/50 text-slate-500 cursor-not-allowed'
                             }`}
                     >
                         <span>Continue to Login</span>

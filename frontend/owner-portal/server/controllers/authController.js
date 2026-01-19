@@ -229,7 +229,7 @@ const searchColleges = async (req, res) => {
     try {
         const query = req.query.q || '';
 
-        if (query.trim().length < 2) {
+        if (query.trim().length < 1) {
             return res.json([]);
         }
 
