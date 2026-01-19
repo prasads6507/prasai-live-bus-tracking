@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Bus, MapPin, Search, Menu, Bell, User, LayoutDashboard, Settings, LogOut, Navigation } from 'lucide-react';
@@ -14,7 +14,7 @@ const Dashboard = () => {
 
     useEffect(() => {
         const fetchInitialData = async () => {
-             // 1. Verify User & Org
+            // 1. Verify User & Org
             const storedUser = localStorage.getItem('user');
             if (!storedUser) {
                 navigate(`/${orgSlug}/login`);
@@ -23,7 +23,7 @@ const Dashboard = () => {
             setUser(JSON.parse(storedUser));
 
             try {
-                 // 2. Fetch Org Details if name not set (optional optimization)
+                // 2. Fetch Org Details if name not set (optional optimization)
                 if (orgSlug) {
                     const orgData = await validateSlug(orgSlug);
                     setOrgName(orgData.collegeName);
@@ -62,7 +62,7 @@ const Dashboard = () => {
     return (
         <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
             {/* Sidebar */}
-            <motion.aside 
+            <motion.aside
                 initial={{ x: -20, opacity: 0 }}
                 animate={{ x: 0, opacity: 1 }}
                 className="w-64 bg-slate-900 text-white flex flex-col hidden lg:flex"
@@ -94,7 +94,7 @@ const Dashboard = () => {
                             <p className="text-xs text-slate-400 truncate">{user?.email}</p>
                         </div>
                     </div>
-                    <button 
+                    <button
                         onClick={handleLogout}
                         className="mt-3 w-full flex items-center justify-center gap-2 text-sm text-slate-400 hover:text-red-400 transition-colors py-2"
                     >
@@ -117,9 +117,9 @@ const Dashboard = () => {
                     <div className="flex items-center gap-4">
                         <div className="relative hidden md:block">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                            <input 
-                                type="text" 
-                                placeholder="Search buses, drivers..." 
+                            <input
+                                type="text"
+                                placeholder="Search buses, drivers..."
                                 className="pl-10 pr-4 py-2 bg-slate-100 border-none rounded-full text-sm w-64 focus:ring-2 focus:ring-blue-100 outline-none"
                             />
                         </div>
@@ -133,26 +133,26 @@ const Dashboard = () => {
                 {/* Dashboard Content */}
                 <div className="flex-1 overflow-auto p-6">
                     <div className="max-w-7xl mx-auto space-y-6">
-                        
+
                         {/* Stats Grid */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <StatCard 
-                                title="Active Buses" 
-                                value={buses.filter(b => b.status === 'ACTIVE').length.toString()} 
+                            <StatCard
+                                title="Active Buses"
+                                value={buses.filter(b => b.status === 'ACTIVE').length.toString()}
                                 total={buses.length.toString()}
                                 icon={<Bus className="text-blue-600" size={24} />}
                                 color="bg-blue-50"
                             />
-                            <StatCard 
-                                title="On Route" 
-                                value={buses.filter(b => b.status === 'ON_ROUTE').length.toString()} 
+                            <StatCard
+                                title="On Route"
+                                value={buses.filter(b => b.status === 'ON_ROUTE').length.toString()}
                                 total={buses.length.toString()}
                                 icon={<Navigation className="text-green-600" size={24} />}
                                 color="bg-green-50"
                             />
-                            <StatCard 
-                                title="Maintenance" 
-                                value={buses.filter(b => b.status === 'MAINTENANCE').length.toString()} 
+                            <StatCard
+                                title="Maintenance"
+                                value={buses.filter(b => b.status === 'MAINTENANCE').length.toString()}
                                 total={buses.length.toString()}
                                 icon={<Settings className="text-orange-600" size={24} />}
                                 color="bg-orange-50"
@@ -204,11 +204,10 @@ const Dashboard = () => {
 
 // Sub-components for cleaner code
 const SidebarItem = ({ icon, label, active = false }: { icon: any, label: string, active?: boolean }) => (
-    <button className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${
-        active 
-        ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' 
-        : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-    }`}>
+    <button className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${active
+            ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20'
+            : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+        }`}>
         {icon}
         <span className="font-medium text-sm">{label}</span>
     </button>
@@ -241,11 +240,10 @@ const BusCard = ({ bus }: { bus: any }) => (
                     <p className="text-xs text-slate-500">{bus.capacity || 0} Seats</p>
                 </div>
             </div>
-            <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                bus.status === 'ACTIVE' ? 'bg-green-100 text-green-700' : 
-                bus.status === 'MAINTENANCE' ? 'bg-orange-100 text-orange-700' :
-                'bg-slate-100 text-slate-600'
-            }`}>
+            <span className={`px-2 py-1 rounded-full text-xs font-bold ${bus.status === 'ACTIVE' ? 'bg-green-100 text-green-700' :
+                    bus.status === 'MAINTENANCE' ? 'bg-orange-100 text-orange-700' :
+                        'bg-slate-100 text-slate-600'
+                }`}>
                 {bus.status || 'Unknown'}
             </span>
         </div>
@@ -260,10 +258,10 @@ const BusCard = ({ bus }: { bus: any }) => (
             </div>
         </div>
         <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-             <span className="text-xs font-medium text-slate-400">Last updated: Just now</span>
-             <button className="text-blue-600 hover:text-blue-700 text-sm font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
-                 Track Live
-             </button>
+            <span className="text-xs font-medium text-slate-400">Last updated: Just now</span>
+            <button className="text-blue-600 hover:text-blue-700 text-sm font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
+                Track Live
+            </button>
         </div>
     </div>
 );

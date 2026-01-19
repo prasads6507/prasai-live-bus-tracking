@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Lock, Mail, ArrowRight, ShieldCheck, AlertCircle, School, Bus } from 'lucide-react';
 import { login, validateSlug } from '../services/api';
@@ -218,8 +218,8 @@ const Login = () => {
                                 type="submit"
                                 disabled={loading || !!error}
                                 className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg flex items-center justify-center space-x-2 transition-all ${loading || error
-                                        ? 'bg-slate-200 text-slate-400 shadow-none cursor-not-allowed'
-                                        : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-blue-200'
+                                    ? 'bg-slate-200 text-slate-400 shadow-none cursor-not-allowed'
+                                    : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-blue-200'
                                     }`}
                             >
                                 {loading ? (
