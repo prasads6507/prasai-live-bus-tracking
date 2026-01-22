@@ -142,12 +142,18 @@ const getRoutes = async (req, res) => {
         const routes = await Promise.all(snapshot.docs.map(async (doc) => {
             const routeData = { _id: doc.id, ...doc.data() };
 
-            // Get stops count for this route
+            // Get stops for this route
             const stopsSnapshot = await db.collection('stops')
                 .where('routeId', '==', doc.id)
                 .get();
 
-            routeData.stopsCount = stopsSnapshot.size;
+            // Map stops and sort by order
+            const stops = stopsSnapshot.docs
+                .map(stopDoc => ({ ...stopDoc.data() }))
+                .sort((a, b) => (a.order || 0) - (b.order || 0));
+
+            routeData.stops = stops;
+            routeData.stopsCount = stops.length; // Keep stopsCount for compatibility if needed
             return routeData;
         }));
 
