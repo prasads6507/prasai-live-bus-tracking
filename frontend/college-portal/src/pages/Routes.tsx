@@ -66,13 +66,20 @@ const Routes = () => {
         setFormError('');
 
         try {
+            // Ensure startPoint and endPoint are always defined
+            const routeData = {
+                ...newRoute,
+                startPoint: '',
+                endPoint: ''
+            };
+
             if (isEditMode && editingRoute) {
                 // Update existing route
-                await updateRoute(editingRoute._id, newRoute);
+                await updateRoute(editingRoute._id, routeData);
                 setSuccessMessage(`Route ${newRoute.routeName} updated successfully!`);
             } else {
                 // Create new route
-                await createRoute(newRoute);
+                await createRoute(routeData);
                 setSuccessMessage(`Route ${newRoute.routeName} created successfully!`);
             }
 
