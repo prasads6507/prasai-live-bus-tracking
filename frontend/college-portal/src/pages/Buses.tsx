@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import { Bus, Plus, Search, X, AlertCircle, CheckCircle, Edit2, Trash2, ToggleRight } from 'lucide-react';
-import { getBuses, createBus, updateBus, deleteBus } from '../services/api';
+import { getBuses, createBus, updateBus, deleteBus, validateSlug } from '../services/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import Layout from '../components/Layout';
 
 const Buses = () => {
+    const { orgSlug } = useParams<{ orgSlug: string }>();
     const [buses, setBuses] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
@@ -25,8 +27,22 @@ const Buses = () => {
     const [editingBus, setEditingBus] = useState<any>(null);
 
     useEffect(() => {
-        fetchBuses();
-    }, []);
+        initializeAndFetchBuses();
+    }, [orgSlug]);
+
+    const initializeAndFetchBuses = async () => {
+        try {
+            // Ensure college context is set (important for Super Admin and production)
+            if (orgSlug) {
+                const orgData = await validateSlug(orgSlug);
+                localStorage.setItem('current_college_id', orgData.collegeId);
+            }
+            await fetchBuses();
+        } catch (error) {
+            console.error("Failed to initialize:", error);
+            setLoading(false);
+        }
+    };
 
     const fetchBuses = async () => {
         try {
