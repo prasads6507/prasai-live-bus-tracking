@@ -40,6 +40,51 @@ const getBuses = async (req, res) => {
     }
 };
 
+const updateBus = async (req, res) => {
+    const { busId } = req.params;
+    const { busNumber, plateNumber, capacity, status } = req.body;
+
+    try {
+        const busRef = db.collection('buses').doc(busId);
+        const busDoc = await busRef.get();
+
+        if (!busDoc.exists) {
+            return res.status(404).json({ message: 'Bus not found' });
+        }
+
+        const updateData = {};
+        if (busNumber !== undefined) updateData.busNumber = busNumber;
+        if (plateNumber !== undefined) updateData.plateNumber = plateNumber;
+        if (capacity !== undefined) updateData.capacity = capacity;
+        if (status !== undefined) updateData.status = status;
+        updateData.updatedAt = new Date().toISOString();
+
+        await busRef.update(updateData);
+        const updated = await busRef.get();
+        res.json({ _id: updated.id, ...updated.data() });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+const deleteBus = async (req, res) => {
+    const { busId } = req.params;
+
+    try {
+        const busRef = db.collection('buses').doc(busId);
+        const busDoc = await busRef.get();
+
+        if (!busDoc.exists) {
+            return res.status(404).json({ message: 'Bus not found' });
+        }
+
+        await busRef.delete();
+        res.json({ message: 'Bus deleted successfully' });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
 // --- ROUTES & STOPS ---
 
 // @desc    Create a route with stops
@@ -246,6 +291,8 @@ const getAssignments = async (req, res) => {
 module.exports = {
     createBus,
     getBuses,
+    updateBus,
+    deleteBus,
     createRoute,
     getRoutes,
     createUser,

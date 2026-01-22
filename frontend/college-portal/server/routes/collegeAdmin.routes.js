@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const {
-    createBus, getBuses,
+    createBus, getBuses, updateBus, deleteBus,
     createRoute, getRoutes,
     createUser, getUsersByRole, updateUser, deleteUser,
     assignDriver, getAssignments
@@ -17,6 +17,10 @@ router.use(tenantIsolation); // Enforces req.collegeId
 router.route('/buses')
     .post(createBus)
     .get(getBuses);
+
+router.route('/buses/:busId')
+    .put(updateBus)
+    .delete(deleteBus);
 
 router.route('/routes')
     .post(createRoute)

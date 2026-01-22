@@ -45,8 +45,9 @@ const Layout = ({ children, activeItem = 'dashboard' }: LayoutProps) => {
                     />
                     <SidebarItem
                         icon={<Bus size={20} />}
-                        label="Fleet Management"
-                        active={activeItem === 'fleet'}
+                        label="Buses"
+                        active={activeItem === 'buses'}
+                        onClick={() => navigate(`/${orgSlug}/buses`)}
                     />
                     <SidebarItem
                         icon={<User size={20} />}

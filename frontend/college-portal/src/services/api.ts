@@ -65,4 +65,20 @@ export const deleteDriver = async (userId: string) => {
     return response.data;
 };
 
+// Bus Management
+export const createBus = async (busData: any) => {
+    const response = await api.post('/admin/buses', busData);
+    return response.data;
+};
+
+export const updateBus = async (busId: string, busData: any) => {
+    const response = await api.put(`/admin/buses/${busId}`, busData);
+    return response.data;
+};
+
+export const deleteBus = async (busId: string) => {
+    const response = await api.delete(`/admin/buses/${busId}`);
+    return response.data;
+};
+
 export default api;
