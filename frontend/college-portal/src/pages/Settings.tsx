@@ -1,17 +1,30 @@
 import { useState, useEffect } from 'react';
-import { User, Building, Mail, Phone, LogOut, Info } from 'lucide-react';
+import { User, Building, Mail, LogOut, Info } from 'lucide-react';
+import { useParams } from 'react-router-dom';
 import Layout from '../components/Layout';
+import { validateSlug } from '../services/api';
 
 const Settings = () => {
+    const { orgSlug } = useParams<{ orgSlug: string }>();
     const [user, setUser] = useState<any>(null);
     const [orgName, setOrgName] = useState('');
 
     useEffect(() => {
         const storedUser = localStorage.getItem('user');
         const org = localStorage.getItem('orgName');
+
         if (storedUser) setUser(JSON.parse(storedUser));
-        if (org) setOrgName(org);
-    }, []);
+
+        if (org) {
+            setOrgName(org);
+        } else if (orgSlug) {
+            // Fallback: Fetch org name if not in local storage
+            validateSlug(orgSlug).then(data => {
+                setOrgName(data.collegeName);
+                localStorage.setItem('orgName', data.collegeName);
+            }).catch(err => console.error("Failed to fetch org details", err));
+        }
+    }, [orgSlug]);
 
     const logout = () => {
         if (confirm('Are you sure you want to logout?')) {
@@ -60,14 +73,6 @@ const Settings = () => {
                                         {user?.email || 'admin@example.com'}
                                     </div>
                                 </div>
-                                <div className="space-y-2">
-                                    <label className="text-sm font-medium text-slate-500 flex items-center gap-2">
-                                        <Phone size={16} /> Phone Number
-                                    </label>
-                                    <div className="p-3 bg-slate-50 rounded-lg text-slate-800 border border-slate-200">
-                                        {user?.phone || 'Not provided'}
-                                    </div>
-                                </div>
                             </div>
                         </div>
                     </div>
@@ -110,13 +115,9 @@ const Settings = () => {
                                     <span>Version</span>
                                     <span className="font-mono">v1.0.0</span>
                                 </div>
-                                <div className="flex justify-between py-2 border-b border-slate-100">
-                                    <span>Environment</span>
-                                    <span className="capitalize">{import.meta.env.MODE}</span>
-                                </div>
                                 <div className="flex justify-between py-2">
                                     <span>Support</span>
-                                    <span className="text-blue-600">support@bannu.com</span>
+                                    <span className="text-blue-600">support@prasai.com</span>
                                 </div>
                             </div>
                         </div>

@@ -63,9 +63,14 @@ const Login = () => {
                 throw new Error('You do not have access to this organization.');
             }
 
+            // Store user info and org name
             localStorage.setItem('token', data.token);
-            localStorage.setItem('user', JSON.stringify(data));
+            localStorage.setItem('user', JSON.stringify(data.user)); // Should include role
             localStorage.setItem('current_college_id', orgDetails.collegeId);
+            localStorage.setItem('orgName', orgDetails.collegeName); // Save College Name for Settings
+
+            // Set default headers for subsequent requests
+            // (Verify if api has setHeader method or if we reload)
 
             navigate(`/${orgSlug}/dashboard`);
 
