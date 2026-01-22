@@ -65,6 +65,7 @@ const Layout = ({ children, activeItem = 'dashboard' }: LayoutProps) => {
                         icon={<Settings size={20} />}
                         label="Settings"
                         active={activeItem === 'settings'}
+                        onClick={() => navigate(`/${orgSlug}/settings`)}
                     />
                 </nav>
 
