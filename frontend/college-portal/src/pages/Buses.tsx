@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Bus, Plus, Search, X, AlertCircle, CheckCircle, Edit2, Trash2, ToggleRight } from 'lucide-react';
-import { getBuses, createBus, updateBus, deleteBus, validateSlug } from '../services/api';
+import { getBuses, createBus, updateBus, deleteBus, validateSlug, getDrivers } from '../services/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import Layout from '../components/Layout';
 
 const Buses = () => {
     const { orgSlug } = useParams<{ orgSlug: string }>();
     const [buses, setBuses] = useState<any[]>([]);
+    const [drivers, setDrivers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -16,7 +17,7 @@ const Buses = () => {
     const [newBus, setNewBus] = useState({
         busNumber: '',
         plateNumber: '',
-        capacity: ''
+        assignedDriverId: ''
     });
     const [formLoading, setFormLoading] = useState(false);
     const [formError, setFormError] = useState('');
@@ -37,10 +38,19 @@ const Buses = () => {
                 const orgData = await validateSlug(orgSlug);
                 localStorage.setItem('current_college_id', orgData.collegeId);
             }
-            await fetchBuses();
+            await Promise.all([fetchBuses(), fetchDrivers()]);
         } catch (error) {
             console.error("Failed to initialize:", error);
             setLoading(false);
+        }
+    };
+
+    const fetchDrivers = async () => {
+        try {
+            const data = await getDrivers();
+            setDrivers(Array.isArray(data) ? data : []);
+        } catch (error) {
+            console.error("Failed to fetch drivers:", error);
         }
     };
 
@@ -71,7 +81,7 @@ const Buses = () => {
                 setSuccessMessage(`Bus ${newBus.busNumber} created successfully!`);
             }
 
-            setNewBus({ busNumber: '', plateNumber: '', capacity: '' });
+            setNewBus({ busNumber: '', plateNumber: '', assignedDriverId: '' });
             setIsEditMode(false);
             setEditingBus(null);
             fetchBuses(); // Refresh list
@@ -91,7 +101,7 @@ const Buses = () => {
         setNewBus({
             busNumber: bus.busNumber,
             plateNumber: bus.plateNumber || '',
-            capacity: bus.capacity?.toString() || ''
+            assignedDriverId: bus.assignedDriverId || ''
         });
         setIsEditMode(true);
         setIsModalOpen(true);
@@ -162,7 +172,7 @@ const Buses = () => {
                             onClick={() => {
                                 setIsEditMode(false);
                                 setEditingBus(null);
-                                setNewBus({ busNumber: '', plateNumber: '', capacity: '' });
+                                setNewBus({ busNumber: '', plateNumber: '', assignedDriverId: '' });
                                 setIsModalOpen(true);
                             }}
                             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-semibold shadow-lg shadow-blue-200 transition-all"
@@ -180,7 +190,7 @@ const Buses = () => {
                                     <tr>
                                         <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Bus Number</th>
                                         <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Plate Number</th>
-                                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Capacity</th>
+                                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Assigned Driver</th>
                                         <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Status</th>
                                         <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Actions</th>
                                     </tr>
@@ -198,7 +208,12 @@ const Buses = () => {
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 text-slate-600">{bus.plateNumber || 'N/A'}</td>
-                                                <td className="px-6 py-4 text-slate-600">{bus.capacity || 0} seats</td>
+                                                <td className="px-6 py-4 text-slate-600">
+                                                    {bus.assignedDriverId
+                                                        ? drivers.find(d => d._id === bus.assignedDriverId)?.name || 'Unassigned'
+                                                        : 'Unassigned'
+                                                    }
+                                                </td>
                                                 <td className="px-6 py-4">
                                                     <span className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${bus.status === 'ACTIVE'
                                                         ? 'bg-green-100 text-green-700'
@@ -317,16 +332,19 @@ const Buses = () => {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-700 mb-2">Capacity (Seats)</label>
-                                    <input
-                                        type="number"
-                                        required
-                                        min="1"
+                                    <label className="block text-sm font-semibold text-slate-700 mb-2">Assign Driver</label>
+                                    <select
                                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all"
-                                        placeholder="e.g., 50"
-                                        value={newBus.capacity}
-                                        onChange={(e) => setNewBus({ ...newBus, capacity: e.target.value })}
-                                    />
+                                        value={newBus.assignedDriverId}
+                                        onChange={(e) => setNewBus({ ...newBus, assignedDriverId: e.target.value })}
+                                    >
+                                        <option value="">-- Select Driver (Optional) --</option>
+                                        {drivers.map((driver) => (
+                                            <option key={driver._id} value={driver._id}>
+                                                {driver.name} ({driver.email})
+                                            </option>
+                                        ))}
+                                    </select>
                                 </div>
 
                                 <motion.button
