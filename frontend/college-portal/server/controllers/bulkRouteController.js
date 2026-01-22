@@ -42,10 +42,10 @@ const uploadRoutesFile = async (req, res) => {
         for (const row of routesData) {
             try {
                 // Validate required fields
-                if (!row['Route Name'] || !row['Start Point'] || !row['End Point']) {
+                if (!row['Route Name']) {
                     results.errors.push({
                         row: row,
-                        error: 'Missing required fields (Route Name, Start Point, End Point)'
+                        error: 'Missing required field: Route Name'
                     });
                     continue;
                 }
@@ -81,8 +81,8 @@ const uploadRoutesFile = async (req, res) => {
                     routeId,
                     collegeId: req.collegeId,
                     routeName: routeName,
-                    startPoint: row['Start Point'].toString().trim(),
-                    endPoint: row['End Point'].toString().trim(),
+                    startPoint: '',
+                    endPoint: '',
                     createdAt: new Date().toISOString()
                 };
 
@@ -147,8 +147,9 @@ const downloadTemplate = (req, res) => {
     try {
         // Create sample data
         const routesData = [
-            { 'Route Name': 'Route A', 'Start Point': 'Main Campus', 'End Point': 'City Center' },
-            { 'Route Name': 'Route B', 'Start Point': 'North Gate', 'End Point': 'South Station' }
+            { 'Route Name': 'Route A' },
+            { 'Route Name': 'Route B' },
+            { 'Route Name': 'Route C' }
         ];
 
         const stopsData = [
