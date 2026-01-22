@@ -4,8 +4,8 @@ const tenantIsolation = (req, res, next) => {
         return res.status(401).json({ message: 'User not authenticated' });
     }
 
-    // If user is OWNER, they can specify collegeId or access all
-    if (req.user.role === 'OWNER') {
+    // If user is OWNER or SUPER_ADMIN, they can specify collegeId or access all
+    if (req.user.role === 'OWNER' || req.user.role === 'SUPER_ADMIN') {
         // Check for context header
         const contextId = req.headers['x-tenant-id'];
         if (contextId) {

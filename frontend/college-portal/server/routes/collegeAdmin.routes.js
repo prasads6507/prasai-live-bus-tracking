@@ -11,7 +11,7 @@ const tenantIsolation = require('../middleware/tenantIsolation');
 
 // All routes protected + college admin/owner + tenant isolation
 router.use(protect);
-router.use(authorize('COLLEGE_ADMIN', 'OWNER'));
+router.use(authorize('COLLEGE_ADMIN', 'OWNER', 'SUPER_ADMIN'));
 router.use(tenantIsolation); // Enforces req.collegeId
 
 router.route('/buses')
