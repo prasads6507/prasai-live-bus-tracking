@@ -65,7 +65,15 @@ const Login = () => {
 
             // Store user info and org name
             localStorage.setItem('token', data.token);
-            localStorage.setItem('user', JSON.stringify(data.user)); // Should include role
+            // Backend returns flat user object, not nested 'user' key
+            const userToStore = {
+                _id: data._id,
+                name: data.name,
+                email: data.email,
+                role: data.role,
+                collegeId: data.collegeId
+            };
+            localStorage.setItem('user', JSON.stringify(userToStore));
             localStorage.setItem('current_college_id', orgDetails.collegeId);
             localStorage.setItem('orgName', orgDetails.collegeName); // Save College Name for Settings
 
