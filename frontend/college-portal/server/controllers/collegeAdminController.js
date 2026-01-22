@@ -117,8 +117,8 @@ const createRoute = async (req, res) => {
                     collegeId: req.collegeId,
                     routeId,
                     stopName: stop.stopName,
-                    latitude: stop.latitude,
-                    longitude: stop.longitude,
+                    latitude: stop.latitude || 0,
+                    longitude: stop.longitude || 0,
                     order: index + 1
                 };
                 batch.set(db.collection('stops').doc(stopId), stopData);
