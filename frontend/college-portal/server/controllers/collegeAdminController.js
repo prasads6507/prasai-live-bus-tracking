@@ -125,6 +125,7 @@ const createUser = async (req, res) => {
             phone,
             passwordHash,
             role,
+            status: 'ACTIVE',
             createdAt: new Date().toISOString()
         };
 
@@ -155,6 +156,52 @@ const getUsersByRole = async (req, res) => {
         });
 
         res.json(users);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+const updateUser = async (req, res) => {
+    const { userId } = req.params;
+    const { name, email, phone, status } = req.body;
+
+    try {
+        const userRef = db.collection('users').doc(userId);
+        const doc = await userRef.get();
+
+        if (!doc.exists) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        const updateData = {};
+        if (name) updateData.name = name;
+        if (email) updateData.email = email;
+        if (phone !== undefined) updateData.phone = phone;
+        if (status !== undefined) updateData.status = status;
+
+        await userRef.update(updateData);
+        const updated = await userRef.get();
+        const { passwordHash, ...userData } = updated.data();
+
+        res.json({ _id: updated.id, ...userData });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+const deleteUser = async (req, res) => {
+    const { userId } = req.params;
+
+    try {
+        const userRef = db.collection('users').doc(userId);
+        const doc = await userRef.get();
+
+        if (!doc.exists) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        await userRef.delete();
+        res.json({ message: 'User deleted successfully' });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
@@ -203,6 +250,8 @@ module.exports = {
     getRoutes,
     createUser,
     getUsersByRole,
+    updateUser,
+    deleteUser,
     assignDriver,
     getAssignments
 };

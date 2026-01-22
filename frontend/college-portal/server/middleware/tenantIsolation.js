@@ -6,8 +6,14 @@ const tenantIsolation = (req, res, next) => {
 
     // If user is OWNER, they can specify collegeId or access all
     if (req.user.role === 'OWNER') {
-        // If collegeId is provided in request, we allow it (for managing specific college)
-        // Otherwise, we don't enforce a specific college context
+        // Check for context header
+        const contextId = req.headers['x-tenant-id'];
+        if (contextId) {
+            req.collegeId = contextId;
+        } else if (req.body && req.body.collegeId) {
+            req.collegeId = req.body.collegeId;
+        }
+
         return next();
     }
 

@@ -3,6 +3,9 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Home from './pages/Home';
 import FindOrganization from './pages/FindOrganization';
+import DriverLogin from './pages/DriverLogin';
+import DriverDashboard from './pages/DriverDashboard';
+import Drivers from './pages/Drivers';
 
 function App() {
   return (
@@ -16,7 +19,15 @@ function App() {
 
         {/* Dynamic Organization Login */}
         <Route path="/:orgSlug/login" element={<Login />} />
+        <Route path="/:orgSlug/login" element={<Login />} />
         <Route path="/:orgSlug/dashboard" element={<Dashboard />} />
+
+        {/* Driver Portal */}
+        <Route path="/:orgSlug/driver" element={<DriverLogin />} />
+        <Route path="/:orgSlug/driver-dashboard" element={<DriverDashboard />} />
+
+        {/* Admin Features */}
+        <Route path="/:orgSlug/drivers" element={<Drivers />} />
 
         {/* Protected Routes placeholder */}
         <Route path="/:orgSlug/*" element={<Navigate to={`login`} replace />} />

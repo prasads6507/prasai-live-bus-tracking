@@ -9,7 +9,7 @@ const matchPassword = async (enteredPassword, passwordHash) => {
 
 const generateToken = (id, role, collegeId) => {
     return jwt.sign({ id, role, collegeId }, process.env.JWT_SECRET, {
-        expiresIn: '24h',
+        expiresIn: '30d',
     });
 };
 
