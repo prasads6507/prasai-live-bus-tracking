@@ -9,8 +9,6 @@ const Dashboard = () => {
     const navigate = useNavigate();
     const [buses, setBuses] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [orgName, setOrgName] = useState('College Admin');
-    const [user, setUser] = useState<any>(null);
 
     useEffect(() => {
         const fetchInitialData = async () => {
@@ -20,13 +18,11 @@ const Dashboard = () => {
                 navigate(`/${orgSlug}/login`);
                 return;
             }
-            setUser(JSON.parse(storedUser));
 
             try {
                 // 2. Fetch Org Details if name not set (optional optimization)
                 if (orgSlug) {
                     const orgData = await validateSlug(orgSlug);
-                    setOrgName(orgData.collegeName);
                     // Ensure context is set for API calls (important for Super Admin)
                     localStorage.setItem('current_college_id', orgData.collegeId);
                 }
