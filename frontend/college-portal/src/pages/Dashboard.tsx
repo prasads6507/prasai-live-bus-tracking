@@ -41,6 +41,19 @@ const Dashboard = () => {
         };
 
         fetchInitialData();
+
+        // Refresh data when user returns to this page
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                fetchInitialData();
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
     }, [orgSlug, navigate]);
 
     if (loading) {
