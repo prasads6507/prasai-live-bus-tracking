@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { Bus, MapPin, Plus, Search, Trash2, Edit2, Wrench, X, AlertCircle, CheckCircle } from 'lucide-react';
+import { Bus, Plus, Search, Trash2, Edit2, Wrench, X, AlertCircle, CheckCircle } from 'lucide-react';
 import { getBuses, createBus, updateBus, deleteBus, validateSlug, getDrivers, getRoutes } from '../services/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import Layout from '../components/Layout';
