@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Lock, Mail, ArrowRight, ShieldCheck, AlertCircle, Bus, MapPin } from 'lucide-react';
+import { Lock, Mail, ArrowRight, AlertCircle, Bus } from 'lucide-react';
 import { login, validateSlug } from '../services/api';
 import { motion, AnimatePresence } from 'framer-motion';
 
