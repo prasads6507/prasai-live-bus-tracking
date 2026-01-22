@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const {
     createBus, getBuses, updateBus, deleteBus,
-    createRoute, getRoutes,
+    createRoute, getRoutes, updateRoute, deleteRoute,
     createUser, getUsersByRole, updateUser, deleteUser,
     assignDriver, getAssignments
 } = require('../controllers/collegeAdminController');
@@ -25,6 +25,10 @@ router.route('/buses/:busId')
 router.route('/routes')
     .post(createRoute)
     .get(getRoutes);
+
+router.route('/routes/:routeId')
+    .put(updateRoute)
+    .delete(deleteRoute);
 
 router.route('/users')
     .post(createUser);

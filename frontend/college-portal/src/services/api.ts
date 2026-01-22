@@ -87,4 +87,19 @@ export const getRoutes = async () => {
     return response.data;
 };
 
+export const createRoute = async (routeData: any) => {
+    const response = await api.post('/admin/routes', routeData);
+    return response.data;
+};
+
+export const updateRoute = async (routeId: string, routeData: any) => {
+    const response = await api.put(`/admin/routes/${routeId}`, routeData);
+    return response.data;
+};
+
+export const deleteRoute = async (routeId: string) => {
+    const response = await api.delete(`/admin/routes/${routeId}`);
+    return response.data;
+};
+
 export default api;

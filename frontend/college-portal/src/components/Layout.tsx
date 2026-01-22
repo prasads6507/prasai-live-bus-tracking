@@ -59,6 +59,7 @@ const Layout = ({ children, activeItem = 'dashboard' }: LayoutProps) => {
                         icon={<MapPin size={20} />}
                         label="Routes"
                         active={activeItem === 'routes'}
+                        onClick={() => navigate(`/${orgSlug}/routes`)}
                     />
                     <SidebarItem
                         icon={<Settings size={20} />}

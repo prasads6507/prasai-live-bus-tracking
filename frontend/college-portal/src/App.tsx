@@ -7,6 +7,7 @@ import DriverLogin from './pages/DriverLogin';
 import DriverDashboard from './pages/DriverDashboard';
 import Drivers from './pages/Drivers';
 import Buses from './pages/Buses';
+import RoutesPage from './pages/Routes';
 
 function App() {
   return (
@@ -30,6 +31,7 @@ function App() {
         {/* Admin Features */}
         <Route path="/:orgSlug/drivers" element={<Drivers />} />
         <Route path="/:orgSlug/buses" element={<Buses />} />
+        <Route path="/:orgSlug/routes" element={<RoutesPage />} />
 
         {/* Protected Routes placeholder */}
         <Route path="/:orgSlug/*" element={<Navigate to={`login`} replace />} />

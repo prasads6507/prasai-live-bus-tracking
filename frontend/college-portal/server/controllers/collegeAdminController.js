@@ -137,8 +137,113 @@ const getRoutes = async (req, res) => {
         const snapshot = await db.collection('routes')
             .where('collegeId', '==', req.collegeId)
             .get();
-        const routes = snapshot.docs.map(doc => ({ _id: doc.id, ...doc.data() }));
+
+        // Get routes with stop counts
+        const routes = await Promise.all(snapshot.docs.map(async (doc) => {
+            const routeData = { _id: doc.id, ...doc.data() };
+
+            // Get stops count for this route
+            const stopsSnapshot = await db.collection('stops')
+                .where('routeId', '==', doc.id)
+                .get();
+
+            routeData.stopsCount = stopsSnapshot.size;
+            return routeData;
+        }));
+
         res.json(routes);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+const updateRoute = async (req, res) => {
+    const { routeId } = req.params;
+    const { routeName, startPoint, endPoint, stops } = req.body;
+
+    try {
+        const routeRef = db.collection('routes').doc(routeId);
+        const routeDoc = await routeRef.get();
+
+        if (!routeDoc.exists) {
+            return res.status(404).json({ message: 'Route not found' });
+        }
+
+        const batch = db.batch();
+
+        // Update route
+        const updateData = {};
+        if (routeName !== undefined) updateData.routeName = routeName;
+        if (startPoint !== undefined) updateData.startPoint = startPoint;
+        if (endPoint !== undefined) updateData.endPoint = endPoint;
+        updateData.updatedAt = new Date().toISOString();
+
+        batch.update(routeRef, updateData);
+
+        // If stops are provided, delete old stops and create new ones
+        if (stops !== undefined) {
+            // Delete old stops
+            const oldStops = await db.collection('stops')
+                .where('routeId', '==', routeId)
+                .get();
+
+            oldStops.forEach(doc => {
+                batch.delete(doc.ref);
+            });
+
+            // Create new stops
+            if (stops && stops.length > 0) {
+                stops.forEach((stop, index) => {
+                    const stopId = 'stop-' + Date.now() + '-' + index;
+                    const stopData = {
+                        stopId,
+                        collegeId: req.collegeId,
+                        routeId,
+                        stopName: stop.stopName,
+                        latitude: stop.latitude || 0,
+                        longitude: stop.longitude || 0,
+                        order: index + 1
+                    };
+                    batch.set(db.collection('stops').doc(stopId), stopData);
+                });
+            }
+        }
+
+        await batch.commit();
+        const updated = await routeRef.get();
+        res.json({ _id: updated.id, ...updated.data() });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+const deleteRoute = async (req, res) => {
+    const { routeId } = req.params;
+
+    try {
+        const routeRef = db.collection('routes').doc(routeId);
+        const routeDoc = await routeRef.get();
+
+        if (!routeDoc.exists) {
+            return res.status(404).json({ message: 'Route not found' });
+        }
+
+        const batch = db.batch();
+
+        // Delete all stops for this route
+        const stopsSnapshot = await db.collection('stops')
+            .where('routeId', '==', routeId)
+            .get();
+
+        stopsSnapshot.forEach(doc => {
+            batch.delete(doc.ref);
+        });
+
+        // Delete the route
+        batch.delete(routeRef);
+
+        await batch.commit();
+        res.json({ message: 'Route and associated stops deleted successfully' });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
@@ -297,6 +402,8 @@ module.exports = {
     deleteBus,
     createRoute,
     getRoutes,
+    updateRoute,
+    deleteRoute,
     createUser,
     getUsersByRole,
     updateUser,
