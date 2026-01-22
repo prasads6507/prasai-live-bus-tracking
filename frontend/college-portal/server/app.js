@@ -43,6 +43,7 @@ app.get('/', (req, res) => {
 app.use('/api/auth', require('./routes/auth.routes'));
 app.use('/api/owner', require('./routes/owner.routes'));
 app.use('/api/admin', require('./routes/collegeAdmin.routes'));
+app.use('/api/admin/routes', require('./routes/bulkRoute.routes'));
 app.use('/api/driver', require('./routes/driver.routes'));
 app.use('/api/student', require('./routes/student.routes'));
 

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { MapPin, Plus, Search, X, AlertCircle, CheckCircle, Edit2, Trash2 } from 'lucide-react';
-import { getRoutes, createRoute, updateRoute, deleteRoute, validateSlug } from '../services/api';
+import { MapPin, Plus, Search, X, AlertCircle, CheckCircle, Edit2, Trash2, Upload, Download } from 'lucide-react';
+import { getRoutes, createRoute, updateRoute, deleteRoute, validateSlug, uploadRoutesFile, downloadRouteTemplate } from '../services/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import Layout from '../components/Layout';
 
@@ -26,6 +26,12 @@ const Routes = () => {
     // Edit State
     const [isEditMode, setIsEditMode] = useState(false);
     const [editingRoute, setEditingRoute] = useState<any>(null);
+
+    // Upload State
+    const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [uploadLoading, setUploadLoading] = useState(false);
+    const [uploadResults, setUploadResults] = useState<any>(null);
 
     useEffect(() => {
         initializeAndFetchRoutes();
@@ -128,6 +134,54 @@ const Routes = () => {
         setNewRoute({ ...newRoute, stops: updatedStops });
     };
 
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            setSelectedFile(e.target.files[0]);
+            setUploadResults(null);
+        }
+    };
+
+    const handleFileUpload = async () => {
+        if (!selectedFile) return;
+
+        setUploadLoading(true);
+        setUploadResults(null);
+
+        try {
+            const result = await uploadRoutesFile(selectedFile);
+            setUploadResults(result);
+            setSelectedFile(null);
+
+            // Refresh routes list
+            await fetchRoutes();
+
+            // Show success for a moment then close
+            setTimeout(() => {
+                if (result.results.createdRoutes > 0) {
+                    setIsUploadModalOpen(false);
+                    setUploadResults(null);
+                }
+            }, 3000);
+        } catch (err: any) {
+            setUploadResults({
+                message: 'Upload failed',
+                results: {
+                    errors: [{ error: err.response?.data?.message || err.message || 'Failed to upload file' }]
+                }
+            });
+        } finally {
+            setUploadLoading(false);
+        }
+    };
+
+    const handleDownloadTemplate = async () => {
+        try {
+            await downloadRouteTemplate();
+        } catch (err) {
+            alert('Failed to download template');
+        }
+    };
+
     const filteredRoutes = routes.filter(route =>
         route.routeName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         route.startPoint?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -166,6 +220,15 @@ const Routes = () => {
                                 onChange={(e) => setSearchQuery(e.target.value)}
                             />
                         </div>
+                        <motion.button
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => setIsUploadModalOpen(true)}
+                            className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-xl font-semibold shadow-lg shadow-green-200 transition-all"
+                        >
+                            <Upload size={20} />
+                            <span>Upload Routes</span>
+                        </motion.button>
                         <motion.button
                             whileHover={{ scale: 1.02 }}
                             whileTap={{ scale: 0.98 }}
@@ -401,6 +464,106 @@ const Routes = () => {
                                     {formLoading ? 'Processing...' : (isEditMode ? 'Update Route' : 'Create Route')}
                                 </motion.button>
                             </form>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Upload Routes Modal */}
+            <AnimatePresence>
+                {isUploadModalOpen && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+                        onClick={() => setIsUploadModalOpen(false)}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.95, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.95, opacity: 0 }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6"
+                        >
+                            <div className="flex items-center justify-between mb-6">
+                                <h2 className="text-2xl font-bold text-slate-800">Upload Routes</h2>
+                                <button
+                                    onClick={() => setIsUploadModalOpen(false)}
+                                    className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                                >
+                                    <X size={20} className="text-slate-500" />
+                                </button>
+                            </div>
+
+                            <div className="space-y-4">
+                                {/* Download Template Button */}
+                                <button
+                                    onClick={handleDownloadTemplate}
+                                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold transition-all"
+                                >
+                                    <Download size={20} />
+                                    <span>Download Sample Template</span>
+                                </button>
+
+                                {/* File Input */}
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-700 mb-2">
+                                        Select Excel/CSV File
+                                    </label>
+                                    <input
+                                        type="file"
+                                        accept=".xlsx,.xls,.csv"
+                                        onChange={handleFileSelect}
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all"
+                                    />
+                                    {selectedFile && (
+                                        <p className="mt-2 text-sm text-slate-600">
+                                            Selected: <span className="font-semibold">{selectedFile.name}</span>
+                                        </p>
+                                    )}
+                                </div>
+
+                                {/* Upload Button */}
+                                <motion.button
+                                    whileHover={{ scale: 1.02 }}
+                                    whileTap={{ scale: 0.98 }}
+                                    onClick={handleFileUpload}
+                                    disabled={!selectedFile || uploadLoading}
+                                    className={`w-full py-3 rounded-xl font-semibold text-white transition-all ${!selectedFile || uploadLoading
+                                            ? 'bg-slate-400 cursor-not-allowed'
+                                            : 'bg-green-600 hover:bg-green-700 shadow-lg shadow-green-200'
+                                        }`}
+                                >
+                                    {uploadLoading ? 'Uploading...' : 'Upload Routes'}
+                                </motion.button>
+
+                                {/* Results Display */}
+                                {uploadResults && (
+                                    <div className="mt-4 space-y-2">
+                                        {uploadResults.results.createdRoutes > 0 && (
+                                            <div className="p-4 bg-green-50 border-l-4 border-green-500 text-green-700 rounded-r">
+                                                <p className="font-semibold">{uploadResults.message}</p>
+                                                <p className="text-sm mt-1">
+                                                    Created {uploadResults.results.createdRoutes} routes with{' '}
+                                                    {uploadResults.results.createdStops} stops
+                                                </p>
+                                            </div>
+                                        )}
+
+                                        {uploadResults.results.errors && uploadResults.results.errors.length > 0 && (
+                                            <div className="p-4 bg-red-50 border-l-4 border-red-500 text-red-700 rounded-r max-h-48 overflow-y-auto">
+                                                <p className="font-semibold mb-2">Errors:</p>
+                                                <ul className="text-sm space-y-1">
+                                                    {uploadResults.results.errors.map((err: any, idx: number) => (
+                                                        <li key={idx}>• {err.error}</li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
                         </motion.div>
                     </motion.div>
                 )}

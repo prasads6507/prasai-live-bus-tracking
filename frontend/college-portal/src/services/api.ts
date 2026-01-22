@@ -102,4 +102,31 @@ export const deleteRoute = async (routeId: string) => {
     return response.data;
 };
 
+export const uploadRoutesFile = async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await api.post('/admin/routes/bulk-upload', formData, {
+        headers: {
+            'Content-Type': 'multipart/form-data'
+        }
+    });
+    return response.data;
+};
+
+export const downloadRouteTemplate = async () => {
+    const response = await api.get('/admin/routes/template', {
+        responseType: 'blob'
+    });
+
+    // Create download link
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'routes_template.xlsx');
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+};
+
 export default api;
