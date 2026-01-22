@@ -81,4 +81,10 @@ export const deleteBus = async (busId: string) => {
     return response.data;
 };
 
+// Route Management
+export const getRoutes = async () => {
+    const response = await api.get('/admin/routes');
+    return response.data;
+};
+
 export default api;

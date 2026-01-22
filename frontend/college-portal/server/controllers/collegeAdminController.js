@@ -7,7 +7,7 @@ const bcrypt = require('bcryptjs');
 // @route   POST /api/admin/buses
 // @access  Private (College Admin)
 const createBus = async (req, res) => {
-    const { busNumber, plateNumber, assignedDriverId } = req.body;
+    const { busNumber, plateNumber, assignedDriverId, assignedRouteId } = req.body;
 
     try {
         const busId = 'bus-' + Date.now();
@@ -17,6 +17,7 @@ const createBus = async (req, res) => {
             busNumber,
             plateNumber,
             assignedDriverId: assignedDriverId || null,
+            assignedRouteId: assignedRouteId || null,
             status: 'ACTIVE',
             createdAt: new Date().toISOString()
         };
@@ -42,7 +43,7 @@ const getBuses = async (req, res) => {
 
 const updateBus = async (req, res) => {
     const { busId } = req.params;
-    const { busNumber, plateNumber, assignedDriverId, status } = req.body;
+    const { busNumber, plateNumber, assignedDriverId, assignedRouteId, status } = req.body;
 
     try {
         const busRef = db.collection('buses').doc(busId);
@@ -56,6 +57,7 @@ const updateBus = async (req, res) => {
         if (busNumber !== undefined) updateData.busNumber = busNumber;
         if (plateNumber !== undefined) updateData.plateNumber = plateNumber;
         if (assignedDriverId !== undefined) updateData.assignedDriverId = assignedDriverId || null;
+        if (assignedRouteId !== undefined) updateData.assignedRouteId = assignedRouteId || null;
         if (status !== undefined) updateData.status = status;
         updateData.updatedAt = new Date().toISOString();
 
