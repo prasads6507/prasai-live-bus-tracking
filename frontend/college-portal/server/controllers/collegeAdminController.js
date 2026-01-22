@@ -101,8 +101,8 @@ const createRoute = async (req, res) => {
             routeId,
             collegeId: req.collegeId,
             routeName,
-            startPoint,
-            endPoint,
+            startPoint: startPoint || '',
+            endPoint: endPoint || '',
             createdAt: new Date().toISOString()
         };
 

@@ -15,8 +15,6 @@ const Routes = () => {
     // Form State
     const [newRoute, setNewRoute] = useState({
         routeName: '',
-        startPoint: '',
-        endPoint: '',
         stops: [] as any[]
     });
     const [formLoading, setFormLoading] = useState(false);
@@ -78,7 +76,7 @@ const Routes = () => {
                 setSuccessMessage(`Route ${newRoute.routeName} created successfully!`);
             }
 
-            setNewRoute({ routeName: '', startPoint: '', endPoint: '', stops: [] });
+            setNewRoute({ routeName: '', stops: [] });
             setIsEditMode(false);
             setEditingRoute(null);
             fetchRoutes(); // Refresh list
@@ -97,8 +95,6 @@ const Routes = () => {
         setEditingRoute(route);
         setNewRoute({
             routeName: route.routeName,
-            startPoint: route.startPoint || '',
-            endPoint: route.endPoint || '',
             stops: route.stops || []
         });
         setIsEditMode(true);
@@ -183,9 +179,7 @@ const Routes = () => {
     };
 
     const filteredRoutes = routes.filter(route =>
-        route.routeName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        route.startPoint?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        route.endPoint?.toLowerCase().includes(searchQuery.toLowerCase())
+        route.routeName?.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
     if (loading) {
@@ -235,7 +229,7 @@ const Routes = () => {
                             onClick={() => {
                                 setIsEditMode(false);
                                 setEditingRoute(null);
-                                setNewRoute({ routeName: '', startPoint: '', endPoint: '', stops: [] });
+                                setNewRoute({ routeName: '', stops: [] });
                                 setIsModalOpen(true);
                             }}
                             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-semibold shadow-lg shadow-blue-200 transition-all"
@@ -252,7 +246,6 @@ const Routes = () => {
                                 <thead className="bg-slate-50 border-b border-slate-200">
                                     <tr>
                                         <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Route Name</th>
-                                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Start → End</th>
                                         <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Stops</th>
                                         <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Actions</th>
                                     </tr>
@@ -268,9 +261,6 @@ const Routes = () => {
                                                         </div>
                                                         <span className="font-semibold text-slate-800">{route.routeName}</span>
                                                     </div>
-                                                </td>
-                                                <td className="px-6 py-4 text-slate-600">
-                                                    {route.startPoint} → {route.endPoint}
                                                 </td>
                                                 <td className="px-6 py-4 text-slate-600">
                                                     <span className="inline-flex px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
@@ -299,7 +289,7 @@ const Routes = () => {
                                         ))
                                     ) : (
                                         <tr>
-                                            <td colSpan={4} className="px-6 py-12 text-center text-slate-500">
+                                            <td colSpan={3} className="px-6 py-12 text-center text-slate-500">
                                                 {searchQuery ? 'No routes found matching your search.' : 'No routes added yet. Click "Add New Route" to get started.'}
                                             </td>
                                         </tr>
@@ -365,32 +355,6 @@ const Routes = () => {
                                         value={newRoute.routeName}
                                         onChange={(e) => setNewRoute({ ...newRoute, routeName: e.target.value })}
                                     />
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-semibold text-slate-700 mb-2">Start Point</label>
-                                        <input
-                                            type="text"
-                                            required
-                                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all"
-                                            placeholder="e.g., Main Campus"
-                                            value={newRoute.startPoint}
-                                            onChange={(e) => setNewRoute({ ...newRoute, startPoint: e.target.value })}
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-semibold text-slate-700 mb-2">End Point</label>
-                                        <input
-                                            type="text"
-                                            required
-                                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all"
-                                            placeholder="e.g., City Center"
-                                            value={newRoute.endPoint}
-                                            onChange={(e) => setNewRoute({ ...newRoute, endPoint: e.target.value })}
-                                        />
-                                    </div>
                                 </div>
 
                                 {/* Stops Section */}
@@ -531,8 +495,8 @@ const Routes = () => {
                                     onClick={handleFileUpload}
                                     disabled={!selectedFile || uploadLoading}
                                     className={`w-full py-3 rounded-xl font-semibold text-white transition-all ${!selectedFile || uploadLoading
-                                            ? 'bg-slate-400 cursor-not-allowed'
-                                            : 'bg-green-600 hover:bg-green-700 shadow-lg shadow-green-200'
+                                        ? 'bg-slate-400 cursor-not-allowed'
+                                        : 'bg-green-600 hover:bg-green-700 shadow-lg shadow-green-200'
                                         }`}
                                 >
                                     {uploadLoading ? 'Uploading...' : 'Upload Routes'}
