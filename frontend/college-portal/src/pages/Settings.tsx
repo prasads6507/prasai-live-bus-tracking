@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { User, Shield, Building, Mail, Phone, LogOut, Info } from 'lucide-react';
+import { User, Building, Mail, Phone, LogOut, Info } from 'lucide-react';
 import Layout from '../components/Layout';
 
 const Settings = () => {
