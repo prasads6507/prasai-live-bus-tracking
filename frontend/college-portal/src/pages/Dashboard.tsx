@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Bus, MapPin, Navigation, Settings, User } from 'lucide-react';
-import { getBuses, validateSlug } from '../services/api';
+import { getBuses, getRoutes, validateSlug } from '../services/api';
 import Layout from '../components/Layout';
 
 const Dashboard = () => {
     const { orgSlug } = useParams<{ orgSlug: string }>();
     const navigate = useNavigate();
     const [buses, setBuses] = useState<any[]>([]);
+    const [routes, setRoutes] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -27,10 +28,15 @@ const Dashboard = () => {
                     localStorage.setItem('current_college_id', orgData.collegeId);
                 }
 
-                // 3. Fetch Buses
-                const busData = await getBuses();
-                // Ensure busData is an array (API might wrap it)
+                // 3. Fetch Data in Parallel
+                const [busData, routeData] = await Promise.all([
+                    getBuses(),
+                    getRoutes()
+                ]);
+
+                // Ensure data arrays
                 setBuses(Array.isArray(busData) ? busData : busData.data || []);
+                setRoutes(Array.isArray(routeData) ? routeData : routeData.data || []);
 
             } catch (err) {
                 console.error("Dashboard Fetch Error:", err);
@@ -71,6 +77,13 @@ const Dashboard = () => {
 
                     {/* Stats Grid */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <StatCard
+                            title="Total Routes"
+                            value={routes.length.toString()}
+                            total={routes.length.toString()}
+                            icon={<MapPin className="text-purple-600" size={24} />}
+                            color="bg-purple-50"
+                        />
                         <StatCard
                             title="Active Buses"
                             value={buses.filter(b => b.status === 'ACTIVE').length.toString()}
