@@ -104,9 +104,9 @@ const uploadRoutesFile = async (req, res) => {
                             collegeId: req.collegeId,
                             routeId,
                             stopName: stop['Stop Name'].toString().trim(),
-                            latitude: parseFloat(stop['Latitude']) || 0,
-                            longitude: parseFloat(stop['Longitude']) || 0,
-                            order: parseInt(stop['Order']) || (index + 1)
+                            latitude: 0,
+                            longitude: 0,
+                            order: index + 1
                         };
                         batch.set(db.collection('stops').doc(stopId), stopData);
                         results.createdStops++;
@@ -153,9 +153,11 @@ const downloadTemplate = (req, res) => {
         ];
 
         const stopsData = [
-            { 'Route Name': 'Route A', 'Stop Name': 'Stop 1', 'Latitude': 12.34, 'Longitude': 56.78, 'Order': 1 },
-            { 'Route Name': 'Route A', 'Stop Name': 'Stop 2', 'Latitude': 12.35, 'Longitude': 56.79, 'Order': 2 },
-            { 'Route Name': 'Route B', 'Stop Name': 'Stop 1', 'Latitude': 13.45, 'Longitude': 57.89, 'Order': 1 }
+            { 'Route Name': 'Route A', 'Stop Name': 'Stop 1' },
+            { 'Route Name': 'Route A', 'Stop Name': 'Stop 2' },
+            { 'Route Name': 'Route A', 'Stop Name': 'Stop 3' },
+            { 'Route Name': 'Route B', 'Stop Name': 'Stop 1' },
+            { 'Route Name': 'Route B', 'Stop Name': 'Stop 2' }
         ];
 
         // Create workbook

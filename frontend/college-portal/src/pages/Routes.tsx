@@ -115,7 +115,7 @@ const Routes = () => {
     const addStop = () => {
         setNewRoute({
             ...newRoute,
-            stops: [...newRoute.stops, { stopName: '', latitude: '', longitude: '' }]
+            stops: [...newRoute.stops, { stopName: '' }]
         });
     };
 
@@ -376,31 +376,13 @@ const Routes = () => {
                                             {newRoute.stops.map((stop, index) => (
                                                 <div key={index} className="p-4 bg-slate-50 rounded-xl border border-slate-200">
                                                     <div className="flex items-start gap-3">
-                                                        <div className="flex-1 space-y-2">
-                                                            <input
-                                                                type="text"
-                                                                placeholder="Stop Name"
-                                                                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
-                                                                value={stop.stopName}
-                                                                onChange={(e) => updateStop(index, 'stopName', e.target.value)}
-                                                            />
-                                                            <div className="grid grid-cols-2 gap-2">
-                                                                <input
-                                                                    type="text"
-                                                                    placeholder="Latitude (optional)"
-                                                                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
-                                                                    value={stop.latitude}
-                                                                    onChange={(e) => updateStop(index, 'latitude', e.target.value)}
-                                                                />
-                                                                <input
-                                                                    type="text"
-                                                                    placeholder="Longitude (optional)"
-                                                                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
-                                                                    value={stop.longitude}
-                                                                    onChange={(e) => updateStop(index, 'longitude', e.target.value)}
-                                                                />
-                                                            </div>
-                                                        </div>
+                                                        <input
+                                                            type="text"
+                                                            placeholder="Stop Name"
+                                                            className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
+                                                            value={stop.stopName}
+                                                            onChange={(e) => updateStop(index, 'stopName', e.target.value)}
+                                                        />
                                                         <button
                                                             type="button"
                                                             onClick={() => removeStop(index)}
