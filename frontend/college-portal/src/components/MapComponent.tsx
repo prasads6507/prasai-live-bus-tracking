@@ -9,14 +9,18 @@ interface MapComponentProps {
     buses: any[];
 }
 
-// Component to handle map re-centering
-const ChangeView = ({ center }: { center: [number, number] }) => {
+// Component to handle map re-centering with smooth animation
+const ChangeView = ({ center, shouldAnimate = false }: { center: [number, number], shouldAnimate?: boolean }) => {
     const map = useMap();
     useEffect(() => {
         if (center[0] !== 0 && center[1] !== 0) {
-            map.setView(center);
+            if (shouldAnimate) {
+                map.flyTo(center, map.getZoom(), { duration: 1 });
+            } else {
+                map.setView(center);
+            }
         }
-    }, [center, map]);
+    }, [center, map, shouldAnimate]);
     return null;
 };
 
@@ -153,7 +157,7 @@ const MapComponent = ({ buses }: MapComponentProps) => {
                 scrollWheelZoom={true}
                 className="h-full w-full"
             >
-                <ChangeView center={mapCenter} />
+                <ChangeView center={mapCenter} shouldAnimate={!!activeBusWithLocation} />
                 <TileLayer
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
