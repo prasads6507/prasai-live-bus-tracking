@@ -189,21 +189,27 @@ const DriverDashboard = () => {
                         <>
                             <div>
                                 <label className="block text-sm font-medium text-slate-600 mb-2">Select Your Bus</label>
-                                <div className="grid grid-cols-2 gap-2">
-                                    {buses.map(bus => (
-                                        <button
-                                            key={bus._id}
-                                            onClick={() => setSelectedBusId(bus._id)}
-                                            className={`p-3 rounded-xl border text-left transition-all ${selectedBusId === bus._id
-                                                ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-200'
-                                                : 'border-slate-200 hover:border-blue-300'
-                                                }`}
-                                        >
-                                            <div className="font-bold text-slate-800">{bus.busNumber}</div>
-                                            <div className="text-xs text-slate-500 truncate">{bus.routeName || 'No Route'}</div>
-                                        </button>
-                                    ))}
-                                </div>
+                                {buses.length === 0 ? (
+                                    <div className="p-4 text-center border-2 border-dashed border-slate-200 rounded-xl text-slate-400 text-sm">
+                                        No buses available for this college.
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {buses.map(bus => (
+                                            <button
+                                                key={bus._id}
+                                                onClick={() => setSelectedBusId(bus._id)}
+                                                className={`p-3 rounded-xl border text-left transition-all ${selectedBusId === bus._id
+                                                    ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-200'
+                                                    : 'border-slate-200 hover:border-blue-300'
+                                                    }`}
+                                            >
+                                                <div className="font-bold text-slate-800">{bus.busNumber}</div>
+                                                <div className="text-xs text-slate-500 truncate">{bus.routeName || 'No Route'}</div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
 
                             <button
