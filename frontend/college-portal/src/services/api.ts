@@ -1,13 +1,26 @@
 import axios from 'axios';
 
+const getBaseUrl = () => {
+    const url = import.meta.env.VITE_API_URL || 'http://127.0.0.1:3001/api';
+    return url.endsWith('/api') ? url : `${url}/api`;
+};
+
 const api = axios.create({
-    baseURL: '/api', // Relative path for self-contained deployment
+    baseURL: getBaseUrl(),
 });
 
 // Add a request interceptor to attach the token
 api.interceptors.request.use(
     (config) => {
-        const token = localStorage.getItem('token');
+        // Determine if this is a driver request or standard admin request
+        const isDriverRequest = config.url?.includes('/driver');
+
+        // Use appropriate token based on request type
+        const token = isDriverRequest
+            ? localStorage.getItem('driver_token')
+            : localStorage.getItem('token');
+
+        // Use appropriate tenant ID
         const tenantId = localStorage.getItem('current_college_id');
 
         if (token) {

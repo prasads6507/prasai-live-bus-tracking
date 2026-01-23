@@ -10,6 +10,7 @@ const FindOrganization = () => {
     const [results, setResults] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
     const [selectedOrg, setSelectedOrg] = useState<any>(null);
+    const [error, setError] = useState<any>(null);
 
     useEffect(() => {
         const searchHandler = async () => {
@@ -22,8 +23,16 @@ const FindOrganization = () => {
             try {
                 const data = await searchOrganizations(query);
                 setResults(Array.isArray(data) ? data : []);
-            } catch (err) {
+            } catch (err: any) {
                 console.error('Search Error:', err);
+                const debugInfo = {
+                    message: err.message,
+                    url: err.config?.url,
+                    baseURL: err.config?.baseURL,
+                    method: err.config?.method,
+                    status: err.response?.status
+                };
+                setError(debugInfo);
                 setResults([]);
             } finally {
                 setLoading(false);
@@ -124,8 +133,16 @@ const FindOrganization = () => {
                             )}
                         </AnimatePresence>
 
+                        {/* Error Message for Debugging */}
+                        {error && (
+                            <div className="mt-4 p-4 bg-red-500/10 border border-red-500/50 rounded-xl text-red-200 text-sm">
+                                <p className="font-bold">Search Error:</p>
+                                <pre className="whitespace-pre-wrap mt-1 text-xs opacity-75">{JSON.stringify(error, null, 2)}</pre>
+                            </div>
+                        )}
+
                         {/* No Results */}
-                        {query.length >= 1 && !loading && results.length === 0 && (
+                        {query.length >= 1 && !loading && results.length === 0 && !error && (
                             <div className="mt-4 text-center text-slate-400 py-8">
                                 <Building2 size={48} className="mx-auto mb-3 opacity-20" />
                                 <p>No organizations found matching "{query}"</p>

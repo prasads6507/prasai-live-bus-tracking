@@ -181,6 +181,19 @@ const StatCard = ({ title, value, total, icon, color }: any) => (
     </div>
 );
 
+// Helper for relative time
+const getRelativeTime = (isoString: string) => {
+    if (!isoString) return 'Offline';
+    const date = new Date(isoString);
+    const now = new Date();
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+    if (diffInSeconds < 60) return 'Just now';
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} mins ago`;
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hours ago`;
+    return date.toLocaleDateString();
+};
+
 const BusCard = ({ bus }: { bus: any }) => (
     <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition-shadow group">
         <div className="flex items-start justify-between mb-3">
@@ -193,11 +206,12 @@ const BusCard = ({ bus }: { bus: any }) => (
                     <p className="text-xs text-slate-500">{bus.capacity || 0} Seats</p>
                 </div>
             </div>
-            <span className={`px-2 py-1 rounded-full text-xs font-bold ${bus.status === 'ACTIVE' ? 'bg-green-100 text-green-700' :
-                bus.status === 'MAINTENANCE' ? 'bg-orange-100 text-orange-700' :
-                    'bg-slate-100 text-slate-600'
+            <span className={`px-2 py-1 rounded-full text-xs font-bold ${bus.status === 'ON_ROUTE' ? 'bg-green-100 text-green-700 animate-pulse' :
+                bus.status === 'ACTIVE' ? 'bg-blue-100 text-blue-700' :
+                    bus.status === 'MAINTENANCE' ? 'bg-orange-100 text-orange-700' :
+                        'bg-slate-100 text-slate-600'
                 }`}>
-                {bus.status || 'Unknown'}
+                {bus.status === 'ON_ROUTE' ? 'LIVE' : bus.status || 'Unknown'}
             </span>
         </div>
         <div className="space-y-2">
@@ -206,12 +220,23 @@ const BusCard = ({ bus }: { bus: any }) => (
                 <span>{bus.driver?.name || 'No Driver Assigned'}</span>
             </div>
             <div className="flex items-center gap-2 text-sm text-slate-600">
-                <MapPin size={14} className="text-slate-400" />
-                <span className="truncate">{bus.lastLocation?.address || 'Location Unavailable'}</span>
+                {bus.status === 'ON_ROUTE' ? (
+                    <>
+                        <Navigation size={14} className="text-green-500" />
+                        <span className="font-semibold text-green-700">{bus.speed || 0} km/h</span>
+                    </>
+                ) : (
+                    <>
+                        <MapPin size={14} className="text-slate-400" />
+                        <span className="truncate text-slate-500">Stationary</span>
+                    </>
+                )}
             </div>
         </div>
         <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-400">Last updated: Just now</span>
+            <span className="text-xs font-medium text-slate-400">
+                Updated: {getRelativeTime(bus.lastUpdated)}
+            </span>
             <button className="text-blue-600 hover:text-blue-700 text-sm font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
                 Track Live
             </button>

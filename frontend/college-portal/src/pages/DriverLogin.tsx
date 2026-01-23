@@ -52,8 +52,15 @@ const DriverLogin = () => {
                 throw new Error('You do not belong to this organization.');
             }
 
-            localStorage.setItem('token', data.token);
-            localStorage.setItem('user', JSON.stringify(data));
+            localStorage.setItem('driver_token', data.token);
+            const userToStore = {
+                _id: data._id,
+                name: data.name,
+                email: data.email,
+                role: data.role,
+                collegeId: data.collegeId
+            };
+            localStorage.setItem('driver_user', JSON.stringify(userToStore));
             localStorage.setItem('current_college_id', data.collegeId); // Ensure context is consistent
 
             navigate(`/${orgSlug}/driver-dashboard`);

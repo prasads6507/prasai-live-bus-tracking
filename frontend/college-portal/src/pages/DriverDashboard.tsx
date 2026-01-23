@@ -123,10 +123,12 @@ const DriverDashboard = () => {
 
     const handleLogout = () => {
         endTrip(); // Ensure tracking stops
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        localStorage.removeItem('current_college_id');
-        localStorage.removeItem('orgName');
+        localStorage.removeItem('driver_token');
+        localStorage.removeItem('driver_user');
+        // We don't clear college ID/orgName aggressively anymore to allow Admin session to persist if exists
+        // Or we can clear them effectively "logging out" of that tab's context
+        // localStorage.removeItem('current_college_id'); 
+        // localStorage.removeItem('orgName');
         navigate(`/${orgSlug}/login`);
     };
 
