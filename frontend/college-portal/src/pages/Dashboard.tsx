@@ -64,25 +64,29 @@ const Dashboard = () => {
         console.log('Setting up real-time bus subscription for college:', collegeId);
 
         // Listen for real-time updates to 'buses' collection
-        const q = query(collection(db, 'buses'), where('collegeId', '==', collegeId));
-
-        const unsubscribe = onSnapshot(q, (snapshot) => {
+        const qBuses = query(collection(db, 'buses'), where('collegeId', '==', collegeId));
+        const unsubscribeBuses = onSnapshot(qBuses, (snapshot) => {
             const updatedBuses = snapshot.docs.map(doc => ({
                 _id: doc.id,
                 ...doc.data()
             }));
-
-            console.log(`Real-time update: ${updatedBuses.length} buses, changes:`, snapshot.docChanges().map(c => `${c.type}: ${c.doc.id}`));
-
-            // Always update buses state to ensure UI reflects current data
             setBuses(updatedBuses);
-        }, (error) => {
-            console.error("Real-time Bus Sub Error:", error);
+        });
+
+        // Listen for real-time updates to 'routes' collection
+        const qRoutes = query(collection(db, 'routes'), where('collegeId', '==', collegeId));
+        const unsubscribeRoutes = onSnapshot(qRoutes, (snapshot) => {
+            const updatedRoutes = snapshot.docs.map(doc => ({
+                _id: doc.id,
+                ...doc.data()
+            }));
+            setRoutes(updatedRoutes);
         });
 
         return () => {
-            console.log('Cleaning up real-time subscription for college:', collegeId);
-            unsubscribe();
+            console.log('Cleaning up real-time subscriptions for college:', collegeId);
+            unsubscribeBuses();
+            unsubscribeRoutes();
         };
     }, [orgSlug]); // Re-subscribe if org changes
 

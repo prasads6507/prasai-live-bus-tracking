@@ -17,6 +17,7 @@ const DriverDashboard = () => {
     const [currentCoords, setCurrentCoords] = useState<{ lat: number, lng: number } | null>(null);
     const [locationPermission, setLocationPermission] = useState<PermissionState>('prompt');
     const [tripId, setTripId] = useState<string | null>(null);
+    const [lastSentTime, setLastSentTime] = useState<string>('');
 
     // Refs for tracking
     const watchIdRef = useRef<number | null>(null);
@@ -94,8 +95,8 @@ const DriverDashboard = () => {
                 setCurrentCoords({ lat: latitude, lng: longitude });
                 setLocationError(null);
 
-                // Update real-time location every 5 seconds
-                if (now - lastUpdateRef.current > 5000) {
+                // Update real-time location every 3 seconds (was 5)
+                if (now - lastUpdateRef.current > 3000) {
                     try {
                         console.log(`--- SENDING LOCATION FOR BUS ${selectedBusId} ---`);
                         console.log('Coords:', { latitude, longitude, speed: Math.round((speed || 0) * 3.6), heading: heading || 0 });
@@ -108,6 +109,7 @@ const DriverDashboard = () => {
                             status: 'ON_ROUTE'
                         });
                         lastUpdateRef.current = now;
+                        setLastSentTime(new Date().toLocaleTimeString());
                         console.log('Location update sent successfully');
                     } catch (err: any) {
                         console.error("Failed to send location update", err);
@@ -251,6 +253,11 @@ const DriverDashboard = () => {
                             {currentCoords && (
                                 <div className="mt-3 text-xs opacity-70 font-mono">
                                     GPS: {currentCoords.lat.toFixed(6)}, {currentCoords.lng.toFixed(6)}
+                                    {lastSentTime && (
+                                        <div className="mt-1 opacity-80 border-t border-white/20 pt-1">
+                                            Last Sent: {lastSentTime}
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </>
