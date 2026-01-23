@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { MapPin, Bus, Navigation, LogOut, AlertCircle } from 'lucide-react';
+import { Navigation, LogOut, AlertCircle } from 'lucide-react';
 import { getDriverBuses, updateBusLocation } from '../services/api';
 
 const DriverDashboard = () => {
@@ -195,8 +195,8 @@ const DriverDashboard = () => {
                                             key={bus._id}
                                             onClick={() => setSelectedBusId(bus._id)}
                                             className={`p-3 rounded-xl border text-left transition-all ${selectedBusId === bus._id
-                                                    ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-200'
-                                                    : 'border-slate-200 hover:border-blue-300'
+                                                ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-200'
+                                                : 'border-slate-200 hover:border-blue-300'
                                                 }`}
                                         >
                                             <div className="font-bold text-slate-800">{bus.busNumber}</div>
@@ -210,8 +210,8 @@ const DriverDashboard = () => {
                                 onClick={startTrip}
                                 disabled={!selectedBusId}
                                 className={`w-full py-4 rounded-xl font-bold text-lg shadow-md transition-all flex items-center justify-center gap-2 ${selectedBusId
-                                        ? 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-lg transform active:scale-95'
-                                        : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                                    ? 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-lg transform active:scale-95'
+                                    : 'bg-slate-200 text-slate-400 cursor-not-allowed'
                                     }`}
                             >
                                 <Navigation size={24} />

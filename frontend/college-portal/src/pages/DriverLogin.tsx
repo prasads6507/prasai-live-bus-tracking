@@ -54,6 +54,7 @@ const DriverLogin = () => {
 
             localStorage.setItem('token', data.token);
             localStorage.setItem('user', JSON.stringify(data));
+            localStorage.setItem('current_college_id', data.collegeId); // Ensure context is consistent
 
             navigate(`/${orgSlug}/driver-dashboard`);
 
