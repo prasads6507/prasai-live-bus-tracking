@@ -64,13 +64,17 @@ const DriverDashboard = () => {
         watchIdRef.current = navigator.geolocation.watchPosition(
             async (position) => {
                 const now = Date.now();
-                // Throttle updates to every 3 seconds to save bandwidth/db writes
-                if (now - lastUpdateRef.current > 3000) {
+                // Throttle updates to every 5 seconds to save bandwidth/db writes
+                if (now - lastUpdateRef.current > 5000) {
                     const { latitude, longitude, speed, heading } = position.coords;
 
                     setCurrentSpeed((speed || 0) * 3.6); // Convert m/s to km/h
+                    setLocationError(null); // Clear any previous location errors on success
 
                     try {
+                        console.log(`--- SENDING LOCATION FOR BUS ${selectedBusId} ---`);
+                        console.log('Coords:', { latitude, longitude, speed: Math.round((speed || 0) * 3.6), heading: heading || 0 });
+
                         await updateBusLocation(selectedBusId, {
                             latitude,
                             longitude,
@@ -79,8 +83,14 @@ const DriverDashboard = () => {
                             status: 'ON_ROUTE'
                         });
                         lastUpdateRef.current = now;
-                    } catch (err) {
+                        console.log('Location update sent successfully');
+                    } catch (err: any) {
                         console.error("Failed to send location update", err);
+                        // Only show error if it's a real auth issue, not transient network
+                        if (err.response?.status === 401) {
+                            setError('Session expired. Please log in again.');
+                            endTrip();
+                        }
                     }
                 }
             },
@@ -91,8 +101,8 @@ const DriverDashboard = () => {
             },
             {
                 enableHighAccuracy: true,
-                timeout: 10000,
-                maximumAge: 0
+                timeout: 30000, // Increased timeout to 30 seconds
+                maximumAge: 5000 // Allow cached positions up to 5 seconds old
             }
         );
     };

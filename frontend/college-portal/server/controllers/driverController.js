@@ -40,26 +40,46 @@ const updateBusLocation = async (req, res) => {
         const { busId } = req.params;
         const { latitude, longitude, speed, heading, status } = req.body;
 
+        console.log(`--- UPDATE BUS LOCATION: ${busId} ---`);
+        console.log('Payload:', { latitude, longitude, speed, heading, status });
+        console.log('CollegeId:', req.collegeId);
+
         // Verify bus exists and belongs to college
         const busRef = db.collection('buses').doc(busId);
         const busDoc = await busRef.get();
 
-        if (!busDoc.exists || busDoc.data().collegeId !== req.collegeId) {
-            return res.status(404).json({ success: false, message: 'Bus not found or unauthorized' });
+        if (!busDoc.exists) {
+            console.log('Bus not found');
+            return res.status(404).json({ success: false, message: 'Bus not found' });
+        }
+
+        if (busDoc.data().collegeId !== req.collegeId) {
+            console.log('Unauthorized college access:', busDoc.data().collegeId, 'vs', req.collegeId);
+            return res.status(403).json({ success: false, message: 'Unauthorized college access' });
         }
 
         // Update location and status
-        await busRef.update({
-            location: {
+        const updateData = {
+            lastUpdated: new Date().toISOString(),
+            currentDriverId: req.user.uid
+        };
+
+        if (status) updateData.status = status;
+        if (speed !== undefined) updateData.speed = speed;
+
+        // Only update location object if coordinates are actually provided
+        if (latitude !== undefined && longitude !== undefined) {
+            updateData.location = {
                 latitude,
                 longitude,
                 heading: heading || 0
-            },
-            speed: speed || 0,
-            status: status || 'ON_ROUTE',
-            lastUpdated: new Date().toISOString(),
-            currentDriverId: req.user.uid // Track who updated it
-        });
+            };
+        } else {
+            console.log('No coordinates provided, skipping location update');
+        }
+
+        console.log('Updating Firestore with:', updateData);
+        await busRef.update(updateData);
 
         // Add to location history (optional, for playback later)
         // await db.collection('buses').doc(busId).collection('history').add({ ... });

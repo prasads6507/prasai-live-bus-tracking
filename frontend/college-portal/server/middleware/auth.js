@@ -16,10 +16,26 @@ const protect = (req, res, next) => {
 
             next();
         } catch (error) {
-            res.status(401).json({ message: 'Not authorized, token failed' });
+            console.error('Token verification failed:', error.message);
+
+            // Provide specific error message for token expiry
+            if (error.name === 'TokenExpiredError') {
+                return res.status(401).json({
+                    message: 'Session expired. Please log in again.',
+                    code: 'TOKEN_EXPIRED'
+                });
+            }
+
+            return res.status(401).json({
+                message: 'Not authorized, token failed',
+                code: 'TOKEN_INVALID'
+            });
         }
     } else {
-        res.status(401).json({ message: 'Not authorized, no token' });
+        return res.status(401).json({
+            message: 'Not authorized, no token',
+            code: 'NO_TOKEN'
+        });
     }
 };
 

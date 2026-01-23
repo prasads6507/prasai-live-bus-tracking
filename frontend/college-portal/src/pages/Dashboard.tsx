@@ -56,11 +56,14 @@ const Dashboard = () => {
     // Real-time Bus Updates
     useEffect(() => {
         const collegeId = localStorage.getItem('current_college_id');
-        if (!collegeId) return;
+        if (!collegeId) {
+            console.warn('No college ID found for real-time subscription');
+            return;
+        }
+
+        console.log('Setting up real-time bus subscription for college:', collegeId);
 
         // Listen for real-time updates to 'buses' collection
-        // Assuming buses have a 'collegeId' field to filter by
-        // Note: You needs to ensure your Firestore rules allow this query
         const q = query(collection(db, 'buses'), where('collegeId', '==', collegeId));
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -69,17 +72,19 @@ const Dashboard = () => {
                 ...doc.data()
             }));
 
-            // Only update buses if we have data, otherwise fallback to API (or just set it)
-            // Ideally this replaces api.getBuses() entirely after initial load
-            if (updatedBuses.length > 0) {
-                setBuses(updatedBuses);
-            }
+            console.log(`Real-time update: ${updatedBuses.length} buses, changes:`, snapshot.docChanges().map(c => `${c.type}: ${c.doc.id}`));
+
+            // Always update buses state to ensure UI reflects current data
+            setBuses(updatedBuses);
         }, (error) => {
             console.error("Real-time Bus Sub Error:", error);
         });
 
-        return () => unsubscribe();
-    }, [orgSlug]); // Re-subscribe if org changes (though likely won't without page reload)
+        return () => {
+            console.log('Cleaning up real-time subscription for college:', collegeId);
+            unsubscribe();
+        };
+    }, [orgSlug]); // Re-subscribe if org changes
 
     if (loading) {
         return (

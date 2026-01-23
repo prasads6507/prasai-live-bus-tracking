@@ -16,10 +16,14 @@ api.interceptors.request.use(
         // Admin requests like /api/admin/users/driver should NOT match this
         const isDriverPortalRequest = config.url?.startsWith('/driver/') || config.url === '/driver';
 
+        console.log(`INTERCEPTOR: ${config.method?.toUpperCase()} ${config.url} | isDriver: ${isDriverPortalRequest}`);
+
         // Use appropriate token based on request type
         const token = isDriverPortalRequest
             ? localStorage.getItem('driver_token')
             : localStorage.getItem('token');
+
+        console.log(`Using token: ${token ? 'PRESENT' : 'MISSING'} (${isDriverPortalRequest ? 'driver_token' : 'token'})`);
 
         // Use appropriate tenant ID
         const tenantId = localStorage.getItem('current_college_id');
@@ -86,6 +90,7 @@ export const getDriverBuses = async () => {
 };
 
 export const updateBusLocation = async (busId: string, locationData: any) => {
+    console.log(`API CALL: POST /driver/tracking/${busId}`, locationData);
     const response = await api.post(`/driver/tracking/${busId}`, locationData);
     return response.data;
 };
