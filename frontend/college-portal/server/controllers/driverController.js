@@ -1,117 +1,70 @@
-const { db } = require('../config/firebase');
+const { db, admin } = require('../config/firebase');
 
-// @desc    Start a trip
-// @route   POST /api/driver/trip/start
+// @desc    Get available buses for the driver's college
+// @route   GET /api/driver/buses
 // @access  Private (Driver)
-const startTrip = async (req, res) => {
-    const { busId, routeId } = req.body;
-
+const getDriverBuses = async (req, res) => {
     try {
-        // Check if active trip exists
-        const tripsRef = db.collection('trips');
-        const snapshot = await tripsRef
-            .where('driverUserId', '==', req.user.id)
-            .where('status', '==', 'RUNNING')
-            .limit(1)
+        const busesSnapshot = await db.collection('buses')
+            .where('collegeId', '==', req.collegeId)
             .get();
 
-        if (!snapshot.empty) {
-            return res.status(400).json({ message: 'You already have an active trip' });
+        const buses = busesSnapshot.docs.map(doc => ({
+            _id: doc.id,
+            ...doc.data()
+        }));
+
+        res.status(200).json({
+            success: true,
+            count: buses.length,
+            data: buses
+        });
+    } catch (error) {
+        console.error('Error fetching driver buses:', error);
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+    }
+};
+
+// @desc    Update bus location and status
+// @route   POST /api/driver/tracking/:busId
+// @access  Private (Driver)
+const updateBusLocation = async (req, res) => {
+    try {
+        const { busId } = req.params;
+        const { latitude, longitude, speed, heading, status } = req.body;
+
+        // Verify bus exists and belongs to college
+        const busRef = db.collection('buses').doc(busId);
+        const busDoc = await busRef.get();
+
+        if (!busDoc.exists || busDoc.data().collegeId !== req.collegeId) {
+            return res.status(404).json({ success: false, message: 'Bus not found or unauthorized' });
         }
 
-        const newTrip = {
-            collegeId: req.collegeId || 'unknown', // Middleware should set this
-            busId,
-            driverUserId: req.user.id,
-            routeId,
-            status: 'RUNNING',
-            startTime: new Date().toISOString()
-        };
-
-        const docRef = await tripsRef.add(newTrip);
-
-        res.status(201).json({ _id: docRef.id, ...newTrip });
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-};
-
-// @desc    End a trip
-// @route   POST /api/driver/trip/end
-// @access  Private (Driver)
-const endTrip = async (req, res) => {
-    const { tripId } = req.body;
-
-    try {
-        const tripRef = db.collection('trips').doc(tripId);
-        const doc = await tripRef.get();
-
-        if (doc.exists && doc.data().driverUserId === req.user.id) {
-            await tripRef.update({
-                status: 'ENDED',
-                endTime: new Date().toISOString()
-            });
-            const updated = await tripRef.get();
-            res.json({ _id: updated.id, ...updated.data() });
-        } else {
-            res.status(404).json({ message: 'Trip not found or unauthorized' });
-        }
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-};
-
-// @desc    Send SOS
-// @route   POST /api/driver/trip/sos
-// @access  Private (Driver)
-const sendSOS = async (req, res) => {
-    const { busId, location, message } = req.body;
-
-    try {
-        const alert = {
-            collegeId: req.collegeId || 'unknown',
-            type: 'SOS',
-            busId,
-            message,
-            location,
-            timestamp: new Date().toISOString()
-        };
-
-        // Write directly to 'alerts' collection
-        // Frontend must "listen" to this collection for updates
-        const docRef = await db.collection('alerts').add(alert);
-
-        res.status(201).json({ _id: docRef.id, ...alert });
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-};
-
-// @desc    Update live location
-// @route   POST /api/driver/location
-// @access  Private (Driver)
-const updateLocation = async (req, res) => {
-    const { busId, latitude, longitude, speed, heading } = req.body;
-
-    try {
-        const locationData = {
-            busId,
-            collegeId: req.collegeId || 'unknown',
-            driverUserId: req.user.id,
-            latitude,
-            longitude,
+        // Update location and status
+        await busRef.update({
+            location: {
+                latitude,
+                longitude,
+                heading: heading || 0
+            },
             speed: speed || 0,
-            heading: heading || 0,
-            lastUpdatedAt: new Date().toISOString()
-        };
+            status: status || 'ON_ROUTE',
+            lastUpdated: new Date().toISOString(),
+            currentDriverId: req.user.uid // Track who updated it
+        });
 
-        // We use busId as doc ID for latest location lookup
-        await db.collection('live_locations').doc(busId).set(locationData);
+        // Add to location history (optional, for playback later)
+        // await db.collection('buses').doc(busId).collection('history').add({ ... });
 
-        res.json({ success: true });
+        res.status(200).json({ success: true, message: 'Location updated' });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        console.error('Error updating bus location:', error);
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
     }
 };
 
-module.exports = { startTrip, endTrip, sendSOS, updateLocation };
+module.exports = {
+    getDriverBuses,
+    updateBusLocation
+};

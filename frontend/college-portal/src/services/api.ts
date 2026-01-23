@@ -65,6 +65,17 @@ export const deleteDriver = async (userId: string) => {
     return response.data;
 };
 
+// Driver Portal - Bus Operations
+export const getDriverBuses = async () => {
+    const response = await api.get('/driver/buses');
+    return response.data;
+};
+
+export const updateBusLocation = async (busId: string, locationData: any) => {
+    const response = await api.post(`/driver/tracking/${busId}`, locationData);
+    return response.data;
+};
+
 // Bus Management
 export const createBus = async (busData: any) => {
     const response = await api.post('/admin/buses', busData);
