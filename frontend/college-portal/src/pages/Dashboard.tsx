@@ -79,7 +79,6 @@ const Dashboard = () => {
         });
 
         return () => unsubscribe();
-        return () => unsubscribe();
     }, [orgSlug]); // Re-subscribe if org changes (though likely won't without page reload)
 
     if (loading) {
