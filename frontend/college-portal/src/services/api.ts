@@ -12,11 +12,12 @@ const api = axios.create({
 // Add a request interceptor to attach the token
 api.interceptors.request.use(
     (config) => {
-        // Determine if this is a driver request or standard admin request
-        const isDriverRequest = config.url?.includes('/driver');
+        // Determine if this is a driver portal request (starts with /driver/)
+        // Admin requests like /api/admin/users/driver should NOT match this
+        const isDriverPortalRequest = config.url?.startsWith('/driver/') || config.url === '/driver';
 
         // Use appropriate token based on request type
-        const token = isDriverRequest
+        const token = isDriverPortalRequest
             ? localStorage.getItem('driver_token')
             : localStorage.getItem('token');
 

@@ -7,6 +7,7 @@ import Layout from '../components/Layout';
 const Drivers = () => {
     const [drivers, setDrivers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -31,10 +32,12 @@ const Drivers = () => {
 
     const fetchDrivers = async () => {
         try {
+            setError('');
             const data = await getDrivers();
             setDrivers(Array.isArray(data) ? data : []);
-        } catch (error) {
+        } catch (error: any) {
             console.error("Failed to fetch drivers:", error);
+            setError(error.response?.data?.message || error.message || 'Failed to load drivers');
         } finally {
             setLoading(false);
         }
@@ -150,6 +153,21 @@ const Drivers = () => {
                     </div>
 
                     {/* Drivers List */}
+                    <AnimatePresence>
+                        {error && (
+                            <motion.div
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                                className="mb-4 bg-red-50 border-l-4 border-red-500 p-4 rounded-r shadow-sm"
+                            >
+                                <div className="flex items-center">
+                                    <AlertCircle className="text-red-500 mr-2" />
+                                    <p className="text-red-700 font-medium">{error}</p>
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                     <div className="flex-1 overflow-auto bg-white rounded-2xl shadow-sm border border-slate-200">
                         {loading ? (
                             <div className="flex items-center justify-center h-full">
@@ -199,8 +217,8 @@ const Drivers = () => {
                                             </td>
                                             <td className="p-5">
                                                 <span className={`px-3 py-1 rounded-full text-xs font-bold ${driver.status === 'ACTIVE'
-                                                        ? 'bg-green-100 text-green-700'
-                                                        : 'bg-red-100 text-red-700'
+                                                    ? 'bg-green-100 text-green-700'
+                                                    : 'bg-red-100 text-red-700'
                                                     }`}>
                                                     {driver.status || 'ACTIVE'}
                                                 </span>

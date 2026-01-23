@@ -45,8 +45,8 @@ const Login = () => {
 
             // Redirect DRIVERS to Driver Dashboard
             if (data.role === 'DRIVER') {
-                // Store user info for driver
-                localStorage.setItem('token', data.token);
+                // Store user info specifically for driver portal
+                localStorage.setItem('driver_token', data.token);
                 const userToStore = {
                     _id: data._id,
                     name: data.name,
@@ -54,7 +54,7 @@ const Login = () => {
                     role: data.role,
                     collegeId: data.collegeId
                 };
-                localStorage.setItem('user', JSON.stringify(userToStore));
+                localStorage.setItem('driver_user', JSON.stringify(userToStore));
                 localStorage.setItem('current_college_id', orgDetails.collegeId);
                 localStorage.setItem('orgName', orgDetails.collegeName);
 

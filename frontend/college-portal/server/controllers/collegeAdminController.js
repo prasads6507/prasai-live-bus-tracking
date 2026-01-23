@@ -302,10 +302,14 @@ const getUsersByRole = async (req, res) => {
     const filterRole = role.toUpperCase();
 
     try {
+        console.log(`[DEBUG] getUsersByRole: collegeId=${req.collegeId}, role=${filterRole}`);
+
         const snapshot = await db.collection('users')
             .where('collegeId', '==', req.collegeId)
             .where('role', '==', filterRole)
             .get();
+
+        console.log(`[DEBUG] Found ${snapshot.size} users`);
 
         const users = snapshot.docs.map(doc => {
             const data = doc.data();

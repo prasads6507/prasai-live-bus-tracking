@@ -11,6 +11,7 @@ const DriverDashboard = () => {
     const [buses, setBuses] = useState<any[]>([]);
     const [selectedBusId, setSelectedBusId] = useState<string>('');
     const [isTracking, setIsTracking] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     const [locationError, setLocationError] = useState<string | null>(null);
     const [currentSpeed, setCurrentSpeed] = useState<number>(0);
     const [locationPermission, setLocationPermission] = useState<PermissionState>('prompt');
@@ -38,8 +39,9 @@ const DriverDashboard = () => {
                 } else {
                     console.warn("Failed to fetch buses:", response.message);
                 }
-            } catch (err) {
+            } catch (err: any) {
                 console.error("Failed to init driver dashboard", err);
+                setError(err.response?.data?.message || err.message || "Failed to load dashboard data");
             }
         };
         init();
@@ -182,6 +184,16 @@ const DriverDashboard = () => {
                         </div>
                     )}
                 </div>
+
+                {error && (
+                    <div className="bg-red-100 border border-red-200 text-red-700 p-4 rounded-xl text-sm flex items-start gap-2 shadow-sm animate-in fade-in slide-in-from-top-2">
+                        <AlertCircle size={18} className="mt-0.5 shrink-0" />
+                        <div>
+                            <p className="font-bold">Dashboard Error</p>
+                            <p>{error}</p>
+                        </div>
+                    </div>
+                )}
 
                 {locationError && (
                     <div className="bg-red-100 border border-red-200 text-red-700 p-3 rounded-lg text-sm flex items-start gap-2">

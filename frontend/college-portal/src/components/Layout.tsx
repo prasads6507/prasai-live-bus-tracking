@@ -16,6 +16,8 @@ const Layout = ({ children, activeItem = 'dashboard' }: LayoutProps) => {
     const handleLogout = () => {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
+        localStorage.removeItem('driver_token');
+        localStorage.removeItem('driver_user');
         localStorage.removeItem('current_college_id');
         localStorage.removeItem('orgName');
         navigate(`/${orgSlug}/login`);
