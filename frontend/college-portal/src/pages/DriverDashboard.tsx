@@ -32,8 +32,11 @@ const DriverDashboard = () => {
 
                 // Fetch Buses
                 const response = await getDriverBuses();
+                console.log("DRIVER BUSES RESPONSE:", response);
                 if (response.success) {
                     setBuses(response.data);
+                } else {
+                    console.warn("Failed to fetch buses:", response.message);
                 }
             } catch (err) {
                 console.error("Failed to init driver dashboard", err);
@@ -122,7 +125,9 @@ const DriverDashboard = () => {
         endTrip(); // Ensure tracking stops
         localStorage.removeItem('token');
         localStorage.removeItem('user');
-        navigate(`/${orgSlug}/driver`);
+        localStorage.removeItem('current_college_id');
+        localStorage.removeItem('orgName');
+        navigate(`/${orgSlug}/login`);
     };
 
     // UI Components

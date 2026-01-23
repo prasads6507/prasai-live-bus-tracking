@@ -43,13 +43,23 @@ const Login = () => {
         try {
             const data = await login({ email, password });
 
-            // REJECT DRIVERS - They must use the driver portal
+            // Redirect DRIVERS to Driver Dashboard
             if (data.role === 'DRIVER') {
-                setError('Access Denied. Drivers must use the Driver Portal.');
-                setLoading(false);
-                setTimeout(() => {
-                    navigate(`/${orgSlug}/driver`);
-                }, 2000);
+                // Store user info for driver
+                localStorage.setItem('token', data.token);
+                const userToStore = {
+                    _id: data._id,
+                    name: data.name,
+                    email: data.email,
+                    role: data.role,
+                    collegeId: data.collegeId
+                };
+                localStorage.setItem('user', JSON.stringify(userToStore));
+                localStorage.setItem('current_college_id', orgDetails.collegeId);
+                localStorage.setItem('orgName', orgDetails.collegeName);
+
+                // Redirect to driver dashboard
+                navigate(`/${orgSlug}/driver-dashboard`);
                 return;
             }
 

@@ -5,9 +5,16 @@ const { db, admin } = require('../config/firebase');
 // @access  Private (Driver)
 const getDriverBuses = async (req, res) => {
     try {
+        console.log('--- GET DRIVER BUSES ---');
+        console.log('User:', req.user.email, 'Role:', req.user.role, 'Token CollegeId:', req.user.collegeId);
+        console.log('Req CollegeId:', req.collegeId);
+
         const busesSnapshot = await db.collection('buses')
             .where('collegeId', '==', req.collegeId)
             .get();
+
+        console.log(`Found ${busesSnapshot.size} buses for college ${req.collegeId}`);
+
 
         const buses = busesSnapshot.docs.map(doc => ({
             _id: doc.id,
