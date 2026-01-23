@@ -140,7 +140,7 @@ const Login = () => {
                 initial={{ x: -50, opacity: 0 }}
                 animate={{ x: 0, opacity: 1 }}
                 transition={{ duration: 0.6 }}
-                className="lg:w-1/2 bg-slate-900 relative flex flex-col justify-center items-center p-12 text-white overflow-hidden"
+                className="hidden lg:flex lg:w-1/2 bg-slate-900 relative flex-col justify-center items-center p-12 text-white overflow-hidden"
             >
                 {/* Abstract Background Shapes */}
                 <div className="absolute top-0 left-0 w-full h-full opacity-10">
@@ -190,12 +190,18 @@ const Login = () => {
             </motion.div>
 
             {/* Right Side - Login Form */}
-            <div className="lg:w-1/2 flex items-center justify-center p-8 lg:p-12 bg-slate-50">
+            <div className="w-full lg:w-1/2 flex items-center justify-center p-4 sm:p-6 lg:p-12 bg-slate-50 min-h-screen lg:min-h-0">
+                {/* Mobile Header */}
+                <div className="lg:hidden absolute top-0 left-0 right-0 bg-slate-900 text-white p-4 flex items-center justify-center gap-3">
+                    <School className="w-6 h-6 text-blue-400" />
+                    <span className="font-bold text-lg truncate max-w-[200px]">{orgDetails?.collegeName}</span>
+                </div>
+
                 <motion.div
                     initial={{ y: 20, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
                     transition={{ delay: 0.2 }}
-                    className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-slate-100 p-10"
+                    className="w-full max-w-md bg-white rounded-2xl sm:rounded-3xl shadow-xl border border-slate-100 p-6 sm:p-8 lg:p-10 mt-16 lg:mt-0"
                 >
                     <div className="mb-8">
                         <h2 className="text-2xl font-bold text-slate-800">Admin Sign In</h2>
@@ -224,7 +230,7 @@ const Login = () => {
                                 <input
                                     type="email"
                                     required
-                                    className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all font-medium text-slate-700 placeholder:text-slate-400"
+                                    className="w-full pl-12 pr-4 py-3 sm:py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all font-medium text-slate-700 placeholder:text-slate-400 text-base"
                                     placeholder="admin@college.edu"
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
@@ -242,7 +248,7 @@ const Login = () => {
                                 <input
                                     type="password"
                                     required
-                                    className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all font-medium text-slate-700 placeholder:text-slate-400"
+                                    className="w-full pl-12 pr-4 py-3 sm:py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all font-medium text-slate-700 placeholder:text-slate-400 text-base"
                                     placeholder="••••••••"
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
@@ -256,7 +262,7 @@ const Login = () => {
                                 whileTap={{ scale: 0.99 }}
                                 type="submit"
                                 disabled={loading || !!error}
-                                className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg flex items-center justify-center space-x-2 transition-all ${loading || error
+                                className={`w-full py-3 sm:py-4 rounded-xl font-bold text-base sm:text-lg shadow-lg flex items-center justify-center space-x-2 transition-all ${loading || error
                                     ? 'bg-slate-200 text-slate-400 shadow-none cursor-not-allowed'
                                     : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-blue-200'
                                     }`}

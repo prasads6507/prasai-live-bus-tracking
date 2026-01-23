@@ -61,18 +61,18 @@ const Login: React.FC = () => {
             </div>
 
             {/* Right Auth Side */}
-            <div className="w-full lg:w-1/2 flex flex-col justify-center items-center p-8 md:p-16 lg:p-24 bg-white relative">
+            <div className="w-full lg:w-1/2 flex flex-col justify-center items-center p-4 sm:p-8 md:p-12 lg:p-16 xl:p-24 bg-white relative min-h-screen lg:min-h-0">
                 {/* Mobile Identity */}
-                <div className="lg:hidden flex flex-col items-center mb-10">
-                    <img src="/logo.png" alt="Prasai Logo" className="w-20 h-20 mb-2" />
-                    <h1 className="text-4xl font-black text-blue-600 tracking-tight italic">Prasai</h1>
+                <div className="lg:hidden flex flex-col items-center mb-6 sm:mb-10">
+                    <img src="/logo.png" alt="Prasai Logo" className="w-16 h-16 sm:w-20 sm:h-20 mb-2" />
+                    <h1 className="text-3xl sm:text-4xl font-black text-blue-600 tracking-tight italic">Prasai</h1>
                     <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Live Bus Tracking</p>
                 </div>
 
                 <div className="w-full max-w-md animate-in slide-in-from-bottom-8 duration-700">
-                    <div className="mb-10 lg:text-left text-center">
-                        <h2 className="text-3xl font-black text-slate-800 mb-2">Welcome Back</h2>
-                        <p className="text-slate-500 font-medium italic">Please enter your credentials to access the portal</p>
+                    <div className="mb-6 sm:mb-10 lg:text-left text-center">
+                        <h2 className="text-2xl sm:text-3xl font-black text-slate-800 mb-2">Welcome Back</h2>
+                        <p className="text-slate-500 font-medium italic text-sm sm:text-base">Please enter your credentials to access the portal</p>
                     </div>
 
                     {error && (
@@ -83,26 +83,26 @@ const Login: React.FC = () => {
                     )}
 
                     <form onSubmit={handleSubmit} className="space-y-6">
-                        <div className="space-y-2">
-                            <label className="text-sm font-bold text-slate-700 uppercase tracking-wider ml-1">Email Address</label>
+                        <div className="space-y-1 sm:space-y-2">
+                            <label className="text-xs sm:text-sm font-bold text-slate-700 uppercase tracking-wider ml-1">Email Address</label>
                             <input
                                 type="email"
                                 placeholder="name@organization.com"
-                                className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-100 focus:bg-white focus:border-blue-500 transition-all font-medium"
+                                className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-slate-50 border border-slate-200 rounded-xl sm:rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-100 focus:bg-white focus:border-blue-500 transition-all font-medium text-base"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 required
                             />
                         </div>
-                        <div className="space-y-2">
-                            <label className="text-sm font-bold text-slate-700 uppercase tracking-wider ml-1 flex justify-between">
+                        <div className="space-y-1 sm:space-y-2">
+                            <label className="text-xs sm:text-sm font-bold text-slate-700 uppercase tracking-wider ml-1 flex justify-between">
                                 Password
                                 <span className="text-xs text-blue-600 lowercase tracking-normal italic cursor-pointer hover:underline">Forgot?</span>
                             </label>
                             <input
                                 type="password"
                                 placeholder="••••••••••••"
-                                className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-100 focus:bg-white focus:border-blue-500 transition-all font-medium"
+                                className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-slate-50 border border-slate-200 rounded-xl sm:rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-100 focus:bg-white focus:border-blue-500 transition-all font-medium text-base"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 required
@@ -111,7 +111,7 @@ const Login: React.FC = () => {
 
                         <button
                             type="submit"
-                            className="w-full bg-blue-600 text-white py-4 rounded-2xl text-lg font-black hover:bg-blue-700 hover:shadow-xl hover:shadow-blue-200 active:scale-[0.98] transition-all transform duration-200 shadow-lg"
+                            className="w-full bg-blue-600 text-white py-3 sm:py-4 rounded-xl sm:rounded-2xl text-base sm:text-lg font-black hover:bg-blue-700 hover:shadow-xl hover:shadow-blue-200 active:scale-[0.98] transition-all transform duration-200 shadow-lg"
                         >
                             Sign In to Portal
                         </button>
@@ -128,9 +128,9 @@ const Login: React.FC = () => {
 
                     <button
                         onClick={handleGoogleLogin}
-                        className="mt-8 w-full flex items-center justify-center bg-white border border-slate-200 text-slate-700 py-4 rounded-2xl hover:bg-slate-50 hover:border-slate-300 active:scale-[0.98] transition-all font-black text-sm shadow-sm"
+                        className="mt-6 sm:mt-8 w-full flex items-center justify-center bg-white border border-slate-200 text-slate-700 py-3 sm:py-4 rounded-xl sm:rounded-2xl hover:bg-slate-50 hover:border-slate-300 active:scale-[0.98] transition-all font-bold text-sm shadow-sm"
                     >
-                        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-6 h-6 mr-3" />
+                        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
                         Google Marketplace
                     </button>
 
@@ -140,7 +140,7 @@ const Login: React.FC = () => {
                     </div>
 
                     {/* Footer Branding */}
-                    <div className="mt-16 lg:mt-24 pt-8 border-t border-slate-100 text-center">
+                    <div className="mt-10 sm:mt-16 lg:mt-24 pt-6 sm:pt-8 border-t border-slate-100 text-center">
                         <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.3em]">
                             © 2026 Prasai
                         </p>
