@@ -21,7 +21,7 @@ const ChangeView = ({ center }: { center: [number, number] }) => {
 };
 
 // Component to get and update user location
-const UserLocationMarker = ({ onLocationFound }: { onLocationFound: (pos: [number, number]) => void }) => {
+const UserLocationMarker = ({ onLocationFound, shouldCenterOnUser }: { onLocationFound: (pos: [number, number]) => void, shouldCenterOnUser: boolean }) => {
     const [position, setPosition] = useState<[number, number] | null>(null);
     const map = useMap();
 
@@ -34,6 +34,11 @@ const UserLocationMarker = ({ onLocationFound }: { onLocationFound: (pos: [numbe
                     setPosition(userPos);
                     onLocationFound(userPos);
                     console.log('User location obtained:', userPos);
+
+                    // Auto-center map on user location if no buses are active
+                    if (shouldCenterOnUser) {
+                        map.flyTo(userPos, 14, { duration: 1.5 });
+                    }
                 },
                 (error) => {
                     console.warn('Geolocation error:', error.message);
@@ -41,7 +46,7 @@ const UserLocationMarker = ({ onLocationFound }: { onLocationFound: (pos: [numbe
                 { enableHighAccuracy: true, timeout: 10000 }
             );
         }
-    }, [map, onLocationFound]);
+    }, [map]); // Only run on mount, not when callbacks change
 
     if (!position) return null;
 
@@ -155,7 +160,10 @@ const MapComponent = ({ buses }: MapComponentProps) => {
                 />
 
                 {/* User location marker with geolocation request */}
-                <UserLocationMarker onLocationFound={setUserLocation} />
+                <UserLocationMarker
+                    onLocationFound={setUserLocation}
+                    shouldCenterOnUser={!activeBusWithLocation && !anyBusWithLocation}
+                />
 
                 {buses.map((bus) => {
                     if (!bus.location?.latitude || !bus.location?.longitude) return null;
