@@ -1,5 +1,5 @@
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
-import { useEffect } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, useMap, Circle } from 'react-leaflet';
+import { useEffect, useState } from 'react';
 import 'leaflet/dist/leaflet.css';
 import { divIcon } from 'leaflet';
 import { Bus, MapPin } from 'lucide-react';
@@ -20,9 +20,69 @@ const ChangeView = ({ center }: { center: [number, number] }) => {
     return null;
 };
 
+// Component to get and update user location
+const UserLocationMarker = ({ onLocationFound }: { onLocationFound: (pos: [number, number]) => void }) => {
+    const [position, setPosition] = useState<[number, number] | null>(null);
+    const map = useMap();
+
+    useEffect(() => {
+        // Request geolocation permission and get current position
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    const userPos: [number, number] = [pos.coords.latitude, pos.coords.longitude];
+                    setPosition(userPos);
+                    onLocationFound(userPos);
+                    console.log('User location obtained:', userPos);
+                },
+                (error) => {
+                    console.warn('Geolocation error:', error.message);
+                },
+                { enableHighAccuracy: true, timeout: 10000 }
+            );
+        }
+    }, [map, onLocationFound]);
+
+    if (!position) return null;
+
+    // Create user location icon
+    const userIconMarkup = renderToStaticMarkup(
+        <div className="relative flex items-center justify-center">
+            <div className="absolute w-8 h-8 bg-blue-500/30 rounded-full animate-ping"></div>
+            <div className="relative w-4 h-4 bg-blue-600 rounded-full border-2 border-white shadow-lg"></div>
+        </div>
+    );
+
+    const userIcon = divIcon({
+        html: userIconMarkup,
+        className: 'user-location-icon',
+        iconSize: [20, 20],
+        iconAnchor: [10, 10]
+    });
+
+    return (
+        <>
+            <Circle
+                center={position}
+                radius={100}
+                pathOptions={{ color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 0.1 }}
+            />
+            <Marker position={position} icon={userIcon}>
+                <Popup>
+                    <div className="text-center p-1">
+                        <p className="font-bold text-blue-600">Your Location</p>
+                        <p className="text-xs text-slate-500">{position[0].toFixed(6)}, {position[1].toFixed(6)}</p>
+                    </div>
+                </Popup>
+            </Marker>
+        </>
+    );
+};
+
 const MapComponent = ({ buses }: MapComponentProps) => {
     // Default center (Hyderabad)
     const defaultCenter: [number, number] = [17.3850, 78.4867];
+    const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
 
     // Log bus data for debugging
     console.log('MapComponent received buses:', buses.length, buses.map(b => ({
@@ -36,11 +96,14 @@ const MapComponent = ({ buses }: MapComponentProps) => {
     const activeBusWithLocation = buses.find(b => b.status === 'ON_ROUTE' && b.location?.latitude && b.location?.longitude);
     const anyBusWithLocation = buses.find(b => b.location?.latitude && b.location?.longitude);
 
+    // Priority: Active bus > Any bus with location > User location > Default
     const mapCenter: [number, number] = activeBusWithLocation
         ? [activeBusWithLocation.location.latitude, activeBusWithLocation.location.longitude]
         : anyBusWithLocation
             ? [anyBusWithLocation.location.latitude, anyBusWithLocation.location.longitude]
-            : defaultCenter;
+            : userLocation
+                ? userLocation
+                : defaultCenter;
 
     // Custom Bus Icon
     const createBusIcon = (status: string) => {
@@ -91,6 +154,9 @@ const MapComponent = ({ buses }: MapComponentProps) => {
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
 
+                {/* User location marker with geolocation request */}
+                <UserLocationMarker onLocationFound={setUserLocation} />
+
                 {buses.map((bus) => {
                     if (!bus.location?.latitude || !bus.location?.longitude) return null;
 
@@ -134,3 +200,4 @@ const MapComponent = ({ buses }: MapComponentProps) => {
 };
 
 export default MapComponent;
+

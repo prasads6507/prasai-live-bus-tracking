@@ -32,7 +32,7 @@ const getDriverBuses = async (req, res) => {
     }
 };
 
-// @desc    Update bus location and status
+// @desc    Update bus location and status (real-time, every 5 seconds)
 // @route   POST /api/driver/tracking/:busId
 // @access  Private (Driver)
 const updateBusLocation = async (req, res) => {
@@ -81,9 +81,6 @@ const updateBusLocation = async (req, res) => {
         console.log('Updating Firestore with:', updateData);
         await busRef.update(updateData);
 
-        // Add to location history (optional, for playback later)
-        // await db.collection('buses').doc(busId).collection('history').add({ ... });
-
         res.status(200).json({ success: true, message: 'Location updated' });
     } catch (error) {
         console.error('Error updating bus location:', error);
@@ -91,7 +88,163 @@ const updateBusLocation = async (req, res) => {
     }
 };
 
+// @desc    Start a new trip
+// @route   POST /api/driver/trip/start/:busId
+// @access  Private (Driver)
+const startTrip = async (req, res) => {
+    try {
+        const { busId } = req.params;
+        const { tripId } = req.body;
+
+        console.log(`--- START TRIP: ${tripId} for Bus ${busId} ---`);
+
+        // Verify bus exists and belongs to college
+        const busRef = db.collection('buses').doc(busId);
+        const busDoc = await busRef.get();
+
+        if (!busDoc.exists) {
+            return res.status(404).json({ success: false, message: 'Bus not found' });
+        }
+
+        if (busDoc.data().collegeId !== req.collegeId) {
+            return res.status(403).json({ success: false, message: 'Unauthorized college access' });
+        }
+
+        // Create trip document in trips subcollection
+        const tripRef = busRef.collection('trips').doc(tripId);
+        await tripRef.set({
+            tripId,
+            busId,
+            driverId: req.user.uid,
+            driverName: req.user.name || req.user.email,
+            collegeId: req.collegeId,
+            startTime: new Date().toISOString(),
+            endTime: null,
+            status: 'ACTIVE',
+            totalPoints: 0
+        });
+
+        // Update bus with current trip info
+        await busRef.update({
+            currentTripId: tripId,
+            status: 'ON_ROUTE'
+        });
+
+        console.log('Trip started successfully:', tripId);
+        res.status(201).json({ success: true, message: 'Trip started', tripId });
+    } catch (error) {
+        console.error('Error starting trip:', error);
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+    }
+};
+
+// @desc    End current trip
+// @route   POST /api/driver/trip/end/:busId
+// @access  Private (Driver)
+const endTrip = async (req, res) => {
+    try {
+        const { busId } = req.params;
+        const { tripId } = req.body;
+
+        console.log(`--- END TRIP: ${tripId} for Bus ${busId} ---`);
+
+        // Verify bus exists and belongs to college
+        const busRef = db.collection('buses').doc(busId);
+        const busDoc = await busRef.get();
+
+        if (!busDoc.exists) {
+            return res.status(404).json({ success: false, message: 'Bus not found' });
+        }
+
+        if (busDoc.data().collegeId !== req.collegeId) {
+            return res.status(403).json({ success: false, message: 'Unauthorized college access' });
+        }
+
+        // Update trip document
+        const tripRef = busRef.collection('trips').doc(tripId);
+        const tripDoc = await tripRef.get();
+
+        if (tripDoc.exists) {
+            const tripData = tripDoc.data();
+            const startTime = new Date(tripData.startTime);
+            const endTime = new Date();
+            const durationMinutes = Math.round((endTime - startTime) / 60000);
+
+            await tripRef.update({
+                endTime: endTime.toISOString(),
+                status: 'COMPLETED',
+                durationMinutes
+            });
+        }
+
+        // Update bus status
+        await busRef.update({
+            currentTripId: null,
+            status: 'ACTIVE'
+        });
+
+        console.log('Trip ended successfully:', tripId);
+        res.status(200).json({ success: true, message: 'Trip ended', tripId });
+    } catch (error) {
+        console.error('Error ending trip:', error);
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+    }
+};
+
+// @desc    Save trip history point (every 1 minute)
+// @route   POST /api/driver/trip/history/:busId
+// @access  Private (Driver)
+const saveTripHistory = async (req, res) => {
+    try {
+        const { busId } = req.params;
+        const { tripId, latitude, longitude, speed, heading, timestamp } = req.body;
+
+        console.log(`--- SAVE TRIP HISTORY: ${tripId} ---`);
+        console.log('Location:', { latitude, longitude, speed, heading });
+
+        // Verify bus exists and belongs to college
+        const busRef = db.collection('buses').doc(busId);
+        const busDoc = await busRef.get();
+
+        if (!busDoc.exists) {
+            return res.status(404).json({ success: false, message: 'Bus not found' });
+        }
+
+        if (busDoc.data().collegeId !== req.collegeId) {
+            return res.status(403).json({ success: false, message: 'Unauthorized college access' });
+        }
+
+        // Save to trip history subcollection
+        const tripRef = busRef.collection('trips').doc(tripId);
+        const historyRef = tripRef.collection('history');
+
+        await historyRef.add({
+            latitude,
+            longitude,
+            speed: speed || 0,
+            heading: heading || 0,
+            timestamp: timestamp || new Date().toISOString(),
+            recordedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        // Increment total points counter
+        await tripRef.update({
+            totalPoints: admin.firestore.FieldValue.increment(1)
+        });
+
+        console.log('History point saved');
+        res.status(201).json({ success: true, message: 'History saved' });
+    } catch (error) {
+        console.error('Error saving trip history:', error);
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+    }
+};
+
 module.exports = {
     getDriverBuses,
-    updateBusLocation
+    updateBusLocation,
+    startTrip,
+    endTrip,
+    saveTripHistory
 };
+

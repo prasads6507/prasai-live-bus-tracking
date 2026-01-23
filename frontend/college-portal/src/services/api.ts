@@ -95,6 +95,25 @@ export const updateBusLocation = async (busId: string, locationData: any) => {
     return response.data;
 };
 
+// Trip Management
+export const startNewTrip = async (busId: string, tripId: string) => {
+    console.log(`API CALL: POST /driver/trip/start/${busId}`, { tripId });
+    const response = await api.post(`/driver/trip/start/${busId}`, { tripId });
+    return response.data;
+};
+
+export const endCurrentTrip = async (busId: string, tripId: string) => {
+    console.log(`API CALL: POST /driver/trip/end/${busId}`, { tripId });
+    const response = await api.post(`/driver/trip/end/${busId}`, { tripId });
+    return response.data;
+};
+
+export const saveTripHistory = async (busId: string, tripId: string, locationData: any) => {
+    console.log(`API CALL: POST /driver/trip/history/${busId}`, { tripId, ...locationData });
+    const response = await api.post(`/driver/trip/history/${busId}`, { tripId, ...locationData });
+    return response.data;
+};
+
 // Bus Management
 export const createBus = async (busData: any) => {
     const response = await api.post('/admin/buses', busData);

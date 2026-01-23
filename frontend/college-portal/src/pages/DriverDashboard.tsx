@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Navigation, LogOut, AlertCircle } from 'lucide-react';
-import { getDriverBuses, updateBusLocation } from '../services/api';
+import { getDriverBuses, updateBusLocation, saveTripHistory, startNewTrip, endCurrentTrip } from '../services/api';
 
 const DriverDashboard = () => {
     const { orgSlug } = useParams<{ orgSlug: string }>();
@@ -14,11 +14,15 @@ const DriverDashboard = () => {
     const [error, setError] = useState<string | null>(null);
     const [locationError, setLocationError] = useState<string | null>(null);
     const [currentSpeed, setCurrentSpeed] = useState<number>(0);
+    const [currentCoords, setCurrentCoords] = useState<{ lat: number, lng: number } | null>(null);
     const [locationPermission, setLocationPermission] = useState<PermissionState>('prompt');
+    const [tripId, setTripId] = useState<string | null>(null);
 
     // Refs for tracking
     const watchIdRef = useRef<number | null>(null);
     const lastUpdateRef = useRef<number>(0);
+    const lastHistorySaveRef = useRef<number>(0); // Track when we last saved to history
+    const currentPositionRef = useRef<{ latitude: number, longitude: number, speed: number, heading: number } | null>(null);
 
     // 1. Check Location Permissions & Fetch Buses
     useEffect(() => {
@@ -58,19 +62,40 @@ const DriverDashboard = () => {
         setIsTracking(true);
         setLocationError(null);
 
+        // Generate a new trip ID and start the trip on the backend
+        const newTripId = `trip-${selectedBusId}-${Date.now()}`;
+        setTripId(newTripId);
+
+        try {
+            await startNewTrip(selectedBusId, newTripId);
+            console.log('Trip started:', newTripId);
+        } catch (err) {
+            console.error('Failed to start trip on backend', err);
+        }
+
         // Update status to ON_ROUTE immediately
         await updateBusStatus('ON_ROUTE');
 
         watchIdRef.current = navigator.geolocation.watchPosition(
             async (position) => {
                 const now = Date.now();
-                // Throttle updates to every 5 seconds to save bandwidth/db writes
+                const { latitude, longitude, speed, heading } = position.coords;
+
+                // Store current position in ref for history saving
+                currentPositionRef.current = {
+                    latitude,
+                    longitude,
+                    speed: Math.round((speed || 0) * 3.6),
+                    heading: heading || 0
+                };
+
+                // Update UI state
+                setCurrentSpeed((speed || 0) * 3.6);
+                setCurrentCoords({ lat: latitude, lng: longitude });
+                setLocationError(null);
+
+                // Update real-time location every 5 seconds
                 if (now - lastUpdateRef.current > 5000) {
-                    const { latitude, longitude, speed, heading } = position.coords;
-
-                    setCurrentSpeed((speed || 0) * 3.6); // Convert m/s to km/h
-                    setLocationError(null); // Clear any previous location errors on success
-
                     try {
                         console.log(`--- SENDING LOCATION FOR BUS ${selectedBusId} ---`);
                         console.log('Coords:', { latitude, longitude, speed: Math.round((speed || 0) * 3.6), heading: heading || 0 });
@@ -86,11 +111,28 @@ const DriverDashboard = () => {
                         console.log('Location update sent successfully');
                     } catch (err: any) {
                         console.error("Failed to send location update", err);
-                        // Only show error if it's a real auth issue, not transient network
                         if (err.response?.status === 401) {
                             setError('Session expired. Please log in again.');
                             endTrip();
                         }
+                    }
+                }
+
+                // Save to trip history every 60 seconds (1 minute)
+                if (tripId && now - lastHistorySaveRef.current > 60000) {
+                    try {
+                        console.log('Saving trip history snapshot...');
+                        await saveTripHistory(selectedBusId, tripId, {
+                            latitude,
+                            longitude,
+                            speed: Math.round((speed || 0) * 3.6),
+                            heading: heading || 0,
+                            timestamp: new Date().toISOString()
+                        });
+                        lastHistorySaveRef.current = now;
+                        console.log('Trip history saved');
+                    } catch (err) {
+                        console.error('Failed to save trip history', err);
                     }
                 }
             },
@@ -115,6 +157,20 @@ const DriverDashboard = () => {
         }
         setIsTracking(false);
         setCurrentSpeed(0);
+        setCurrentCoords(null);
+
+        // End trip on backend (saves final state)
+        if (tripId && selectedBusId) {
+            try {
+                await endCurrentTrip(selectedBusId, tripId);
+                console.log('Trip ended:', tripId);
+            } catch (err) {
+                console.error('Failed to end trip on backend', err);
+            }
+        }
+        setTripId(null);
+        lastHistorySaveRef.current = 0;
+        currentPositionRef.current = null;
 
         // Reset bus status
         await updateBusStatus('ACTIVE');
@@ -174,7 +230,6 @@ const DriverDashboard = () => {
             {/* Main Content */}
             <div className="flex-1 p-4 flex flex-col gap-4 max-w-md mx-auto w-full">
 
-                {/* Status Card */}
                 <div className={`rounded-2xl p-6 text-center shadow-lg transition-all ${isTracking ? 'bg-green-600 text-white' : 'bg-white text-slate-800'
                     }`}>
                     <div className="mb-2 uppercase text-xs font-bold tracking-wider opacity-80">
@@ -189,9 +244,16 @@ const DriverDashboard = () => {
                         ) : 'IDLE'}
                     </div>
                     {isTracking && (
-                        <div className="mt-4 text-6xl font-black">
-                            {Math.round(currentSpeed)} <span className="text-lg font-medium opacity-70">km/h</span>
-                        </div>
+                        <>
+                            <div className="mt-4 text-6xl font-black">
+                                {Math.round(currentSpeed)} <span className="text-lg font-medium opacity-70">km/h</span>
+                            </div>
+                            {currentCoords && (
+                                <div className="mt-3 text-xs opacity-70 font-mono">
+                                    GPS: {currentCoords.lat.toFixed(6)}, {currentCoords.lng.toFixed(6)}
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
 
