@@ -1,7 +1,7 @@
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { divIcon } from 'leaflet';
-import { Bus, Navigation } from 'lucide-react';
+import { Bus } from 'lucide-react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 interface MapComponentProps {

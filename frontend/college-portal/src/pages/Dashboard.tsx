@@ -14,7 +14,6 @@ const Dashboard = () => {
     const [routes, setRoutes] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
-    const [loading, setLoading] = useState(true);
 
     // Initial Data Fetch & Validation
     useEffect(() => {
