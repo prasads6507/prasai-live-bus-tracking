@@ -53,16 +53,27 @@ const DriverDashboard = () => {
         init();
     }, []);
 
-    // 2. Start Tracking Loop
+    // 2. Resume Trip on Mount
+    useEffect(() => {
+        const savedTrip = localStorage.getItem('driver_active_trip');
+        if (savedTrip) {
+            try {
+                const { tripId, busId } = JSON.parse(savedTrip);
+                console.log("Resuming active trip:", tripId);
+                setSelectedBusId(busId);
+                setTripId(tripId);
+                setIsTracking(true);
+                // Wait for busId state to settle or pass it directly
+                startTrackingLoop(busId, tripId);
+            } catch (e) {
+                console.error("Failed to parse active trip", e);
+            }
+        }
+    }, []);
+
+    // 3. Start Trip (User Action)
     const startTrip = async () => {
         if (!selectedBusId) return;
-        if (!navigator.geolocation) {
-            setLocationError("Geolocation is not supported by your browser");
-            return;
-        }
-
-        setIsTracking(true);
-        setLocationError(null);
 
         // Generate a new trip ID and start the trip on the backend
         const newTripId = `trip-${selectedBusId}-${Date.now()}`;
@@ -71,12 +82,29 @@ const DriverDashboard = () => {
         try {
             await startNewTrip(selectedBusId, newTripId);
             console.log('Trip started:', newTripId);
+
+            // Persist to localStorage
+            localStorage.setItem('driver_active_trip', JSON.stringify({ tripId: newTripId, busId: selectedBusId }));
+
+            // Start Tracking
+            startTrackingLoop(selectedBusId, newTripId);
         } catch (err) {
             console.error('Failed to start trip on backend', err);
+            setError("Failed to start trip. Please check network.");
+        }
+    };
+
+    const startTrackingLoop = async (busId: string, currentTripId: string) => {
+        if (!navigator.geolocation) {
+            setLocationError("Geolocation is not supported by your browser");
+            return;
         }
 
+        setIsTracking(true);
+        setLocationError(null);
+
         // Update status to ON_ROUTE immediately
-        await updateBusStatus('ON_ROUTE');
+        await updateBusStatus('ON_ROUTE', busId);
 
         watchIdRef.current = navigator.geolocation.watchPosition(
             async (position) => {
@@ -176,18 +204,23 @@ const DriverDashboard = () => {
                 console.error('Failed to end trip on backend', err);
             }
         }
+
+        // Clear persistence
+        localStorage.removeItem('driver_active_trip');
+
         setTripId(null);
         lastHistorySaveRef.current = 0;
         currentPositionRef.current = null;
 
         // Reset bus status
-        await updateBusStatus('ACTIVE');
+        await updateBusStatus('ACTIVE', selectedBusId);
     };
 
-    const updateBusStatus = async (status: string) => {
-        if (!selectedBusId) return;
+    const updateBusStatus = async (status: string, busId?: string) => {
+        const targetBusId = busId || selectedBusId;
+        if (!targetBusId) return;
         try {
-            await updateBusLocation(selectedBusId, {
+            await updateBusLocation(targetBusId, {
                 // Send current location if we have it, mostly simply status update
                 status,
                 speed: 0

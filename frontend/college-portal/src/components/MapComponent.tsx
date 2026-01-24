@@ -175,7 +175,7 @@ const MapComponent = ({ buses }: MapComponentProps) => {
 
                     return (
                         <Marker
-                            key={bus._id}
+                            key={`${bus._id}-${bus.lastUpdated}`}
                             position={[bus.location.latitude, bus.location.longitude]}
                             icon={createBusIcon(bus.status)}
                         >
