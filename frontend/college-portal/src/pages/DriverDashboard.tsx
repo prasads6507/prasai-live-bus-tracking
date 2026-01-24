@@ -18,6 +18,7 @@ const DriverDashboard = () => {
     const [locationPermission, setLocationPermission] = useState<PermissionState>('prompt');
     const [tripId, setTripId] = useState<string | null>(null);
     const [lastSentTime, setLastSentTime] = useState<string>('');
+    const [apiStatus, setApiStatus] = useState<{ successes: number; failures: number; lastCode: number | null; msg: string }>({ successes: 0, failures: 0, lastCode: null, msg: '' });
 
     // Refs for tracking
     const watchIdRef = useRef<number | null>(null);
@@ -110,9 +111,11 @@ const DriverDashboard = () => {
                         });
                         lastUpdateRef.current = now;
                         setLastSentTime(new Date().toLocaleTimeString());
+                        setApiStatus(prev => ({ ...prev, successes: prev.successes + 1, lastCode: 200, msg: 'OK' }));
                         console.log('Location update sent successfully');
                     } catch (err: any) {
                         console.error("Failed to send location update", err);
+                        setApiStatus(prev => ({ ...prev, failures: prev.failures + 1, lastCode: err.response?.status || 0, msg: err.message }));
                         if (err.response?.status === 401) {
                             setError('Session expired. Please log in again.');
                             endTrip();
@@ -345,6 +348,22 @@ const DriverDashboard = () => {
                 {/* Instructions */}
                 <div className="text-center text-xs text-slate-400 mt-4 px-4">
                     Keep this screen open while driving to ensure location updates are sent.
+                </div>
+
+                {/* Diagnostics Panel (Always visible for debugging) */}
+                <div className="mt-4 p-4 bg-black/80 text-green-400 font-mono text-xs rounded-lg overflow-hidden">
+                    <h3 className="uppercase font-bold border-b border-white/20 pb-1 mb-2">Network Diagnostics</h3>
+                    <div className="grid grid-cols-2 gap-2">
+                        <div>Successes: {apiStatus.successes}</div>
+                        <div className="text-red-400">Failures: {apiStatus.failures}</div>
+                        <div>Last Code: {apiStatus.lastCode || '-'}</div>
+                        <div className="col-span-2 truncate">Last Msg: {apiStatus.msg || 'None'}</div>
+                        <div className="col-span-2 text-white/60 pt-2">
+                            Trip ID: {tripId ? 'Active' : 'Inactive'}<br />
+                            Accuracy: {currentCoords ? 'High' : 'N/A'}<br />
+                            Next Update: {Math.max(0, 3 - ((Date.now() - lastUpdateRef.current) / 1000)).toFixed(1)}s
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
