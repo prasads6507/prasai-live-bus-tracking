@@ -170,7 +170,7 @@ const MapComponent = ({ buses }: MapComponentProps) => {
                 />
 
                 {buses.map((bus) => {
-                    if (!bus.location?.latitude || !bus.location?.longitude) return null;
+                    if (bus.location?.latitude == null || bus.location?.longitude == null) return null;
 
                     return (
                         <Marker
@@ -179,26 +179,35 @@ const MapComponent = ({ buses }: MapComponentProps) => {
                             icon={createBusIcon(bus.status)}
                         >
                             <Popup>
-                                <div className="p-1 min-w-[120px]">
-                                    <h3 className="font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-1 mb-1">
-                                        <Bus size={14} className="text-blue-600" />
+                                <div className="p-2 min-w-[150px]">
+                                    <h3 className="font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-2 mb-2 text-sm">
+                                        <Bus size={16} className="text-blue-600" />
                                         {bus.busNumber}
                                     </h3>
-                                    <div className="text-[10px] space-y-1">
-                                        <div className="flex justify-between">
-                                            <span className="text-slate-400">Status:</span>
-                                            <span className="font-bold uppercase" style={{ color: bus.status === 'ON_ROUTE' ? '#16a34a' : '#3b82f6' }}>
-                                                {bus.status === 'ON_ROUTE' ? 'Moving' : 'Idle'}
+                                    <div className="space-y-2 text-xs">
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-slate-500">Status:</span>
+                                            <span className="font-bold px-2 py-0.5 rounded-full text-[10px]"
+                                                style={{
+                                                    backgroundColor: bus.status === 'ON_ROUTE' ? '#dcfce7' : '#eff6ff',
+                                                    color: bus.status === 'ON_ROUTE' ? '#16a34a' : '#3b82f6'
+                                                }}>
+                                                {bus.status === 'ON_ROUTE' ? 'MOVING' : 'IDLE'}
                                             </span>
                                         </div>
-                                        {bus.speed > 0 && (
-                                            <div className="flex justify-between">
-                                                <span className="text-slate-400">Speed:</span>
-                                                <span className="font-bold text-slate-700">{bus.speed} km/h</span>
+
+                                        {bus.speed != null && (
+                                            <div className="flex justify-between items-center bg-slate-50 p-1 rounded">
+                                                <span className="text-slate-500">Speed:</span>
+                                                <span className="font-mono font-bold text-slate-700">{bus.speed} km/h</span>
                                             </div>
                                         )}
-                                        <div className="pt-1 text-[9px] text-slate-400 italic">
-                                            Last Updated: {new Date(bus.lastUpdated).toLocaleTimeString()}
+
+                                        <div className="flex justify-between items-center bg-blue-50 p-1 rounded border border-blue-100">
+                                            <span className="text-blue-500 font-medium">Updated:</span>
+                                            <span className="font-mono font-bold text-blue-700">
+                                                {bus.lastUpdated ? new Date(bus.lastUpdated).toLocaleTimeString() : 'N/A'}
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
