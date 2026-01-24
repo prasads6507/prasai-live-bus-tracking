@@ -129,10 +129,12 @@ const startTrip = async (req, res) => {
             totalPoints: 0
         });
 
-        // Update bus with current trip info
+        // Update bus with current trip info and driver name
         await busRef.update({
             currentTripId: tripId,
-            status: 'ON_ROUTE'
+            status: 'ON_ROUTE',
+            driverName: driverName,
+            currentDriverId: req.user.id
         });
 
         console.log('Trip started successfully:', tripId);

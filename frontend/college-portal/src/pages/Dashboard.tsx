@@ -207,12 +207,16 @@ const BusCard = ({ bus }: { bus: any }) => (
     <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition-shadow group">
         <div className="flex items-start justify-between mb-3">
             <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center font-bold text-sm">
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm ${bus.status === 'ON_ROUTE' ? 'bg-green-100 text-green-600' : 'bg-blue-50 text-blue-600'
+                    }`}>
                     {bus.busNumber?.slice(0, 2) || 'BS'}
                 </div>
                 <div>
                     <h4 className="font-bold text-slate-800">{bus.busNumber}</h4>
-                    <p className="text-xs text-slate-500">{bus.capacity || 0} Seats</p>
+                    <p className="text-xs text-slate-500 flex items-center gap-1">
+                        <User size={10} />
+                        {bus.driverName || 'Unassigned'}
+                    </p>
                 </div>
             </div>
             <span className={`px-2 py-1 rounded-full text-xs font-bold ${bus.status === 'ON_ROUTE' ? 'bg-green-100 text-green-700 animate-pulse' :
@@ -224,31 +228,33 @@ const BusCard = ({ bus }: { bus: any }) => (
             </span>
         </div>
         <div className="space-y-2">
-            <div className="flex items-center gap-2 text-sm text-slate-600">
-                <User size={14} className="text-slate-400" />
-                <span>{bus.driver?.name || 'No Driver Assigned'}</span>
-            </div>
-            <div className="flex items-center gap-2 text-sm text-slate-600">
-                {bus.status === 'ON_ROUTE' ? (
-                    <>
-                        <Navigation size={14} className="text-green-500" />
+            {bus.status === 'ON_ROUTE' && bus.location?.latitude ? (
+                <div className="flex items-center gap-2 text-sm bg-green-50 p-2 rounded-lg">
+                    <Navigation size={14} className="text-green-500" />
+                    <div className="flex-1">
                         <span className="font-semibold text-green-700">{bus.speed || 0} km/h</span>
-                    </>
-                ) : (
-                    <>
-                        <MapPin size={14} className="text-slate-400" />
-                        <span className="truncate text-slate-500">Stationary</span>
-                    </>
-                )}
-            </div>
+                        <span className="text-green-600 ml-2 text-xs font-mono">
+                            ({bus.location.latitude.toFixed(4)}, {bus.location.longitude.toFixed(4)})
+                        </span>
+                    </div>
+                </div>
+            ) : (
+                <div className="flex items-center gap-2 text-sm text-slate-500">
+                    <MapPin size={14} className="text-slate-400" />
+                    <span>{bus.location?.latitude ? 'Parked' : 'No GPS Data'}</span>
+                </div>
+            )}
         </div>
         <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
             <span className="text-xs font-medium text-slate-400">
                 Updated: {getRelativeTime(bus.lastUpdated)}
             </span>
-            <button className="text-blue-600 hover:text-blue-700 text-sm font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
-                Track Live
-            </button>
+            {bus.status === 'ON_ROUTE' && (
+                <span className="text-xs font-bold text-green-600 flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-green-500 animate-ping"></span>
+                    Tracking
+                </span>
+            )}
         </div>
     </div>
 );

@@ -128,10 +128,10 @@ const DriverDashboard = () => {
                 // Update real-time location every 3 seconds (was 5)
                 if (now - lastUpdateRef.current > 3000) {
                     try {
-                        console.log(`--- SENDING LOCATION FOR BUS ${selectedBusId} ---`);
+                        console.log(`--- SENDING LOCATION FOR BUS ${busId} ---`);
                         console.log('Coords:', { latitude, longitude, speed: Math.round((speed || 0) * 3.6), heading: heading || 0 });
 
-                        await updateBusLocation(selectedBusId, {
+                        await updateBusLocation(busId, {
                             latitude,
                             longitude,
                             speed: Math.round((speed || 0) * 3.6),
@@ -156,10 +156,10 @@ const DriverDashboard = () => {
                 }
 
                 // Save to trip history every 60 seconds (1 minute)
-                if (tripId && now - lastHistorySaveRef.current > 60000) {
+                if (currentTripId && now - lastHistorySaveRef.current > 60000) {
                     try {
                         console.log('Saving trip history snapshot...');
-                        await saveTripHistory(selectedBusId, tripId, {
+                        await saveTripHistory(busId, currentTripId, {
                             latitude,
                             longitude,
                             speed: Math.round((speed || 0) * 3.6),
