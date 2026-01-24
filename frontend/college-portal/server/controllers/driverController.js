@@ -11,6 +11,7 @@ const getDriverBuses = async (req, res) => {
 
         const busesSnapshot = await db.collection('buses')
             .where('collegeId', '==', req.collegeId)
+            .where('assignedDriverId', '==', req.user.id)
             .get();
 
         console.log(`Found ${busesSnapshot.size} buses for college ${req.collegeId}`);

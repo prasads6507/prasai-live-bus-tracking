@@ -170,7 +170,8 @@ const MapComponent = ({ buses }: MapComponentProps) => {
                 />
 
                 {buses.map((bus) => {
-                    if (bus.location?.latitude == null || bus.location?.longitude == null) return null;
+                    // Only show buses that are actively ON_ROUTE and have valid location
+                    if (bus.status !== 'ON_ROUTE' || bus.location?.latitude == null || bus.location?.longitude == null) return null;
 
                     return (
                         <Marker
