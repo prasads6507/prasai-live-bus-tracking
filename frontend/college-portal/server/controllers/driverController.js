@@ -61,7 +61,7 @@ const updateBusLocation = async (req, res) => {
         // Update location and status
         const updateData = {
             lastUpdated: new Date().toISOString(),
-            currentDriverId: req.user.uid
+            currentDriverId: req.user.id // Fixed: token has .id, not .uid
         };
 
         if (status) updateData.status = status;
@@ -110,13 +110,17 @@ const startTrip = async (req, res) => {
             return res.status(403).json({ success: false, message: 'Unauthorized college access' });
         }
 
+        // Fetch driver details to get name
+        const userDoc = await db.collection('users').doc(req.user.id).get();
+        const driverName = userDoc.exists ? userDoc.data().name : 'Unknown Driver';
+
         // Create trip document in trips subcollection
         const tripRef = busRef.collection('trips').doc(tripId);
         await tripRef.set({
             tripId,
             busId,
-            driverId: req.user.uid,
-            driverName: req.user.name || req.user.email,
+            driverId: req.user.id, // Fixed: .id
+            driverName: driverName,
             collegeId: req.collegeId,
             startTime: new Date().toISOString(),
             endTime: null,
