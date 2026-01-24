@@ -115,7 +115,10 @@ const DriverDashboard = () => {
                         console.log('Location update sent successfully');
                     } catch (err: any) {
                         console.error("Failed to send location update", err);
-                        setApiStatus(prev => ({ ...prev, failures: prev.failures + 1, lastCode: err.response?.status || 0, msg: err.message }));
+
+                        const serverError = err.response?.data?.error || err.response?.data?.message || err.message;
+                        setApiStatus(prev => ({ ...prev, failures: prev.failures + 1, lastCode: err.response?.status || 0, msg: serverError }));
+
                         if (err.response?.status === 401) {
                             setError('Session expired. Please log in again.');
                             endTrip();

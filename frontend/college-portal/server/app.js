@@ -5,7 +5,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 // const connectDB = require('./config/database');
-const { db } = require('./config/firebase'); // Firebase DB
+const { db, initializationError } = require('./config/firebase'); // Firebase DB
 
 const errorHandler = require('./middleware/errorHandler');
 
@@ -14,7 +14,6 @@ const app = express();
 const server = http.createServer(app);
 
 // Connect Database
-// connectDB(); // Disabled for Firebase Migration
 console.log("Firebase Mode: Database connection handled via Admin SDK");
 
 // Middleware
@@ -24,6 +23,19 @@ app.use(cors({
     credentials: true
 }));
 app.use(express.json());
+
+// Critical Error Check Middleware
+app.use((req, res, next) => {
+    if (initializationError) {
+        console.error("Blocking request due to Init Error:", initializationError.message);
+        return res.status(500).json({
+            success: false,
+            message: 'Server Configuration Error',
+            error: `Firebase Init Failed: ${initializationError.message}`
+        });
+    }
+    next();
+});
 
 // Rate Limiting
 const limiter = rateLimit({

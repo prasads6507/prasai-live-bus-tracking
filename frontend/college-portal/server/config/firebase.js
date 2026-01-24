@@ -1,50 +1,58 @@
 const admin = require('firebase-admin');
 const path = require('path');
 
-// Load environment variables - try multiple paths for Vercel compatibility
+let initializationError = null;
+let db = null;
+let auth = null;
+
+// Load environment variables
 try {
     require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
-} catch (e) {
-    // dotenv may not exist in production, that's okay
-}
+} catch (e) { }
 
-// Singleton pattern - only initialize if not already initialized
+// Singleton pattern
 if (!admin.apps.length) {
     try {
-        // Check for required environment variables
-        const projectId = process.env.FIREBASE_PROJECT_ID;
-        const privateKey = process.env.FIREBASE_PRIVATE_KEY;
-        const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+        let projectId = process.env.FIREBASE_PROJECT_ID;
+        let privateKey = process.env.FIREBASE_PRIVATE_KEY;
+        let clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
 
         if (!projectId || !privateKey || !clientEmail) {
-            console.error('Missing required Firebase environment variables:');
-            console.error(`  FIREBASE_PROJECT_ID: ${projectId ? 'SET' : 'MISSING'}`);
-            console.error(`  FIREBASE_PRIVATE_KEY: ${privateKey ? 'SET (length: ' + privateKey.length + ')' : 'MISSING'}`);
-            console.error(`  FIREBASE_CLIENT_EMAIL: ${clientEmail ? 'SET' : 'MISSING'}`);
-            throw new Error('Missing required Firebase environment variables');
+            throw new Error(`Missing vars: ProjectId=${!!projectId}, Email=${!!clientEmail}, Key=${!!privateKey}`);
         }
 
-        // Replace escaped newlines with actual newlines (Vercel stores them escaped)
+        // Clean keys (remove quotes if user added them)
+        if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
+            privateKey = privateKey.slice(1, -1);
+        }
+
+        // Handle newlines
         const formattedPrivateKey = privateKey.replace(/\\n/g, '\n');
 
         admin.initializeApp({
             credential: admin.credential.cert({
-                projectId: projectId,
+                projectId,
                 privateKey: formattedPrivateKey,
-                clientEmail: clientEmail
+                clientEmail
             })
         });
 
-        console.log(`Firebase Admin Initialized - Project: ${projectId}`);
+        console.log(`Firebase Admin Initialized: ${projectId}`);
     } catch (error) {
-        console.error("Firebase Initialization Error:", error.message);
-        // Don't exit - let the request handler return a proper error
-        throw error;
+        console.error("Firebase Init Failed:", error.message);
+        initializationError = error;
     }
 }
 
-const db = admin.firestore();
-const auth = admin.auth();
+// Only initialize services if no error
+if (!initializationError && admin.apps.length) {
+    try {
+        db = admin.firestore();
+        auth = admin.auth();
+    } catch (e) {
+        initializationError = e;
+    }
+}
 
-module.exports = { admin, db, auth };
+module.exports = { admin, db, auth, initializationError };
 
