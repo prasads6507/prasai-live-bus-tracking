@@ -167,6 +167,11 @@ export const deleteTrip = async (tripId: string) => {
     return response.data;
 };
 
+export const adminEndTrip = async (tripId: string) => {
+    const response = await api.post(`/admin/trips/${tripId}/end`);
+    return response.data;
+};
+
 export const uploadRoutesFile = async (file: File) => {
     const formData = new FormData();
     formData.append('file', file);

@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Clock, Bus, User, Calendar, RefreshCw, Pencil, Trash2, X } from 'lucide-react';
+import { Clock, Bus, User, Calendar, RefreshCw, Pencil, Trash2, X, StopCircle } from 'lucide-react';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import Layout from '../components/Layout';
-import { getTripHistory, updateTrip, deleteTrip } from '../services/api';
+import { getTripHistory, updateTrip, deleteTrip, adminEndTrip } from '../services/api';
 
 interface Trip {
     _id: string;
@@ -28,6 +28,7 @@ const TripHistory = () => {
     // Modal states
     const [editModalOpen, setEditModalOpen] = useState(false);
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+    const [stopModalOpen, setStopModalOpen] = useState(false);
     const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
     const [editForm, setEditForm] = useState({ startTime: '', endTime: '', driverName: '' });
     const [actionLoading, setActionLoading] = useState(false);
@@ -147,6 +148,26 @@ const TripHistory = () => {
             fetchTrips();
         } catch (err: any) {
             setError(err.response?.data?.message || 'Failed to delete trip');
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    const handleStopClick = (trip: Trip) => {
+        setSelectedTrip(trip);
+        setStopModalOpen(true);
+    };
+
+    const handleStopConfirm = async () => {
+        if (!selectedTrip) return;
+        setActionLoading(true);
+        try {
+            await adminEndTrip(selectedTrip._id);
+            setStopModalOpen(false);
+            setSelectedTrip(null);
+            fetchTrips();
+        } catch (err: any) {
+            setError(err.response?.data?.message || 'Failed to stop trip');
         } finally {
             setActionLoading(false);
         }
@@ -272,6 +293,15 @@ const TripHistory = () => {
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center justify-center gap-2">
+                                                    {trip.status === 'ACTIVE' && (
+                                                        <button
+                                                            onClick={() => handleStopClick(trip)}
+                                                            className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                                                            title="Stop Trip"
+                                                        >
+                                                            <StopCircle size={16} />
+                                                        </button>
+                                                    )}
                                                     <button
                                                         onClick={() => handleEditClick(trip)}
                                                         className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
@@ -427,6 +457,41 @@ const TripHistory = () => {
                                 className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
                             >
                                 {actionLoading ? 'Deleting...' : 'Delete'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Stop Trip Confirmation Modal */}
+            {stopModalOpen && selectedTrip && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+                        <div className="p-6">
+                            <div className="w-12 h-12 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center mx-auto mb-4">
+                                <StopCircle size={24} />
+                            </div>
+                            <h3 className="text-lg font-semibold text-slate-800 text-center">Stop Active Trip?</h3>
+                            <p className="text-slate-500 text-center mt-2">
+                                Are you sure you want to end this active trip for <span className="font-medium">{selectedTrip.busNumber}</span>?
+                            </p>
+                            <p className="text-sm text-slate-400 text-center mt-1">
+                                This will mark the trip as completed and update the bus status.
+                            </p>
+                        </div>
+                        <div className="flex items-center justify-end gap-3 p-6 border-t border-slate-200">
+                            <button
+                                onClick={() => setStopModalOpen(false)}
+                                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleStopConfirm}
+                                disabled={actionLoading}
+                                className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                            >
+                                {actionLoading ? 'Stopping...' : 'Stop Trip'}
                             </button>
                         </div>
                     </div>

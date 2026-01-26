@@ -415,18 +415,19 @@ const getTripHistory = async (req, res) => {
         console.log('--- GET TRIP HISTORY ---');
         console.log('CollegeId:', req.collegeId);
 
-        // Query ROOT trips collection filtered by collegeId
-        // Note: Removed orderBy to avoid composite index requirement
-        const tripsSnapshot = await db.collection('trips')
+        let trips = [];
+
+        // 1. First, get trips from ROOT collection (new format)
+        const rootTripsSnapshot = await db.collection('trips')
             .where('collegeId', '==', req.collegeId)
             .limit(100)
             .get();
 
-        console.log('Found trips:', tripsSnapshot.size);
+        console.log('Found trips in root collection:', rootTripsSnapshot.size);
 
-        let trips = tripsSnapshot.docs.map(doc => {
+        rootTripsSnapshot.docs.forEach(doc => {
             const data = doc.data();
-            return {
+            trips.push({
                 _id: doc.id,
                 busId: data.busId,
                 busNumber: data.busNumber || 'Unknown',
@@ -434,9 +435,44 @@ const getTripHistory = async (req, res) => {
                 startTime: data.startTime,
                 endTime: data.endTime,
                 status: data.status,
-                durationMinutes: data.durationMinutes || null
-            };
+                durationMinutes: data.durationMinutes || null,
+                source: 'root' // Track source for debugging
+            });
         });
+
+        // 2. Also get trips from subcollections (old format)
+        const busesSnapshot = await db.collection('buses')
+            .where('collegeId', '==', req.collegeId)
+            .get();
+
+        console.log('Found buses:', busesSnapshot.size);
+
+        for (const busDoc of busesSnapshot.docs) {
+            const busData = busDoc.data();
+            const subTripsSnapshot = await busDoc.ref.collection('trips')
+                .limit(50)
+                .get();
+
+            subTripsSnapshot.docs.forEach(tripDoc => {
+                const tripData = tripDoc.data();
+                // Avoid duplicates - check if this tripId is already in trips array
+                if (!trips.find(t => t._id === tripDoc.id)) {
+                    trips.push({
+                        _id: tripDoc.id,
+                        busId: busDoc.id,
+                        busNumber: busData.busNumber || busData.number || 'Unknown',
+                        driverName: tripData.driverName || 'Unknown Driver',
+                        startTime: tripData.startTime,
+                        endTime: tripData.endTime,
+                        status: tripData.status,
+                        durationMinutes: tripData.durationMinutes || null,
+                        source: 'subcollection' // Track source for debugging
+                    });
+                }
+            });
+        }
+
+        console.log('Total trips found:', trips.length);
 
         // Sort in memory (most recent first)
         trips.sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
@@ -453,23 +489,40 @@ const getTripHistory = async (req, res) => {
 };
 
 // @desc    Update a trip record
-// @route   PUT /api/admin/trips/:busId/:tripId
+// @route   PUT /api/admin/trips/:tripId
 // @access  Private (College Admin)
 const updateTrip = async (req, res) => {
     try {
         const { tripId } = req.params;
         const { startTime, endTime, driverName } = req.body;
 
-        // Access trip from ROOT collection
-        const tripRef = db.collection('trips').doc(tripId);
-        const tripDoc = await tripRef.get();
+        // Try ROOT collection first
+        let tripRef = db.collection('trips').doc(tripId);
+        let tripDoc = await tripRef.get();
+
+        // If not found in root, search subcollections
+        if (!tripDoc.exists) {
+            const busesSnapshot = await db.collection('buses')
+                .where('collegeId', '==', req.collegeId)
+                .get();
+
+            for (const busDoc of busesSnapshot.docs) {
+                const subTripRef = busDoc.ref.collection('trips').doc(tripId);
+                const subTripDoc = await subTripRef.get();
+                if (subTripDoc.exists) {
+                    tripRef = subTripRef;
+                    tripDoc = subTripDoc;
+                    break;
+                }
+            }
+        }
 
         if (!tripDoc.exists) {
             return res.status(404).json({ success: false, message: 'Trip not found' });
         }
 
         // Verify trip belongs to this college
-        if (tripDoc.data().collegeId !== req.collegeId) {
+        if (tripDoc.data().collegeId && tripDoc.data().collegeId !== req.collegeId) {
             return res.status(403).json({ success: false, message: 'Unauthorized' });
         }
 
@@ -498,22 +551,39 @@ const updateTrip = async (req, res) => {
 };
 
 // @desc    Delete a trip record
-// @route   DELETE /api/admin/trips/:busId/:tripId
+// @route   DELETE /api/admin/trips/:tripId
 // @access  Private (College Admin)
 const deleteTrip = async (req, res) => {
     try {
         const { tripId } = req.params;
 
-        // Access trip from ROOT collection
-        const tripRef = db.collection('trips').doc(tripId);
-        const tripDoc = await tripRef.get();
+        // Try ROOT collection first
+        let tripRef = db.collection('trips').doc(tripId);
+        let tripDoc = await tripRef.get();
+
+        // If not found in root, search subcollections
+        if (!tripDoc.exists) {
+            const busesSnapshot = await db.collection('buses')
+                .where('collegeId', '==', req.collegeId)
+                .get();
+
+            for (const busDoc of busesSnapshot.docs) {
+                const subTripRef = busDoc.ref.collection('trips').doc(tripId);
+                const subTripDoc = await subTripRef.get();
+                if (subTripDoc.exists) {
+                    tripRef = subTripRef;
+                    tripDoc = subTripDoc;
+                    break;
+                }
+            }
+        }
 
         if (!tripDoc.exists) {
             return res.status(404).json({ success: false, message: 'Trip not found' });
         }
 
         // Verify trip belongs to this college
-        if (tripDoc.data().collegeId !== req.collegeId) {
+        if (tripDoc.data().collegeId && tripDoc.data().collegeId !== req.collegeId) {
             return res.status(403).json({ success: false, message: 'Unauthorized' });
         }
 
@@ -522,6 +592,83 @@ const deleteTrip = async (req, res) => {
         res.status(200).json({ success: true, message: 'Trip deleted' });
     } catch (error) {
         console.error('Error deleting trip:', error);
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+    }
+};
+
+// @desc    Admin force-end a trip (when driver forgets)
+// @route   POST /api/admin/trips/:tripId/end
+// @access  Private (College Admin)
+const adminEndTrip = async (req, res) => {
+    try {
+        const { tripId } = req.params;
+
+        console.log('--- ADMIN END TRIP ---', tripId);
+
+        // Try ROOT collection first
+        let tripRef = db.collection('trips').doc(tripId);
+        let tripDoc = await tripRef.get();
+        let busId = null;
+
+        // If not found in root, search subcollections
+        if (!tripDoc.exists) {
+            const busesSnapshot = await db.collection('buses')
+                .where('collegeId', '==', req.collegeId)
+                .get();
+
+            for (const busDoc of busesSnapshot.docs) {
+                const subTripRef = busDoc.ref.collection('trips').doc(tripId);
+                const subTripDoc = await subTripRef.get();
+                if (subTripDoc.exists) {
+                    tripRef = subTripRef;
+                    tripDoc = subTripDoc;
+                    busId = busDoc.id;
+                    break;
+                }
+            }
+        }
+
+        if (!tripDoc.exists) {
+            return res.status(404).json({ success: false, message: 'Trip not found' });
+        }
+
+        const tripData = tripDoc.data();
+        busId = busId || tripData.busId;
+
+        // Verify trip belongs to this college
+        if (tripData.collegeId && tripData.collegeId !== req.collegeId) {
+            return res.status(403).json({ success: false, message: 'Unauthorized' });
+        }
+
+        // Calculate duration
+        const startTime = new Date(tripData.startTime);
+        const endTime = new Date();
+        const durationMinutes = Math.round((endTime - startTime) / 60000);
+
+        // Update trip to COMPLETED
+        await tripRef.update({
+            endTime: endTime.toISOString(),
+            status: 'COMPLETED',
+            durationMinutes,
+            endedBy: 'ADMIN' // Track that admin ended this trip
+        });
+
+        // Also update the bus status if we have busId
+        if (busId) {
+            const busRef = db.collection('buses').doc(busId);
+            const busDoc = await busRef.get();
+            if (busDoc.exists && busDoc.data().currentTripId === tripId) {
+                await busRef.update({
+                    currentTripId: null,
+                    status: 'ACTIVE'
+                });
+            }
+        }
+
+        console.log('Admin ended trip successfully:', tripId);
+        res.status(200).json({ success: true, message: 'Trip ended by admin', tripId });
+    } catch (error) {
+        console.error('Error admin ending trip:', error);
         res.status(500).json({ success: false, message: 'Server Error', error: error.message });
     }
 };
@@ -543,5 +690,6 @@ module.exports = {
     getAssignments,
     getTripHistory,
     updateTrip,
-    deleteTrip
+    deleteTrip,
+    adminEndTrip
 };
