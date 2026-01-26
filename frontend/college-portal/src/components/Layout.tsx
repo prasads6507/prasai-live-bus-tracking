@@ -1,7 +1,7 @@
 import { type ReactNode, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bus, Menu, Bell, User, LayoutDashboard, Settings, LogOut, MapPin, Search, X, Clock } from 'lucide-react';
+import { Bus, Menu, User, LayoutDashboard, Settings, LogOut, MapPin, X, Clock } from 'lucide-react';
 
 interface LayoutProps {
     children: ReactNode;
@@ -157,18 +157,7 @@ const Layout = ({ children, activeItem = 'dashboard' }: LayoutProps) => {
                         <h1 className="text-lg sm:text-xl font-bold text-slate-800">College Portal</h1>
                     </div>
                     <div className="flex items-center gap-2 sm:gap-4">
-                        <div className="relative hidden md:block">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                            <input
-                                type="text"
-                                placeholder="Search buses, drivers..."
-                                className="pl-10 pr-4 py-2 bg-slate-100 border-none rounded-full text-sm w-64 focus:ring-2 focus:ring-blue-100 outline-none"
-                            />
-                        </div>
-                        <button className="relative p-2 text-slate-500 hover:bg-slate-100 rounded-full">
-                            <Bell size={20} />
-                            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full"></span>
-                        </button>
+                        {/* Search and Notifications removed as per request */}
                     </div>
                 </header>
 

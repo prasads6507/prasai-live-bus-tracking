@@ -15,6 +15,7 @@ const Dashboard = () => {
     const [loading, setLoading] = useState(true);
     const [currentCollegeId, setCurrentCollegeId] = useState<string | null>(localStorage.getItem('current_college_id'));
     const [focusedBusLocation, setFocusedBusLocation] = useState<{ lat: number, lng: number } | null>(null);
+    const [refreshing, setRefreshing] = useState(false);
 
     // Initial Data Fetch & Validation
     useEffect(() => {
@@ -100,7 +101,7 @@ const Dashboard = () => {
     };
 
     const handleRefresh = async () => {
-        setLoading(true);
+        setRefreshing(true); // Use refreshing state
         try {
             const [busData, routeData] = await Promise.all([
                 getBuses(),
@@ -112,7 +113,7 @@ const Dashboard = () => {
         } catch (err) {
             console.error("Manual Refresh Error:", err);
         } finally {
-            setLoading(false);
+            setRefreshing(false); // Use refreshing state
         }
     };
 
@@ -171,8 +172,9 @@ const Dashboard = () => {
                             <div className="flex items-center gap-2">
                                 <button
                                     onClick={handleRefresh}
-                                    className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded-lg transition-all"
+                                    className={`p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded-lg transition-all ${refreshing ? 'animate-spin text-blue-600' : ''}`}
                                     title="Refresh Map Data"
+                                    disabled={refreshing}
                                 >
                                     <RotateCw size={18} />
                                 </button>
