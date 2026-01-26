@@ -176,7 +176,7 @@ const MapComponent = ({ buses, focusedLocation }: MapComponentProps) => {
 
                     return (
                         <Marker
-                            key={`${bus._id}-${bus.lastUpdated}`}
+                            key={bus._id} // Fixed: Stable key to prevent remounting and closing popup
                             position={[bus.location.latitude, bus.location.longitude]}
                             icon={createBusIcon(bus.status)}
                         >
