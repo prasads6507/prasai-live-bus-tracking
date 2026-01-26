@@ -151,6 +151,12 @@ export const deleteRoute = async (routeId: string) => {
     return response.data;
 };
 
+// Trip History
+export const getTripHistory = async () => {
+    const response = await api.get('/admin/trips');
+    return response.data;
+};
+
 export const uploadRoutesFile = async (file: File) => {
     const formData = new FormData();
     formData.append('file', file);

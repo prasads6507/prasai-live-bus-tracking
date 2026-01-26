@@ -405,6 +405,57 @@ const getAssignments = async (req, res) => {
     }
 };
 
+// --- TRIP HISTORY ---
+
+// @desc    Get trip history for all buses in college
+// @route   GET /api/admin/trips
+// @access  Private (College Admin)
+const getTripHistory = async (req, res) => {
+    try {
+        // Get all buses for this college
+        const busesSnapshot = await db.collection('buses')
+            .where('collegeId', '==', req.collegeId)
+            .get();
+
+        const trips = [];
+
+        // For each bus, get all trips from subcollection
+        for (const busDoc of busesSnapshot.docs) {
+            const busData = busDoc.data();
+            const tripsSnapshot = await busDoc.ref.collection('trips')
+                .orderBy('startTime', 'desc')
+                .limit(50) // Limit per bus
+                .get();
+
+            tripsSnapshot.docs.forEach(tripDoc => {
+                const tripData = tripDoc.data();
+                trips.push({
+                    _id: tripDoc.id,
+                    busId: busDoc.id,
+                    busNumber: busData.busNumber || busData.number || 'Unknown',
+                    driverName: tripData.driverName || 'Unknown Driver',
+                    startTime: tripData.startTime,
+                    endTime: tripData.endTime,
+                    status: tripData.status, // ACTIVE or COMPLETED
+                    durationMinutes: tripData.durationMinutes || null
+                });
+            });
+        }
+
+        // Sort all trips by startTime (most recent first)
+        trips.sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
+
+        res.status(200).json({
+            success: true,
+            count: trips.length,
+            data: trips
+        });
+    } catch (error) {
+        console.error('Error fetching trip history:', error);
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+    }
+};
+
 module.exports = {
     createBus,
     getBuses,
@@ -419,5 +470,6 @@ module.exports = {
     updateUser,
     deleteUser,
     assignDriver,
-    getAssignments
+    getAssignments,
+    getTripHistory
 };

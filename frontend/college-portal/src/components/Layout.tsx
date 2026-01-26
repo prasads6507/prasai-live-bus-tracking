@@ -1,7 +1,7 @@
 import { type ReactNode, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bus, Menu, Bell, User, LayoutDashboard, Settings, LogOut, MapPin, Search, X } from 'lucide-react';
+import { Bus, Menu, Bell, User, LayoutDashboard, Settings, LogOut, MapPin, Search, X, Clock } from 'lucide-react';
 
 interface LayoutProps {
     children: ReactNode;
@@ -72,6 +72,12 @@ const Layout = ({ children, activeItem = 'dashboard' }: LayoutProps) => {
                     label="Routes"
                     active={activeItem === 'routes'}
                     onClick={() => handleNavigation(`/${orgSlug}/routes`)}
+                />
+                <SidebarItem
+                    icon={<Clock size={20} />}
+                    label="Trip History"
+                    active={activeItem === 'trip-history'}
+                    onClick={() => handleNavigation(`/${orgSlug}/trip-history`)}
                 />
                 <SidebarItem
                     icon={<Settings size={20} />}
