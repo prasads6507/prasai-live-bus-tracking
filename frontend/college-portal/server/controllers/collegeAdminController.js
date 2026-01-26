@@ -412,38 +412,26 @@ const getAssignments = async (req, res) => {
 // @access  Private (College Admin)
 const getTripHistory = async (req, res) => {
     try {
-        // Get all buses for this college
-        const busesSnapshot = await db.collection('buses')
+        // Query ROOT trips collection filtered by collegeId
+        const tripsSnapshot = await db.collection('trips')
             .where('collegeId', '==', req.collegeId)
+            .orderBy('startTime', 'desc')
+            .limit(100)
             .get();
 
-        const trips = [];
-
-        // For each bus, get all trips from subcollection
-        for (const busDoc of busesSnapshot.docs) {
-            const busData = busDoc.data();
-            const tripsSnapshot = await busDoc.ref.collection('trips')
-                .orderBy('startTime', 'desc')
-                .limit(50) // Limit per bus
-                .get();
-
-            tripsSnapshot.docs.forEach(tripDoc => {
-                const tripData = tripDoc.data();
-                trips.push({
-                    _id: tripDoc.id,
-                    busId: busDoc.id,
-                    busNumber: busData.busNumber || busData.number || 'Unknown',
-                    driverName: tripData.driverName || 'Unknown Driver',
-                    startTime: tripData.startTime,
-                    endTime: tripData.endTime,
-                    status: tripData.status, // ACTIVE or COMPLETED
-                    durationMinutes: tripData.durationMinutes || null
-                });
-            });
-        }
-
-        // Sort all trips by startTime (most recent first)
-        trips.sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
+        const trips = tripsSnapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                _id: doc.id,
+                busId: data.busId,
+                busNumber: data.busNumber || 'Unknown',
+                driverName: data.driverName || 'Unknown Driver',
+                startTime: data.startTime,
+                endTime: data.endTime,
+                status: data.status,
+                durationMinutes: data.durationMinutes || null
+            };
+        });
 
         res.status(200).json({
             success: true,
@@ -461,25 +449,20 @@ const getTripHistory = async (req, res) => {
 // @access  Private (College Admin)
 const updateTrip = async (req, res) => {
     try {
-        const { busId, tripId } = req.params;
+        const { tripId } = req.params;
         const { startTime, endTime, driverName } = req.body;
 
-        const busRef = db.collection('buses').doc(busId);
-        const busDoc = await busRef.get();
-
-        if (!busDoc.exists) {
-            return res.status(404).json({ success: false, message: 'Bus not found' });
-        }
-
-        if (busDoc.data().collegeId !== req.collegeId) {
-            return res.status(403).json({ success: false, message: 'Unauthorized' });
-        }
-
-        const tripRef = busRef.collection('trips').doc(tripId);
+        // Access trip from ROOT collection
+        const tripRef = db.collection('trips').doc(tripId);
         const tripDoc = await tripRef.get();
 
         if (!tripDoc.exists) {
             return res.status(404).json({ success: false, message: 'Trip not found' });
+        }
+
+        // Verify trip belongs to this college
+        if (tripDoc.data().collegeId !== req.collegeId) {
+            return res.status(403).json({ success: false, message: 'Unauthorized' });
         }
 
         const updateData = {};
@@ -511,24 +494,19 @@ const updateTrip = async (req, res) => {
 // @access  Private (College Admin)
 const deleteTrip = async (req, res) => {
     try {
-        const { busId, tripId } = req.params;
+        const { tripId } = req.params;
 
-        const busRef = db.collection('buses').doc(busId);
-        const busDoc = await busRef.get();
-
-        if (!busDoc.exists) {
-            return res.status(404).json({ success: false, message: 'Bus not found' });
-        }
-
-        if (busDoc.data().collegeId !== req.collegeId) {
-            return res.status(403).json({ success: false, message: 'Unauthorized' });
-        }
-
-        const tripRef = busRef.collection('trips').doc(tripId);
+        // Access trip from ROOT collection
+        const tripRef = db.collection('trips').doc(tripId);
         const tripDoc = await tripRef.get();
 
         if (!tripDoc.exists) {
             return res.status(404).json({ success: false, message: 'Trip not found' });
+        }
+
+        // Verify trip belongs to this college
+        if (tripDoc.data().collegeId !== req.collegeId) {
+            return res.status(403).json({ success: false, message: 'Unauthorized' });
         }
 
         await tripRef.delete();

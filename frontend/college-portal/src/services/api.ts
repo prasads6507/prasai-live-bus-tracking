@@ -157,13 +157,13 @@ export const getTripHistory = async () => {
     return response.data;
 };
 
-export const updateTrip = async (busId: string, tripId: string, data: any) => {
-    const response = await api.put(`/admin/trips/${busId}/${tripId}`, data);
+export const updateTrip = async (tripId: string, data: any) => {
+    const response = await api.put(`/admin/trips/${tripId}`, data);
     return response.data;
 };
 
-export const deleteTrip = async (busId: string, tripId: string) => {
-    const response = await api.delete(`/admin/trips/${busId}/${tripId}`);
+export const deleteTrip = async (tripId: string) => {
+    const response = await api.delete(`/admin/trips/${tripId}`);
     return response.data;
 };
 

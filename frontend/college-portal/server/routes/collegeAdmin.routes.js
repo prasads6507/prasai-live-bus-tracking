@@ -46,7 +46,7 @@ router.route('/assignments')
 
 // Trip History
 router.get('/trips', getTripHistory);
-router.route('/trips/:busId/:tripId')
+router.route('/trips/:tripId')
     .put(updateTrip)
     .delete(deleteTrip);
 

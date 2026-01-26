@@ -107,7 +107,8 @@ const startTrip = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Bus not found' });
         }
 
-        if (busDoc.data().collegeId !== req.collegeId) {
+        const busData = busDoc.data();
+        if (busData.collegeId !== req.collegeId) {
             return res.status(403).json({ success: false, message: 'Unauthorized college access' });
         }
 
@@ -115,12 +116,13 @@ const startTrip = async (req, res) => {
         const userDoc = await db.collection('users').doc(req.user.id).get();
         const driverName = userDoc.exists ? userDoc.data().name : 'Unknown Driver';
 
-        // Create trip document in trips subcollection
-        const tripRef = busRef.collection('trips').doc(tripId);
+        // Create trip document in ROOT trips collection (easier to browse in Firebase Console)
+        const tripRef = db.collection('trips').doc(tripId);
         await tripRef.set({
             tripId,
             busId,
-            driverId: req.user.id, // Fixed: .id
+            busNumber: busData.busNumber || busData.number || 'Unknown',
+            driverId: req.user.id,
             driverName: driverName,
             collegeId: req.collegeId,
             startTime: new Date().toISOString(),
@@ -167,8 +169,8 @@ const endTrip = async (req, res) => {
             return res.status(403).json({ success: false, message: 'Unauthorized college access' });
         }
 
-        // Update trip document
-        const tripRef = busRef.collection('trips').doc(tripId);
+        // Update trip document in ROOT trips collection
+        const tripRef = db.collection('trips').doc(tripId);
         const tripDoc = await tripRef.get();
 
         if (tripDoc.exists) {

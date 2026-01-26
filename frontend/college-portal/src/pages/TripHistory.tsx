@@ -126,7 +126,7 @@ const TripHistory = () => {
             if (editForm.endTime) data.endTime = new Date(editForm.endTime).toISOString();
             if (editForm.driverName) data.driverName = editForm.driverName;
 
-            await updateTrip(selectedTrip.busId, selectedTrip._id, data);
+            await updateTrip(selectedTrip._id, data);
             setEditModalOpen(false);
             setSelectedTrip(null);
             fetchTrips();
@@ -141,7 +141,7 @@ const TripHistory = () => {
         if (!selectedTrip) return;
         setActionLoading(true);
         try {
-            await deleteTrip(selectedTrip.busId, selectedTrip._id);
+            await deleteTrip(selectedTrip._id);
             setDeleteModalOpen(false);
             setSelectedTrip(null);
             fetchTrips();
