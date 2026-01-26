@@ -456,6 +456,90 @@ const getTripHistory = async (req, res) => {
     }
 };
 
+// @desc    Update a trip record
+// @route   PUT /api/admin/trips/:busId/:tripId
+// @access  Private (College Admin)
+const updateTrip = async (req, res) => {
+    try {
+        const { busId, tripId } = req.params;
+        const { startTime, endTime, driverName } = req.body;
+
+        const busRef = db.collection('buses').doc(busId);
+        const busDoc = await busRef.get();
+
+        if (!busDoc.exists) {
+            return res.status(404).json({ success: false, message: 'Bus not found' });
+        }
+
+        if (busDoc.data().collegeId !== req.collegeId) {
+            return res.status(403).json({ success: false, message: 'Unauthorized' });
+        }
+
+        const tripRef = busRef.collection('trips').doc(tripId);
+        const tripDoc = await tripRef.get();
+
+        if (!tripDoc.exists) {
+            return res.status(404).json({ success: false, message: 'Trip not found' });
+        }
+
+        const updateData = {};
+        if (startTime) updateData.startTime = startTime;
+        if (endTime) updateData.endTime = endTime;
+        if (driverName) updateData.driverName = driverName;
+
+        // Recalculate duration if both times are present
+        if (updateData.startTime || updateData.endTime) {
+            const tripData = tripDoc.data();
+            const start = new Date(updateData.startTime || tripData.startTime);
+            const end = updateData.endTime ? new Date(updateData.endTime) : (tripData.endTime ? new Date(tripData.endTime) : null);
+            if (end) {
+                updateData.durationMinutes = Math.round((end - start) / 60000);
+            }
+        }
+
+        await tripRef.update(updateData);
+
+        res.status(200).json({ success: true, message: 'Trip updated' });
+    } catch (error) {
+        console.error('Error updating trip:', error);
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+    }
+};
+
+// @desc    Delete a trip record
+// @route   DELETE /api/admin/trips/:busId/:tripId
+// @access  Private (College Admin)
+const deleteTrip = async (req, res) => {
+    try {
+        const { busId, tripId } = req.params;
+
+        const busRef = db.collection('buses').doc(busId);
+        const busDoc = await busRef.get();
+
+        if (!busDoc.exists) {
+            return res.status(404).json({ success: false, message: 'Bus not found' });
+        }
+
+        if (busDoc.data().collegeId !== req.collegeId) {
+            return res.status(403).json({ success: false, message: 'Unauthorized' });
+        }
+
+        const tripRef = busRef.collection('trips').doc(tripId);
+        const tripDoc = await tripRef.get();
+
+        if (!tripDoc.exists) {
+            return res.status(404).json({ success: false, message: 'Trip not found' });
+        }
+
+        await tripRef.delete();
+
+        res.status(200).json({ success: true, message: 'Trip deleted' });
+    } catch (error) {
+        console.error('Error deleting trip:', error);
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+    }
+};
+
 module.exports = {
     createBus,
     getBuses,
@@ -471,5 +555,7 @@ module.exports = {
     deleteUser,
     assignDriver,
     getAssignments,
-    getTripHistory
+    getTripHistory,
+    updateTrip,
+    deleteTrip
 };

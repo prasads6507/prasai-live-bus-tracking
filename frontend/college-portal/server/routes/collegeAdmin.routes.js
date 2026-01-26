@@ -4,7 +4,7 @@ const {
     createBus, getBuses, updateBus, deleteBus,
     createRoute, getRoutes, updateRoute, deleteRoute,
     createUser, getUsersByRole, updateUser, deleteUser,
-    assignDriver, getAssignments, getTripHistory
+    assignDriver, getAssignments, getTripHistory, updateTrip, deleteTrip
 } = require('../controllers/collegeAdminController');
 const { protect, authorize } = require('../middleware/auth');
 const tenantIsolation = require('../middleware/tenantIsolation');
@@ -46,5 +46,8 @@ router.route('/assignments')
 
 // Trip History
 router.get('/trips', getTripHistory);
+router.route('/trips/:busId/:tripId')
+    .put(updateTrip)
+    .delete(deleteTrip);
 
 module.exports = router;
