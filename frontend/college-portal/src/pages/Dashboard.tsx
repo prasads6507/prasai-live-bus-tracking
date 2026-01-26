@@ -13,7 +13,8 @@ const Dashboard = () => {
     const [buses, setBuses] = useState<any[]>([]);
     const [routes, setRoutes] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-
+    const [currentCollegeId, setCurrentCollegeId] = useState<string | null>(localStorage.getItem('current_college_id'));
+    const [focusedBusLocation, setFocusedBusLocation] = useState<{ lat: number, lng: number } | null>(null);
 
     // Initial Data Fetch & Validation
     useEffect(() => {
@@ -31,6 +32,7 @@ const Dashboard = () => {
                     const orgData = await validateSlug(orgSlug);
                     // Ensure context is set for API calls (important for Super Admin)
                     localStorage.setItem('current_college_id', orgData.collegeId);
+                    setCurrentCollegeId(orgData.collegeId);
                 }
 
                 // 3. Fetch Data in Parallel
@@ -55,16 +57,15 @@ const Dashboard = () => {
 
     // Real-time Bus Updates
     useEffect(() => {
-        const collegeId = localStorage.getItem('current_college_id');
-        if (!collegeId) {
+        if (!currentCollegeId) {
             console.warn('No college ID found for real-time subscription');
             return;
         }
 
-        console.log('Setting up real-time bus subscription for college:', collegeId);
+        console.log('Setting up real-time bus subscription for college:', currentCollegeId);
 
         // Listen for real-time updates to 'buses' collection
-        const qBuses = query(collection(db, 'buses'), where('collegeId', '==', collegeId));
+        const qBuses = query(collection(db, 'buses'), where('collegeId', '==', currentCollegeId));
         const unsubscribeBuses = onSnapshot(qBuses, (snapshot) => {
             const updatedBuses = snapshot.docs.map(doc => ({
                 _id: doc.id,
@@ -74,7 +75,7 @@ const Dashboard = () => {
         });
 
         // Listen for real-time updates to 'routes' collection
-        const qRoutes = query(collection(db, 'routes'), where('collegeId', '==', collegeId));
+        const qRoutes = query(collection(db, 'routes'), where('collegeId', '==', currentCollegeId));
         const unsubscribeRoutes = onSnapshot(qRoutes, (snapshot) => {
             const updatedRoutes = snapshot.docs.map(doc => ({
                 _id: doc.id,
@@ -84,11 +85,19 @@ const Dashboard = () => {
         });
 
         return () => {
-            console.log('Cleaning up real-time subscriptions for college:', collegeId);
+            console.log('Cleaning up real-time subscriptions for college:', currentCollegeId);
             unsubscribeBuses();
             unsubscribeRoutes();
         };
-    }, [orgSlug]); // Re-subscribe if org changes
+    }, [currentCollegeId]); // Depend on currentCollegeId state
+
+    const handleBusClick = (bus: any) => {
+        if (bus.location?.latitude && bus.location?.longitude) {
+            setFocusedBusLocation({ lat: bus.location.latitude, lng: bus.location.longitude });
+            // Scroll to map
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    };
 
     if (loading) {
         return (
@@ -147,19 +156,21 @@ const Dashboard = () => {
                                 LIVE
                             </div>
                         </div>
-                        <MapComponent buses={buses} />
+                        <MapComponent buses={buses} focusedLocation={focusedBusLocation} />
                     </div>
 
                     {/* Bus List */}
                     <div>
                         <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-lg font-bold text-slate-800">Fleet Status</h2>
+                            <h2 className="text-lg font-bold text-slate-800">Bus Status</h2>
                             <button className="text-sm font-semibold text-blue-600 hover:text-blue-700">View All</button>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             {buses.length > 0 ? (
                                 buses.map((bus) => (
-                                    <BusCard key={bus._id} bus={bus} />
+                                    <div key={bus._id} onClick={() => handleBusClick(bus)} className="cursor-pointer">
+                                        <BusCard bus={bus} />
+                                    </div>
                                 ))
                             ) : (
                                 <div className="col-span-full py-12 text-center bg-white rounded-2xl border border-dashed border-slate-300">

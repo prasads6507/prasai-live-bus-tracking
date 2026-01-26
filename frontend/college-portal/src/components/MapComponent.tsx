@@ -7,6 +7,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 interface MapComponentProps {
     buses: any[];
+    focusedLocation?: { lat: number, lng: number } | null;
 }
 
 // Component to handle map re-centering with smooth animation
@@ -15,7 +16,7 @@ const ChangeView = ({ center, shouldAnimate = false }: { center: [number, number
     useEffect(() => {
         if (center[0] !== 0 && center[1] !== 0) {
             if (shouldAnimate) {
-                map.flyTo(center, map.getZoom(), { duration: 1 });
+                map.flyTo(center, 15, { duration: 1.5 }); // Increased zoom for focused view
             } else {
                 map.setView(center);
             }
@@ -88,31 +89,31 @@ const UserLocationMarker = ({ onLocationFound, shouldCenterOnUser }: { onLocatio
     );
 };
 
-const MapComponent = ({ buses }: MapComponentProps) => {
+const MapComponent = ({ buses, focusedLocation }: MapComponentProps) => {
     // Default center (Hyderabad)
     const defaultCenter: [number, number] = [17.3850, 78.4867];
     const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
 
-    // Log bus data for debugging
-    console.log('MapComponent received buses:', buses.length, buses.map(b => ({
-        id: b._id,
-        status: b.status,
-        location: b.location,
-        lastUpdated: b.lastUpdated
-    })));
-
-    // Find first active bus with location or first bus with location
+    // activeBusWithLocation logic...
     const activeBusWithLocation = buses.find(b => b.status === 'ON_ROUTE' && b.location?.latitude && b.location?.longitude);
     const anyBusWithLocation = buses.find(b => b.location?.latitude && b.location?.longitude);
 
-    // Priority: Active bus > Any bus with location > User location > Default
-    const mapCenter: [number, number] = activeBusWithLocation
-        ? [activeBusWithLocation.location.latitude, activeBusWithLocation.location.longitude]
-        : anyBusWithLocation
-            ? [anyBusWithLocation.location.latitude, anyBusWithLocation.location.longitude]
-            : userLocation
-                ? userLocation
-                : defaultCenter;
+    // Priority: Focused Location > Active bus > Any bus with location > User location > Default
+    let mapCenter: [number, number] = defaultCenter;
+    let shouldAnimate = false;
+
+    if (focusedLocation) {
+        mapCenter = [focusedLocation.lat, focusedLocation.lng];
+        shouldAnimate = true;
+    } else if (activeBusWithLocation) {
+        mapCenter = [activeBusWithLocation.location.latitude, activeBusWithLocation.location.longitude];
+        // Only animate if we're tracking a moving bus and we haven't manually focused
+        shouldAnimate = false;
+    } else if (anyBusWithLocation) {
+        mapCenter = [anyBusWithLocation.location.latitude, anyBusWithLocation.location.longitude];
+    } else if (userLocation) {
+        mapCenter = userLocation;
+    }
 
     // Custom Bus Icon
     const createBusIcon = (status: string) => {
@@ -157,7 +158,7 @@ const MapComponent = ({ buses }: MapComponentProps) => {
                 scrollWheelZoom={true}
                 className="h-full w-full"
             >
-                <ChangeView center={mapCenter} shouldAnimate={!!activeBusWithLocation} />
+                <ChangeView center={mapCenter} shouldAnimate={shouldAnimate} />
                 <TileLayer
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
