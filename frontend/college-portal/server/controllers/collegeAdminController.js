@@ -412,14 +412,19 @@ const getAssignments = async (req, res) => {
 // @access  Private (College Admin)
 const getTripHistory = async (req, res) => {
     try {
+        console.log('--- GET TRIP HISTORY ---');
+        console.log('CollegeId:', req.collegeId);
+
         // Query ROOT trips collection filtered by collegeId
+        // Note: Removed orderBy to avoid composite index requirement
         const tripsSnapshot = await db.collection('trips')
             .where('collegeId', '==', req.collegeId)
-            .orderBy('startTime', 'desc')
             .limit(100)
             .get();
 
-        const trips = tripsSnapshot.docs.map(doc => {
+        console.log('Found trips:', tripsSnapshot.size);
+
+        let trips = tripsSnapshot.docs.map(doc => {
             const data = doc.data();
             return {
                 _id: doc.id,
@@ -432,6 +437,9 @@ const getTripHistory = async (req, res) => {
                 durationMinutes: data.durationMinutes || null
             };
         });
+
+        // Sort in memory (most recent first)
+        trips.sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
 
         res.status(200).json({
             success: true,
