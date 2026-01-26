@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Bus, MapPin, Navigation, Settings, User } from 'lucide-react';
+import { Bus, MapPin, Navigation, Settings, User, RotateCw } from 'lucide-react';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase'; // Import Firestore instance
 import { getBuses, getRoutes, validateSlug } from '../services/api';
@@ -99,6 +99,23 @@ const Dashboard = () => {
         }
     };
 
+    const handleRefresh = async () => {
+        setLoading(true);
+        try {
+            const [busData, routeData] = await Promise.all([
+                getBuses(),
+                getRoutes()
+            ]);
+            setBuses(Array.isArray(busData) ? busData : busData.data || []);
+            setRoutes(Array.isArray(routeData) ? routeData : routeData.data || []);
+            // Also reset focus to allow map to re-center if desired, or keep it. Let's keep it.
+        } catch (err) {
+            console.error("Manual Refresh Error:", err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     if (loading) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-slate-50">
@@ -151,9 +168,18 @@ const Dashboard = () => {
                                 <MapPin size={20} className="text-blue-600" />
                                 Live Fleet Tracking
                             </h3>
-                            <div className="px-3 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full flex items-center gap-1">
-                                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                                LIVE
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={handleRefresh}
+                                    className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded-lg transition-all"
+                                    title="Refresh Map Data"
+                                >
+                                    <RotateCw size={18} />
+                                </button>
+                                <div className="px-3 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full flex items-center gap-1">
+                                    <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                                    LIVE
+                                </div>
                             </div>
                         </div>
                         <MapComponent buses={buses} focusedLocation={focusedBusLocation} />
