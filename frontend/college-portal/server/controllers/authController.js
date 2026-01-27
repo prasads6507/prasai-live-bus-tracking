@@ -16,41 +16,116 @@ const generateToken = (id, role, collegeId) => {
 // @desc    Auth user & get token
 // @route   POST /api/auth/login
 // @access  Public
+// @desc    Auth user & get token (Unified for Admin, Owner, Driver, Student)
+// @route   POST /api/auth/login
+// @access  Public
 const loginUser = async (req, res) => {
-    const { email, password } = req.body;
+    const { email, password, orgSlug } = req.body;
 
     try {
-        // Firestore query: users collection, where email == email
+        // -------------------------
+        // 1. Try Users Collection (Owner, Admin, Driver)
+        // -------------------------
         const usersRef = db.collection('users');
-        const snapshot = await usersRef.where('email', '==', email).limit(1).get();
+        const userSnapshot = await usersRef.where('email', '==', email).limit(1).get();
 
-        if (snapshot.empty) {
-            return res.status(401).json({ message: 'Invalid email or password' });
-        }
+        if (!userSnapshot.empty) {
+            const userDoc = userSnapshot.docs[0];
+            const userData = userDoc.data();
 
-        const userDoc = snapshot.docs[0];
-        const userData = userDoc.data();
+            // Security Check: College Status
+            if (userData.role !== 'OWNER' && userData.collegeId !== 'OWNER_GLOBAL') {
+                const collegeDoc = await db.collection('colleges').doc(userData.collegeId).get();
+                if (collegeDoc.exists && collegeDoc.data().status === 'SUSPENDED') {
+                    return res.status(403).json({ message: 'Your organization account is suspended.' });
+                }
+            }
 
-        // Security Check: College Status
-        if (userData.role !== 'OWNER' && userData.collegeId !== 'OWNER_GLOBAL') {
-            const collegeDoc = await db.collection('colleges').doc(userData.collegeId).get();
-            if (collegeDoc.exists && collegeDoc.data().status === 'SUSPENDED') {
-                return res.status(403).json({ message: 'Your organization account is suspended. Please contact the system administrator.' });
+            if (await matchPassword(password, userData.passwordHash)) {
+                return res.json({
+                    _id: userData.userId,
+                    name: userData.name,
+                    email: userData.email,
+                    role: userData.role,
+                    collegeId: userData.collegeId,
+                    token: generateToken(userData.userId, userData.role, userData.collegeId),
+                });
+            } else {
+                return res.status(401).json({ message: 'Invalid email or password' });
             }
         }
 
-        if (userData && (await matchPassword(password, userData.passwordHash))) {
-            res.json({
-                _id: userData.userId,
-                name: userData.name,
-                email: userData.email,
-                role: userData.role,
-                collegeId: userData.collegeId,
-                token: generateToken(userData.userId, userData.role, userData.collegeId),
-            });
-        } else {
-            res.status(401).json({ message: 'Invalid email or password' });
+        // -------------------------
+        // 2. Try Students Collection
+        // -------------------------
+        // We need collegeId to scope student search if possible, or search globally if unique email
+        let studentsQuery = db.collection('students').where('email', '==', email);
+
+        // Optimization: prevent cross-college login if orgSlug is known
+        if (orgSlug) {
+            const collegesRef = db.collection('colleges');
+            // Try to resolve orgSlug to collegeId
+            let collegeId = null;
+            let collegeDoc = await collegesRef.doc(orgSlug).get();
+            if (collegeDoc.exists) collegeId = collegeDoc.data().collegeId;
+            else {
+                const slugSnap = await collegesRef.where('slug', '==', orgSlug).limit(1).get();
+                if (!slugSnap.empty) collegeId = slugSnap.docs[0].data().collegeId;
+            }
+
+            if (collegeId) {
+                studentsQuery = studentsQuery.where('collegeId', '==', collegeId);
+            }
         }
+
+        const studentSnapshot = await studentsQuery.limit(1).get();
+
+        if (!studentSnapshot.empty) {
+            const studentDoc = studentSnapshot.docs[0];
+            const student = studentDoc.data();
+
+            // Check College Status for student
+            const collegeDoc = await db.collection('colleges').doc(student.collegeId).get();
+            if (collegeDoc.exists && collegeDoc.data().status === 'SUSPENDED') {
+                return res.status(403).json({ message: 'Your organization account is suspended.' });
+            }
+
+            let isValid = false;
+            let isFirstLogin = student.isFirstLogin || false;
+
+            if (isFirstLogin || !student.passwordHash) {
+                // First login: password should match registerNumber
+                if (password === student.registerNumber) {
+                    isValid = true;
+                }
+            } else {
+                // Subsequent login
+                if (await matchPassword(password, student.passwordHash)) {
+                    isValid = true;
+                    isFirstLogin = false; // Confirm it's not first login flow effectively
+                }
+            }
+
+            if (isValid) {
+                return res.json({
+                    _id: student.studentId,
+                    name: student.name,
+                    email: student.email,
+                    collegeId: student.collegeId,
+                    role: 'STUDENT',
+                    isFirstLogin, // Frontend needs this to trigger password change modal
+                    token: generateToken(student.studentId, 'STUDENT', student.collegeId)
+                });
+            }
+            else {
+                if (isFirstLogin || !student.passwordHash) {
+                    return res.status(401).json({ message: 'Invalid credentials. Use your Register Number as initial password.' });
+                }
+            }
+        }
+
+        return res.status(401).json({ message: 'Invalid email or password' });
+
     } catch (error) {
         console.error("Login Error:", error);
         res.status(500).json({ message: error.message });

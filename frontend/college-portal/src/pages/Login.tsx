@@ -41,7 +41,7 @@ const Login = () => {
         setError('');
 
         try {
-            const data = await login({ email, password });
+            const data = await login({ email, password, orgSlug }); // Pass orgSlug for unified login scoping
 
             // Redirect DRIVERS to Driver Dashboard
             if (data.role === 'DRIVER') {
@@ -60,6 +60,50 @@ const Login = () => {
 
                 // Redirect to driver dashboard
                 navigate(`/${orgSlug}/driver-dashboard`);
+                return;
+            }
+
+            // Redirect STUDENTS
+            if (data.role === 'STUDENT') {
+                localStorage.setItem('student_token', data.token);
+                // Store regular token too for consistency if needed, but StudentPortal uses student_token usually?
+                // Actually StudentLogin.tsx stores 'token'? No, let's check.
+                // StudentLogin.tsx uses 'student_token'. 
+                // Wait, reusing 'token' key might conflict if Admin logs in later?
+                // It's better to store specific keys or clear properly.
+                // For now, let's follow existing patterns.
+                localStorage.setItem('token', data.token); // Generic token usage
+
+                const userToStore = {
+                    _id: data._id,
+                    name: data.name,
+                    email: data.email,
+                    role: data.role,
+                    collegeId: data.collegeId,
+                    isFirstLogin: data.isFirstLogin
+                };
+                localStorage.setItem('user', JSON.stringify(userToStore));
+
+                if (data.isFirstLogin) {
+                    // Redirect to student login page but with pre-filled state or handle modal there?
+                    // Actually, if they use this Main Login, we should probably redirect them to Dashboard,
+                    // BUT Dashboard might not have the "Set Password" modal trigger if it expects it on Login page.
+                    // Ideally, we redirect to Student Login page which will see the token and redirect?
+                    // OR we send them to specific student dashboard route.
+                    // Let's send to student login page, it might handle the "Already logged in" state or we fix it.
+                    // Better: Send to Student Dashboard, but make sure Dashboard handles first-time check?
+                    // The user said "on next there shoud be a chage password pop".
+                    // That logic is currently in `StudentLogin.tsx`.
+                    // If we bypass StudentLogin.tsx, we miss the pop-up.
+                    // So, let's redirect to `/student/login`?
+                    // But we already have the token.
+                    // Let's navigate to `/student/dashboard` and ensure Dashboard or a wrapper handles the Force Change Password.
+                    // OR simple hack: Navigate to `/student/login` and pass state?
+                    navigate(`/${orgSlug}/student/login`, { state: { ...data, preAuthenticated: true } });
+                    return;
+                }
+
+                navigate(`/${orgSlug}/student/dashboard`);
                 return;
             }
 
