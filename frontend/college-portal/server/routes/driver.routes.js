@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const {
     getDriverBuses,
+    searchDriverBuses,
     updateBusLocation,
     startTrip,
     endTrip,
@@ -17,6 +18,7 @@ router.use(tenantIsolation);
 
 // Bus operations
 router.get('/buses', getDriverBuses);
+router.get('/buses/search', searchDriverBuses);
 router.post('/tracking/:busId', updateBusLocation);
 
 // Trip management

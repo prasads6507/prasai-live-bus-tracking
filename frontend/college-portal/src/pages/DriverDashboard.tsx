@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Navigation, LogOut, AlertCircle, User, Bus, Settings, Phone, Search, X } from 'lucide-react';
-import { getDriverBuses, updateBusLocation, saveTripHistory, startNewTrip, endCurrentTrip } from '../services/api';
+import { getDriverBuses, updateBusLocation, saveTripHistory, startNewTrip, endCurrentTrip, searchDriverBuses } from '../services/api';
 
 const DriverDashboard = () => {
     const { orgSlug } = useParams<{ orgSlug: string }>();
@@ -248,21 +248,20 @@ const DriverDashboard = () => {
 
         setIsSearching(true);
         setError(null);
-
-        // Client-side search only since backend endpoint is missing
         try {
-            const foundBus = buses.find(b => b.busNumber.toLowerCase() === manualBusNumber.trim().toLowerCase());
-
-            if (foundBus) {
-                // Select the bus directly
-                setSelectedBusId(foundBus._id);
-                setManualEntryMode(false);
-                setManualBusNumber('');
+            const response = await searchDriverBuses(manualBusNumber);
+            // Assuming response has { success: true, data: [...] } structure like getDriverBuses
+            if (response.success && Array.isArray(response.data) && response.data.length > 0) {
+                setBuses(response.data);
+            } else if (Array.isArray(response) && response.length > 0) {
+                // Handle case where it returns direct array
+                setBuses(response);
             } else {
-                setError('Bus not found in your assigned list. Please contact admin.');
+                setError('No bus found with that number');
+                setBuses([]);
             }
         } catch (err: any) {
-            setError('Failed to search bus locally');
+            setError(err.message || 'Failed to search bus');
         } finally {
             setIsSearching(false);
         }

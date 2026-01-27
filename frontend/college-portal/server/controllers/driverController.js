@@ -3,6 +3,31 @@ const { db, admin } = require('../config/firebase');
 // @desc    Get available buses for the driver's college
 // @route   GET /api/driver/buses
 // @access  Private (Driver)
+// Helper to populate route names
+const populateBusRoutes = async (buses) => {
+    try {
+        const routeIds = [...new Set(buses.filter(b => b.assignedRouteId).map(b => b.assignedRouteId))];
+        if (routeIds.length === 0) return buses;
+
+        const routesSnapshot = await db.collection('routes').where(admin.firestore.FieldPath.documentId(), 'in', routeIds).get();
+        const routesMap = {};
+        routesSnapshot.docs.forEach(doc => {
+            routesMap[doc.id] = doc.data().routeName || doc.data().route_name || doc.data().name || 'Unknown Route';
+        });
+
+        return buses.map(bus => ({
+            ...bus,
+            routeName: bus.assignedRouteId ? (routesMap[bus.assignedRouteId] || 'No Route Details') : 'No Route Assigned'
+        }));
+    } catch (error) {
+        console.error("Error populating routes:", error);
+        return buses; // Return raw data on failure
+    }
+};
+
+// @desc    Get available buses for the driver's college
+// @route   GET /api/driver/buses
+// @access  Private (Driver)
 const getDriverBuses = async (req, res) => {
     try {
         console.log('--- GET DRIVER BUSES ---');
@@ -16,11 +41,13 @@ const getDriverBuses = async (req, res) => {
 
         console.log(`Found ${busesSnapshot.size} buses for college ${req.collegeId}`);
 
-
-        const buses = busesSnapshot.docs.map(doc => ({
+        let buses = busesSnapshot.docs.map(doc => ({
             _id: doc.id,
             ...doc.data()
         }));
+
+        // Populate Route Names
+        buses = await populateBusRoutes(buses);
 
         res.status(200).json({
             success: true,
@@ -29,6 +56,52 @@ const getDriverBuses = async (req, res) => {
         });
     } catch (error) {
         console.error('Error fetching driver buses:', error);
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+    }
+};
+
+// @desc    Search ALL buses in college (Global Search)
+// @route   GET /api/driver/buses/search
+// @access  Private (Driver)
+const searchDriverBuses = async (req, res) => {
+    try {
+        const { q } = req.query;
+        if (!q) return res.status(400).json({ success: false, message: 'Query required' });
+
+        console.log(`--- SEARCH DRIVER BUSES: ${q} ---`);
+
+        // Note: Firestore doesn't support native partial text search strings easily.
+        // We will fetch all buses for the college (usually manageable size) and filter in memory,
+        // OR use a specific "busNumber" match if possible.
+        // For better experience, we'll fetch all and filter since bus fleets are usually < 100.
+
+        const busesSnapshot = await db.collection('buses')
+            .where('collegeId', '==', req.collegeId)
+            .get();
+
+        let buses = busesSnapshot.docs.map(doc => ({
+            _id: doc.id,
+            ...doc.data()
+        }));
+
+        // Filter by bus number (case insensitive partial match)
+        const query = q.toLowerCase();
+        buses = buses.filter(bus =>
+            (bus.busNumber && bus.busNumber.toLowerCase().includes(query)) ||
+            (bus.number && bus.number.toString().toLowerCase().includes(query))
+        );
+
+        // Populate Route Names
+        buses = await populateBusRoutes(buses);
+
+        res.status(200).json({
+            success: true,
+            count: buses.length,
+            data: buses
+        });
+
+    } catch (error) {
+        console.error('Error searching buses:', error);
         res.status(500).json({ success: false, message: 'Server Error', error: error.message });
     }
 };
@@ -251,6 +324,7 @@ const saveTripHistory = async (req, res) => {
 
 module.exports = {
     getDriverBuses,
+    searchDriverBuses,
     updateBusLocation,
     startTrip,
     endTrip,
