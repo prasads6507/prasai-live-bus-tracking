@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Bus, LogIn, AlertCircle, Eye, EyeOff, KeyRound } from 'lucide-react';
 import { validateSlug, studentLogin, studentSetPassword } from '../services/api';
@@ -25,7 +25,18 @@ const StudentLogin = () => {
     const [passwordError, setPasswordError] = useState('');
     const [setPasswordLoading, setSetPasswordLoading] = useState(false);
 
+    const location = useLocation();
+
     useEffect(() => {
+        // Check if we were redirected from main login with pre-authenticated state
+        if (location.state?.preAuthenticated && location.state?.isFirstLogin) {
+            // Auto-open set password modal
+            const data = location.state;
+            localStorage.setItem('token', data.token);
+            localStorage.setItem('current_college_id', data.collegeId);
+            setShowSetPasswordModal(true);
+        }
+
         const checkSlug = async () => {
             if (!orgSlug) {
                 setError('Organization not specified');
@@ -46,7 +57,7 @@ const StudentLogin = () => {
             }
         };
         checkSlug();
-    }, [orgSlug]);
+    }, [orgSlug, location]);
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();

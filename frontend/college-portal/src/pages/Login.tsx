@@ -248,8 +248,8 @@ const Login = () => {
                     className="w-full max-w-md bg-white rounded-2xl sm:rounded-3xl shadow-xl border border-slate-100 p-6 sm:p-8 lg:p-10 mt-16 lg:mt-0"
                 >
                     <div className="mb-8">
-                        <h2 className="text-2xl font-bold text-slate-800">Admin Sign In</h2>
-                        <p className="text-slate-500 mt-2">Enter your credentials to access the dashboard</p>
+                        <h2 className="text-2xl font-bold text-slate-800">Sign In</h2>
+                        <p className="text-slate-500 mt-2">Enter your credentials to access the portal</p>
                     </div>
 
                     <AnimatePresence>
@@ -275,7 +275,7 @@ const Login = () => {
                                     type="email"
                                     required
                                     className="w-full pl-12 pr-4 py-3 sm:py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all font-medium text-slate-700 placeholder:text-slate-400 text-base"
-                                    placeholder="admin@college.edu"
+                                    placeholder="email@college.edu"
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
                                 />
@@ -285,7 +285,6 @@ const Login = () => {
                         <div className="space-y-2">
                             <div className="flex justify-between items-center ml-1">
                                 <label className="text-sm font-semibold text-slate-700">Password</label>
-                                <a href="#" className="text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline">Forgot password?</a>
                             </div>
                             <div className="relative group">
                                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors" size={20} />
@@ -315,13 +314,19 @@ const Login = () => {
                                     <span className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
                                 ) : (
                                     <>
-                                        <span>Sign In to Dashboard</span>
+                                        <span>Sign In</span>
                                         <ArrowRight size={20} />
                                     </>
                                 )}
                             </motion.button>
                         </div>
                     </form>
+
+                    <div className="mt-6 text-center">
+                        <p className="text-xs text-slate-400">
+                            Forgot your password? Contact your college administrator.
+                        </p>
+                    </div>
 
                     <div className="mt-8 pt-6 border-t border-slate-100 text-center">
                         <p className="text-slate-400 text-sm flex items-center justify-center gap-2">

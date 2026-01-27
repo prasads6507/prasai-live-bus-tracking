@@ -36,53 +36,79 @@ const StudentDashboard = () => {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white">
-            {/* Header */}
-            <header className="bg-slate-800/50 backdrop-blur-lg border-b border-slate-700/50">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="bg-blue-600 p-2 rounded-lg">
-                            <Bus size={24} />
+        <div className="min-h-screen bg-slate-900 text-slate-100 font-sans selection:bg-blue-500/30">
+            {/* Navbar */}
+            <nav className="sticky top-0 z-30 bg-slate-900/80 backdrop-blur-xl border-b border-white/10">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="flex justify-between items-center h-16">
+                        <div className="flex items-center gap-3">
+                            <div className="bg-gradient-to-tr from-blue-600 to-indigo-600 p-2 rounded-xl shadow-lg shadow-blue-500/20">
+                                <Bus size={20} className="text-white" />
+                            </div>
+                            <div>
+                                <h1 className="font-bold text-lg tracking-tight">Student Portal</h1>
+                                <p className="text-xs text-slate-400 font-medium">{college?.collegeName}</p>
+                            </div>
                         </div>
-                        <div>
-                            <h1 className="font-bold text-lg">Student Portal</h1>
-                            <p className="text-sm text-slate-400">{college?.collegeName}</p>
-                        </div>
+                        <button
+                            onClick={handleLogout}
+                            className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-sm font-medium transition-all hover:scale-105 active:scale-95"
+                        >
+                            <LogOut size={16} />
+                            <span>Sign Out</span>
+                        </button>
                     </div>
-                    <button
-                        onClick={handleLogout}
-                        className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
-                    >
-                        <LogOut size={18} />
-                        Logout
-                    </button>
                 </div>
-            </header>
+            </nav>
 
-            {/* Main Content */}
-            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+                {/* Hero Section */}
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="bg-slate-800/50 backdrop-blur-lg border border-slate-700/50 rounded-2xl p-8"
+                    className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-900 via-blue-900 to-slate-900 border border-white/10 shadow-2xl"
                 >
-                    <div className="flex items-center gap-4 mb-6">
-                        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-2xl font-bold">
-                            {user?.name?.charAt(0) || <User size={32} />}
+                    <div className="absolute top-0 right-0 -mt-20 -mr-20 w-80 h-80 bg-blue-500/20 rounded-full blur-[100px]" />
+                    <div className="relative z-10 p-8 sm:p-10 flex flex-col md:flex-row items-start md:items-center gap-6">
+                        <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 p-[2px] shadow-xl">
+                            <div className="w-full h-full rounded-full bg-slate-900 flex items-center justify-center text-3xl font-bold text-blue-400">
+                                {user?.name?.charAt(0) || <User size={40} />}
+                            </div>
                         </div>
-                        <div>
-                            <h2 className="text-2xl font-bold">Welcome, {user?.name || 'Student'}!</h2>
-                            <p className="text-slate-400">{user?.email}</p>
+                        <div className="flex-1">
+                            <h2 className="text-3xl font-bold text-white mb-2">Hello, {user?.name?.split(' ')[0]}!</h2>
+                            <div className="flex flex-wrap gap-4 text-sm text-blue-200/80">
+                                <span className="bg-white/10 px-3 py-1 rounded-full border border-white/10">{user?.email}</span>
+                                <span className="bg-white/10 px-3 py-1 rounded-full border border-white/10">ID: {user?.registerNumber || 'N/A'}</span>
+                            </div>
                         </div>
-                    </div>
-
-                    <div className="mt-8 p-6 bg-blue-500/10 border border-blue-500/30 rounded-xl">
-                        <h3 className="font-semibold text-blue-400 mb-2">🚍 Bus Tracking Coming Soon!</h3>
-                        <p className="text-slate-300 text-sm">
-                            You will be able to track your college buses in real-time right here. Stay tuned for updates!
-                        </p>
                     </div>
                 </motion.div>
+
+                {/* Feature Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {/* Coming Soon Card */}
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.1 }}
+                        className="col-span-full bg-slate-800/50 backdrop-blur-md border border-white/5 p-8 rounded-3xl relative overflow-hidden group hover:border-blue-500/30 transition-colors"
+                    >
+                        <div className="absolute inset-0 bg-gradient-to-r from-blue-600/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <div className="relative z-10 flex flex-col items-center text-center space-y-4">
+                            <div className="w-16 h-16 bg-blue-500/20 rounded-2xl flex items-center justify-center mb-2">
+                                <Bus size={32} className="text-blue-400" />
+                            </div>
+                            <h3 className="text-xl font-bold text-white">Live Bus Tracking</h3>
+                            <p className="text-slate-400 max-w-md mx-auto">
+                                Real-time location updates, estimated arrival times, and route visualization are coming soon to your dashboard.
+                            </p>
+                            <span className="inline-block px-4 py-1.5 bg-blue-500/20 text-blue-300 text-xs font-bold uppercase tracking-wider rounded-full">
+                                In Development
+                            </span>
+                        </div>
+                    </motion.div>
+                </div>
             </main>
         </div>
     );
