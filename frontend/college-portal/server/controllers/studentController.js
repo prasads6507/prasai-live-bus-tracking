@@ -213,10 +213,28 @@ const createBulkStudents = async (req, res) => {
     }
 };
 
+// @desc    Get student's assigned bus
+// @route   GET /api/student/my-bus
+// @access  Private (Student)
+const getMyBus = async (req, res) => {
+    // Placeholder for future implementation
+    res.json({ message: 'Bus assignment tracking coming soon' });
+};
+
+// @desc    Get live location of student's bus
+// @route   GET /api/student/live-location
+// @access  Private (Student)
+const getLiveLocation = async (req, res) => {
+    // Placeholder for future implementation
+    res.json({ message: 'Live tracking coming soon' });
+};
+
 module.exports = {
     createStudent,
     getStudents,
     updateStudent,
     deleteStudent,
-    createBulkStudents
+    createBulkStudents,
+    getMyBus,
+    getLiveLocation
 };
