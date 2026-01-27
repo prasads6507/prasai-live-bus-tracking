@@ -73,6 +73,12 @@ export const createDriver = async (driverData: any) => {
     return response.data;
 };
 
+// Bulk Driver Creation
+export const bulkCreateDrivers = async (drivers: any[]) => {
+    const response = await api.post('/admin/users/bulk', { users: drivers, role: 'DRIVER' });
+    return response.data;
+};
+
 export const updateDriver = async (userId: string, driverData: any) => {
     const response = await api.put(`/admin/users/${userId}`, driverData);
     return response.data;

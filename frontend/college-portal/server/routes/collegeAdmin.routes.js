@@ -3,7 +3,7 @@ const router = express.Router();
 const {
     createBus, getBuses, updateBus, deleteBus,
     createRoute, getRoutes, updateRoute, deleteRoute,
-    createUser, getUsersByRole, updateUser, deleteUser,
+    createUser, getUsersByRole, updateUser, deleteUser, createBulkUsers,
     assignDriver, getAssignments, getTripHistory, updateTrip, deleteTrip, adminEndTrip
 } = require('../controllers/collegeAdminController');
 const { protect, authorize } = require('../middleware/auth');
@@ -32,6 +32,8 @@ router.route('/routes/:routeId')
 
 router.route('/users')
     .post(createUser);
+
+router.post('/users/bulk', createBulkUsers);
 
 router.route('/users/:role')
     .get(getUsersByRole);

@@ -257,6 +257,79 @@ const deleteRoute = async (req, res) => {
 
 // --- USERS (Drivers & Students) ---
 
+const createBulkUsers = async (req, res) => {
+    const { users, role } = req.body;
+
+    if (!['DRIVER', 'STUDENT'].includes(role)) {
+        return res.status(400).json({ message: 'Invalid role for bulk creation' });
+    }
+
+    if (!Array.isArray(users) || users.length === 0) {
+        return res.status(400).json({ message: 'No users provided' });
+    }
+
+    try {
+        const batch = db.batch();
+        const results = {
+            success: [],
+            errors: [],
+            createdCount: 0
+        };
+
+        const existingEmails = new Set(); // To track duplicates within the batch if needed, but easier to check DB
+
+        for (const user of users) {
+            // Basic validation
+            if (!user.email || !user.phone || !user.name) {
+                results.errors.push({ user, error: 'Missing required fields (name, email, phone)' });
+                continue;
+            }
+
+            // Check DB for existing email (Sequential check is slow but safer for now, or fetch all emails first?)
+            // For small batches (<100), sequential find is okay-ish. For larger, we should fetch all user emails for college.
+            const existingUser = await db.collection('users').where('email', '==', user.email).limit(1).get();
+            if (!existingUser.empty) {
+                results.errors.push({ user, error: 'Email already exists' });
+                continue;
+            }
+
+            const userId = role.toLowerCase() + '-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+            const salt = await bcrypt.genSalt(10);
+            // Password is the phone number
+            const passwordHash = await bcrypt.hash(user.phone.toString(), salt);
+
+            const newUser = {
+                userId,
+                collegeId: req.collegeId,
+                name: user.name,
+                email: user.email,
+                phone: user.phone,
+                passwordHash,
+                role,
+                status: 'ACTIVE',
+                createdAt: new Date().toISOString()
+            };
+
+            batch.set(db.collection('users').doc(userId), newUser);
+            results.success.push({ name: user.name, email: user.email });
+            results.createdCount++;
+        }
+
+        if (results.createdCount > 0) {
+            await batch.commit();
+        }
+
+        res.json({
+            message: `Processed ${users.length} users. Created: ${results.createdCount}, Failed: ${results.errors.length}`,
+            results
+        });
+
+    } catch (error) {
+        console.error('Bulk user creation error:', error);
+        res.status(500).json({ message: 'Server error during bulk upload' });
+    }
+};
+
 const createUser = async (req, res) => {
     const { name, email, password, phone, role } = req.body;
 
@@ -691,5 +764,6 @@ module.exports = {
     getTripHistory,
     updateTrip,
     deleteTrip,
-    adminEndTrip
+    adminEndTrip,
+    createBulkUsers
 };

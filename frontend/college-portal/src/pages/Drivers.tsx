@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { User, Plus, Search, Mail, Phone, Lock, X, AlertCircle, CheckCircle, Edit2, Trash2, ToggleRight } from 'lucide-react';
-import { getDrivers, createDriver, updateDriver, deleteDriver } from '../services/api';
+import { User, Plus, Search, Mail, Phone, Lock, X, AlertCircle, CheckCircle, Edit2, Trash2, ToggleRight, Upload, Download, FileSpreadsheet } from 'lucide-react';
+import { getDrivers, createDriver, updateDriver, deleteDriver, bulkCreateDrivers } from '../services/api';
+import * as XLSX from 'xlsx';
 import { motion, AnimatePresence } from 'framer-motion';
 import Layout from '../components/Layout';
 
@@ -25,6 +26,15 @@ const Drivers = () => {
     // Edit State
     const [isEditMode, setIsEditMode] = useState(false);
     const [editingDriver, setEditingDriver] = useState<any>(null);
+
+    // Bulk Upload State
+    const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+    const [bulkFile, setBulkFile] = useState<File | null>(null);
+    const [bulkPreview, setBulkPreview] = useState<any[]>([]);
+    const [selectedBulkIndices, setSelectedBulkIndices] = useState<number[]>([]);
+    const [bulkLoading, setBulkLoading] = useState(false);
+    const [bulkError, setBulkError] = useState('');
+    const [bulkSuccess, setBulkSuccess] = useState('');
 
     useEffect(() => {
         fetchDrivers();
@@ -108,6 +118,71 @@ const Drivers = () => {
         }
     };
 
+    const downloadDriverTemplate = () => {
+        const headers = [['Name', 'Email', 'Phone']];
+        const data = [
+            ['John Driver', 'driver1@example.com', '9876543210'],
+            ['Jane Doe', 'driver2@example.com', '8765432109']
+        ];
+
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet([...headers, ...data]);
+        XLSX.utils.book_append_sheet(wb, ws, 'Drivers');
+        XLSX.writeFile(wb, 'Drivers_Template.xlsx');
+    };
+
+    const handleProcessFile = async (file: File) => {
+        try {
+            setBulkFile(file);
+            const data = await file.arrayBuffer();
+            const workbook = XLSX.read(data);
+            const sheetName = workbook.SheetNames[0];
+            const sheet = workbook.Sheets[sheetName];
+            const jsonData = XLSX.utils.sheet_to_json(sheet);
+
+            // Map keys loosely
+            const mappedData = jsonData.map((row: any) => ({
+                name: row['Name'] || row['name'] || '',
+                email: row['Email'] || row['email'] || '',
+                phone: row['Phone'] || row['phone'] || ''
+            })).filter(r => r.name && r.email && r.phone); // Basic filter
+
+            if (mappedData.length === 0) {
+                setBulkError('No valid data found in file. Please check column headers (Name, Email, Phone).');
+                return;
+            }
+
+            setBulkPreview(mappedData);
+            setSelectedBulkIndices(mappedData.map((_, i) => i)); // Select all by default
+            setBulkError('');
+        } catch (err) {
+            setBulkError('Failed to parse Excel file');
+            console.error(err);
+        }
+    };
+
+    const handleBulkUpload = async () => {
+        if (selectedBulkIndices.length === 0) return;
+
+        setBulkLoading(true);
+        setBulkError('');
+
+        try {
+            const driversToUpload = selectedBulkIndices.map(i => bulkPreview[i]);
+            const response = await bulkCreateDrivers(driversToUpload);
+
+            setBulkSuccess(response.message || 'Drivers imported successfully!');
+            fetchDrivers();
+
+            // Reset after delay or close (handled in success view)
+        } catch (err: any) {
+            console.error(err);
+            setBulkError(err.response?.data?.message || 'Bulk upload failed');
+        } finally {
+            setBulkLoading(false);
+        }
+    };
+
     const filteredDrivers = drivers.filter(driver =>
         driver.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         driver.email.toLowerCase().includes(searchQuery.toLowerCase())
@@ -129,15 +204,26 @@ const Drivers = () => {
                             </h1>
                             <p className="text-slate-500 mt-1 ml-12">Manage fleet drivers and access credentials</p>
                         </div>
-                        <motion.button
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            onClick={() => setIsModalOpen(true)}
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-blue-200 transition-colors"
-                        >
-                            <Plus size={20} />
-                            Add New Driver
-                        </motion.button>
+                        <div className="flex gap-2">
+                            <motion.button
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={() => setIsBulkModalOpen(true)}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-emerald-200 transition-colors"
+                            >
+                                <Upload size={20} />
+                                Bulk Upload
+                            </motion.button>
+                            <motion.button
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={() => setIsModalOpen(true)}
+                                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-blue-200 transition-colors"
+                            >
+                                <Plus size={20} />
+                                Add New Driver
+                            </motion.button>
+                        </div>
                     </div>
 
                     {/* Search Bar */}
@@ -392,6 +478,191 @@ const Drivers = () => {
                                         {formLoading ? (isEditMode ? 'Updating...' : 'Creating...') : (isEditMode ? 'Update Driver' : 'Create Driver Account')}
                                     </button>
                                 </form>
+                            )}
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+            {/* Bulk Upload Modal */}
+            <AnimatePresence>
+                {isBulkModalOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setIsBulkModalOpen(false)}
+                            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+                        />
+                        <motion.div
+                            initial={{ scale: 0.95, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.95, opacity: 0 }}
+                            className="relative bg-white rounded-3xl shadow-2xl p-8 w-full max-w-4xl overflow-hidden max-h-[90vh] flex flex-col"
+                        >
+                            <div className="flex items-center justify-between mb-6 shrink-0">
+                                <div>
+                                    <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                                        <FileSpreadsheet className="text-emerald-600" />
+                                        Bulk Upload Drivers
+                                    </h2>
+                                    <p className="text-slate-500 text-sm mt-1">
+                                        Upload Excel sheet to auto-create accounts (Password = Phone Number)
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() => setIsBulkModalOpen(false)}
+                                    className="p-2 hover:bg-slate-100 rounded-full transition-colors"
+                                >
+                                    <X size={24} className="text-slate-400" />
+                                </button>
+                            </div>
+
+                            {bulkSuccess ? (
+                                <div className="flex flex-col items-center justify-center py-12 text-center animate-in fade-in zoom-in duration-300">
+                                    <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-4">
+                                        <CheckCircle size={32} />
+                                    </div>
+                                    <h3 className="text-xl font-bold text-slate-800">Upload Successful!</h3>
+                                    <p className="text-slate-500 mt-2">{bulkSuccess}</p>
+                                    <button
+                                        onClick={() => {
+                                            setBulkSuccess('');
+                                            setIsBulkModalOpen(false);
+                                            fetchDrivers();
+                                        }}
+                                        className="mt-6 bg-slate-800 text-white px-6 py-2 rounded-lg hover:bg-slate-900 transition-colors"
+                                    >
+                                        Close
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="flex-1 flex flex-col min-h-0">
+                                    {/* Upload Area */}
+                                    {!bulkPreview.length && (
+                                        <div className="border-2 border-dashed border-slate-300 rounded-2xl p-12 flex flex-col items-center justify-center text-center bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer group"
+                                            onClick={() => document.getElementById('bulk-file-input')?.click()}
+                                        >
+                                            <input
+                                                id="bulk-file-input"
+                                                type="file"
+                                                accept=".xlsx,.xls,.csv"
+                                                className="hidden"
+                                                onChange={(e) => {
+                                                    const file = e.target.files?.[0];
+                                                    if (file) handleProcessFile(file);
+                                                }}
+                                            />
+                                            <div className="w-16 h-16 bg-white rounded-full shadow-sm flex items-center justify-center mb-4 group-hover:scale-110 transition-transform text-blue-500">
+                                                <Upload size={32} />
+                                            </div>
+                                            <p className="font-bold text-slate-700 text-lg">Click to Upload Excel File</p>
+                                            <p className="text-slate-400 text-sm mt-1">Supported formats: .xlsx, .xls, .csv</p>
+
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    downloadDriverTemplate();
+                                                }}
+                                                className="mt-6 flex items-center gap-2 text-blue-600 font-bold hover:underline"
+                                            >
+                                                <Download size={16} /> Download Template
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {/* Preview Table */}
+                                    {bulkPreview.length > 0 && (
+                                        <div className="flex-1 flex flex-col min-h-0">
+                                            <div className="flex items-center justify-between mb-4">
+                                                <p className="text-slate-600 font-medium">
+                                                    Found <span className="text-slate-900 font-bold">{bulkPreview.length}</span> records
+                                                </p>
+                                                <button
+                                                    onClick={() => {
+                                                        setBulkPreview([]);
+                                                        setBulkFile(null);
+                                                        setBulkError('');
+                                                    }}
+                                                    className="text-red-500 text-sm hover:underline"
+                                                >
+                                                    Clear & Upload New
+                                                </button>
+                                            </div>
+
+                                            <div className="flex-1 overflow-auto border border-slate-200 rounded-xl">
+                                                <table className="w-full text-left text-sm">
+                                                    <thead className="bg-slate-50 sticky top-0 z-10 border-b border-slate-200">
+                                                        <tr>
+                                                            <th className="p-3 w-10">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    className="w-4 h-4 rounded border-slate-300"
+                                                                    checked={selectedBulkIndices.length === bulkPreview.length}
+                                                                    onChange={(e) => {
+                                                                        if (e.target.checked) {
+                                                                            setSelectedBulkIndices(bulkPreview.map((_, i) => i));
+                                                                        } else {
+                                                                            setSelectedBulkIndices([]);
+                                                                        }
+                                                                    }}
+                                                                />
+                                                            </th>
+                                                            <th className="p-3 font-semibold text-slate-700">Name</th>
+                                                            <th className="p-3 font-semibold text-slate-700">Email</th>
+                                                            <th className="p-3 font-semibold text-slate-700">Phone</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-slate-100">
+                                                        {bulkPreview.map((row, idx) => (
+                                                            <tr key={idx} className="hover:bg-slate-50">
+                                                                <td className="p-3">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        className="w-4 h-4 rounded border-slate-300"
+                                                                        checked={selectedBulkIndices.includes(idx)}
+                                                                        onChange={(e) => {
+                                                                            if (e.target.checked) {
+                                                                                setSelectedBulkIndices(prev => [...prev, idx]);
+                                                                            } else {
+                                                                                setSelectedBulkIndices(prev => prev.filter(i => i !== idx));
+                                                                            }
+                                                                        }}
+                                                                    />
+                                                                </td>
+                                                                <td className="p-3 text-slate-800">{row.name}</td>
+                                                                <td className="p-3 text-slate-600">{row.email}</td>
+                                                                <td className="p-3 text-slate-600">{row.phone}</td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Actions */}
+                                    <div className="mt-6 shrink-0 space-y-3">
+                                        {bulkError && (
+                                            <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg flex items-start gap-2">
+                                                <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
+                                                {bulkError}
+                                            </div>
+                                        )}
+                                        {bulkPreview.length > 0 && (
+                                            <button
+                                                onClick={handleBulkUpload}
+                                                disabled={bulkLoading || selectedBulkIndices.length === 0}
+                                                className={`w-full py-4 rounded-xl font-bold text-white shadow-lg shadow-emerald-200 transition-all flex items-center justify-center gap-2 ${bulkLoading || selectedBulkIndices.length === 0
+                                                    ? 'bg-slate-300 cursor-not-allowed shadow-none'
+                                                    : 'bg-emerald-600 hover:bg-emerald-700'
+                                                    }`}
+                                            >
+                                                {bulkLoading ? 'Processing...' : `Upload ${selectedBulkIndices.length} Drivers`}
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
                             )}
                         </motion.div>
                     </div>
