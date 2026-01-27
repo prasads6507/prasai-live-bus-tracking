@@ -218,6 +218,11 @@ const DriverDashboard = () => {
 
         // Reset bus status
         await updateBusStatus('ACTIVE', selectedBusId);
+
+        // Reset Selection to "Redirect" to Dashboard Home
+        setSelectedBusId('');
+        setManualBusNumber('');
+        setManualEntryMode(false);
     };
 
     const updateBusStatus = async (status: string, busId?: string) => {
