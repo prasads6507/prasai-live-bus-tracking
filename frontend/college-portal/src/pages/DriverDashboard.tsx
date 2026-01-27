@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Navigation, LogOut, AlertCircle, User, Bus, Settings, Phone, Search, X } from 'lucide-react';
-import { getDriverBuses, updateBusLocation, saveTripHistory, startNewTrip, endCurrentTrip, searchDriverBuses } from '../services/api';
+import { getDriverBuses, updateBusLocation, saveTripHistory, startNewTrip, endCurrentTrip } from '../services/api';
 
 const DriverDashboard = () => {
     const { orgSlug } = useParams<{ orgSlug: string }>();
@@ -240,14 +240,7 @@ const DriverDashboard = () => {
         navigate(`/${orgSlug}/login`);
     };
 
-    const handleSwitchBus = () => {
-        // Just clear selection, keeping session active
-        setSelectedBusId('');
-        // Stop current tracking if any
-        if (isTracking) {
-            endTrip();
-        }
-    };
+
 
     const handleManualSearch = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -255,20 +248,21 @@ const DriverDashboard = () => {
 
         setIsSearching(true);
         setError(null);
+
+        // Client-side search only since backend endpoint is missing
         try {
-            const response = await searchDriverBuses(manualBusNumber);
-            // Assuming response has { success: true, data: [...] } structure like getDriverBuses
-            if (response.success && Array.isArray(response.data) && response.data.length > 0) {
-                setBuses(response.data);
-            } else if (Array.isArray(response) && response.length > 0) {
-                // Handle case where it returns direct array
-                setBuses(response);
+            const foundBus = buses.find(b => b.busNumber.toLowerCase() === manualBusNumber.trim().toLowerCase());
+
+            if (foundBus) {
+                // Select the bus directly
+                setSelectedBusId(foundBus._id);
+                setManualEntryMode(false);
+                setManualBusNumber('');
             } else {
-                setError('No bus found with that number');
-                setBuses([]);
+                setError('Bus not found in your assigned list. Please contact admin.');
             }
         } catch (err: any) {
-            setError(err.message || 'Failed to search bus');
+            setError('Failed to search bus locally');
         } finally {
             setIsSearching(false);
         }
@@ -417,7 +411,7 @@ const DriverDashboard = () => {
                                                         <div className="font-bold text-slate-800 text-lg group-hover:text-blue-700">{bus.busNumber}</div>
                                                         <div className="text-xs text-slate-400 font-medium flex items-center gap-1 mt-1">
                                                             <div className="w-1.5 h-1.5 rounded-full bg-slate-300"></div>
-                                                            {bus.routeName || bus.route?.routeName || bus.assignedRoute?.routeName || 'No Route Assigned'}
+                                                            {bus.routeName || bus.route?.routeName || bus.assignedRoute?.routeName || bus.route?.name || 'No Route Assigned'}
                                                         </div>
                                                     </div>
                                                     <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-blue-200 group-hover:text-blue-700 transition-colors">
@@ -452,7 +446,7 @@ const DriverDashboard = () => {
                                                     {buses.find(b => b._id === selectedBusId)?.busNumber}
                                                 </h3>
                                                 <p className="text-sm text-slate-500 font-medium mt-1">
-                                                    {buses.find(b => b._id === selectedBusId)?.routeName || 'General Route'}
+                                                    {buses.find(b => b._id === selectedBusId)?.routeName || buses.find(b => b._id === selectedBusId)?.route?.routeName || buses.find(b => b._id === selectedBusId)?.assignedRoute?.routeName || 'General Route'}
                                                 </p>
                                             </div>
                                             <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600">
@@ -460,14 +454,7 @@ const DriverDashboard = () => {
                                             </div>
                                         </div>
 
-                                        <div className="flex gap-2">
-                                            <button
-                                                onClick={handleSwitchBus}
-                                                className="flex-1 py-2 text-sm font-semibold text-slate-500 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors"
-                                            >
-                                                Switch Bus
-                                            </button>
-                                        </div>
+                                        {/* Switch Bus Button Removed */}
                                     </div>
 
                                     {/* Driver Info Card */}

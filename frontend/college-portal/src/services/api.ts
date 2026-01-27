@@ -89,10 +89,7 @@ export const getDriverBuses = async () => {
     return response.data;
 };
 
-export const searchDriverBuses = async (query: string) => {
-    const response = await api.get('/driver/buses/search', { params: { q: query } });
-    return response.data;
-};
+
 
 export const updateBusLocation = async (busId: string, locationData: any) => {
     console.log(`API CALL: POST /driver/tracking/${busId}`, locationData);
