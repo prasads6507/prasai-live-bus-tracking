@@ -60,4 +60,21 @@ router.route('/trips/:tripId')
     .delete(deleteTrip);
 router.post('/trips/:tripId/end', adminEndTrip);
 
+// Student Routes
+const {
+    createStudent,
+    getStudents,
+    updateStudent,
+    deleteStudent,
+    createBulkStudents
+} = require('../controllers/studentController');
+
+router.route('/students')
+    .post(createStudent)
+    .get(getStudents);
+router.post('/students/bulk-json', createBulkStudents);
+router.route('/students/:id')
+    .put(updateStudent)
+    .delete(deleteStudent);
+
 module.exports = router;

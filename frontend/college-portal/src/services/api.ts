@@ -217,4 +217,41 @@ export const bulkCreateRoutes = async (routesData: any[]) => {
     return response.data;
 };
 
+// Student Management
+export const getStudents = async () => {
+    const response = await api.get('/admin/students');
+    return response.data;
+};
+
+export const createStudent = async (studentData: any) => {
+    const response = await api.post('/admin/students', studentData);
+    return response.data;
+};
+
+export const updateStudent = async (studentId: string, studentData: any) => {
+    const response = await api.put(`/admin/students/${studentId}`, studentData);
+    return response.data;
+};
+
+export const deleteStudent = async (studentId: string) => {
+    const response = await api.delete(`/admin/students/${studentId}`);
+    return response.data;
+};
+
+export const bulkCreateStudents = async (students: any[]) => {
+    const response = await api.post('/admin/students/bulk-json', { students });
+    return response.data;
+};
+
+// Student Auth
+export const studentLogin = async (email: string, password: string, orgSlug: string) => {
+    const response = await api.post('/auth/student/login', { email, password, orgSlug });
+    return response.data;
+};
+
+export const studentSetPassword = async (newPassword: string) => {
+    const response = await api.post('/auth/student/set-password', { newPassword });
+    return response.data;
+};
+
 export default api;

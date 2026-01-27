@@ -10,4 +10,8 @@ router.get('/college/:slug', authController.getCollegeBySlug);
 router.get('/colleges/search', authController.searchColleges);
 router.get('/me', protect, authController.getMe);
 
+// Student Auth Routes
+router.post('/student/login', authController.studentLogin);
+router.post('/student/set-password', protect, authController.studentSetPassword);
+
 module.exports = router;

@@ -261,4 +261,112 @@ const searchColleges = async (req, res) => {
     }
 };
 
-module.exports = { loginUser, getMe, registerOwner, googleLogin, getCollegeBySlug, searchColleges };
+// @desc    Student Login (first login: registerNumber as password)
+// @route   POST /api/auth/student/login
+// @access  Public
+const studentLogin = async (req, res) => {
+    const { email, password, orgSlug } = req.body;
+
+    try {
+        // 1. Find college by slug
+        const collegesRef = db.collection('colleges');
+        let collegeDoc = await collegesRef.doc(orgSlug).get();
+        if (!collegeDoc.exists) {
+            const snapshot = await collegesRef.where('slug', '==', orgSlug).limit(1).get();
+            if (!snapshot.empty) collegeDoc = snapshot.docs[0];
+        }
+        if (!collegeDoc || !collegeDoc.exists) {
+            return res.status(404).json({ message: 'Organization not found' });
+        }
+        const collegeId = collegeDoc.data().collegeId;
+        if (collegeDoc.data().status === 'SUSPENDED') {
+            return res.status(403).json({ message: 'Organization is suspended.' });
+        }
+
+        // 2. Find student by email and collegeId
+        const studentsRef = db.collection('students');
+        const snapshot = await studentsRef
+            .where('collegeId', '==', collegeId)
+            .where('email', '==', email)
+            .limit(1)
+            .get();
+
+        if (snapshot.empty) {
+            return res.status(401).json({ message: 'Invalid email or credentials' });
+        }
+
+        const studentDoc = snapshot.docs[0];
+        const student = studentDoc.data();
+
+        // 3. Check password
+        if (student.isFirstLogin || !student.passwordHash) {
+            // First login: password should match registerNumber
+            if (password !== student.registerNumber) {
+                return res.status(401).json({ message: 'Invalid credentials. Use your Register Number as your initial password.' });
+            }
+            // Return token + flag for first login
+            return res.json({
+                _id: student.studentId,
+                name: student.name,
+                email: student.email,
+                collegeId: student.collegeId,
+                role: 'STUDENT',
+                isFirstLogin: true,
+                token: generateToken(student.studentId, 'STUDENT', student.collegeId)
+            });
+        } else {
+            // Subsequent login: compare hashed password
+            if (!(await matchPassword(password, student.passwordHash))) {
+                return res.status(401).json({ message: 'Invalid email or password' });
+            }
+            return res.json({
+                _id: student.studentId,
+                name: student.name,
+                email: student.email,
+                collegeId: student.collegeId,
+                role: 'STUDENT',
+                isFirstLogin: false,
+                token: generateToken(student.studentId, 'STUDENT', student.collegeId)
+            });
+        }
+    } catch (error) {
+        console.error('Student Login Error:', error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Student set new password (after first login)
+// @route   POST /api/auth/student/set-password
+// @access  Private (requires token from first login)
+const studentSetPassword = async (req, res) => {
+    const { newPassword } = req.body;
+    const studentId = req.user.id; // From protect middleware
+
+    try {
+        if (!newPassword || newPassword.length < 6) {
+            return res.status(400).json({ message: 'Password must be at least 6 characters' });
+        }
+
+        const studentRef = db.collection('students').doc(studentId);
+        const studentDoc = await studentRef.get();
+
+        if (!studentDoc.exists) {
+            return res.status(404).json({ message: 'Student not found' });
+        }
+
+        const salt = await bcrypt.genSalt(10);
+        const passwordHash = await bcrypt.hash(newPassword, salt);
+
+        await studentRef.update({
+            passwordHash,
+            isFirstLogin: false
+        });
+
+        res.json({ success: true, message: 'Password updated successfully' });
+    } catch (error) {
+        console.error('Set Password Error:', error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
+module.exports = { loginUser, getMe, registerOwner, googleLogin, getCollegeBySlug, searchColleges, studentLogin, studentSetPassword };

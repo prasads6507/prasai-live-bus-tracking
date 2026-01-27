@@ -68,6 +68,12 @@ const Layout = ({ children, activeItem = 'dashboard' }: LayoutProps) => {
                     onClick={() => handleNavigation(`/${orgSlug}/drivers`)}
                 />
                 <SidebarItem
+                    icon={<User size={20} />}
+                    label="Students"
+                    active={activeItem === 'students'}
+                    onClick={() => handleNavigation(`/${orgSlug}/students`)}
+                />
+                <SidebarItem
                     icon={<MapPin size={20} />}
                     label="Routes"
                     active={activeItem === 'routes'}
