@@ -60,15 +60,31 @@ const createStudent = async (req, res) => {
 const getStudents = async (req, res) => {
     try {
         const collegeId = req.collegeId;
-        const snapshot = await db.collection('students')
-            .where('collegeId', '==', collegeId)
-            .orderBy('createdAt', 'desc')
-            .get();
+        let snapshot;
+        try {
+            snapshot = await db.collection('students')
+                .where('collegeId', '==', collegeId)
+                .orderBy('createdAt', 'desc')
+                .get();
+        } catch (error) {
+            // Fallback: If index is missing, fetch without sorting
+            if (error.code === 9 || error.message.includes('requires an index')) {
+                console.warn('Index missing for sorting. Fetching unordered data.');
+                snapshot = await db.collection('students')
+                    .where('collegeId', '==', collegeId)
+                    .get();
+            } else {
+                throw error;
+            }
+        }
 
         const students = snapshot.docs.map(doc => {
             const data = doc.data();
             return { ...data, passwordHash: undefined }; // Don't expose password hash
         });
+
+        // Manual sort in memory if fallback was used
+        students.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
         res.json({ success: true, data: students });
     } catch (error) {
