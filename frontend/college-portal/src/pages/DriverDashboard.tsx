@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Navigation, LogOut, AlertCircle } from 'lucide-react';
+import { Navigation, LogOut, AlertCircle, User, Bus, Settings, Phone } from 'lucide-react';
 import { getDriverBuses, updateBusLocation, saveTripHistory, startNewTrip, endCurrentTrip } from '../services/api';
 
 const DriverDashboard = () => {
@@ -10,6 +10,7 @@ const DriverDashboard = () => {
     // State
     const [buses, setBuses] = useState<any[]>([]);
     const [selectedBusId, setSelectedBusId] = useState<string>('');
+    const [driverDetails, setDriverDetails] = useState<any>(null);
     const [isTracking, setIsTracking] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [locationError, setLocationError] = useState<string | null>(null);
@@ -18,7 +19,6 @@ const DriverDashboard = () => {
     const [locationPermission, setLocationPermission] = useState<PermissionState>('prompt');
     const [tripId, setTripId] = useState<string | null>(null);
     const [lastSentTime, setLastSentTime] = useState<string>('');
-    const [apiStatus, setApiStatus] = useState<{ successes: number; failures: number; lastCode: number | null; msg: string }>({ successes: 0, failures: 0, lastCode: null, msg: '' });
 
     // Refs for tracking
     const watchIdRef = useRef<number | null>(null);
@@ -42,6 +42,11 @@ const DriverDashboard = () => {
                 console.log("DRIVER BUSES RESPONSE:", response);
                 if (response.success) {
                     setBuses(response.data);
+                    // Set driver details from local storage if available
+                    const storedUser = localStorage.getItem('driver_user');
+                    if (storedUser) {
+                        setDriverDetails(JSON.parse(storedUser));
+                    }
                 } else {
                     console.warn("Failed to fetch buses:", response.message);
                 }
@@ -140,13 +145,9 @@ const DriverDashboard = () => {
                         });
                         lastUpdateRef.current = now;
                         setLastSentTime(new Date().toLocaleTimeString());
-                        setApiStatus(prev => ({ ...prev, successes: prev.successes + 1, lastCode: 200, msg: 'OK' }));
                         console.log('Location update sent successfully');
                     } catch (err: any) {
                         console.error("Failed to send location update", err);
-
-                        const serverError = err.response?.data?.error || err.response?.data?.message || err.message;
-                        setApiStatus(prev => ({ ...prev, failures: prev.failures + 1, lastCode: err.response?.status || 0, msg: serverError }));
 
                         if (err.response?.status === 401) {
                             setError('Session expired. Please log in again.');
@@ -176,12 +177,11 @@ const DriverDashboard = () => {
             (error) => {
                 console.error("Location Error:", error);
                 setLocationError(error.message);
-                // Don't stop tracking automatically on transient errors, but warn user
             },
             {
                 enableHighAccuracy: true,
-                timeout: 30000, // Increased timeout to 30 seconds
-                maximumAge: 5000 // Allow cached positions up to 5 seconds old
+                timeout: 30000,
+                maximumAge: 5000
             }
         );
     };
@@ -222,7 +222,6 @@ const DriverDashboard = () => {
         if (!targetBusId) return;
         try {
             await updateBusLocation(targetBusId, {
-                // Send current location if we have it, mostly simply status update
                 status,
                 speed: 0
             } as any);
@@ -232,14 +231,19 @@ const DriverDashboard = () => {
     };
 
     const handleLogout = () => {
-        endTrip(); // Ensure tracking stops
+        endTrip();
         localStorage.removeItem('driver_token');
         localStorage.removeItem('driver_user');
-        // We don't clear college ID/orgName aggressively anymore to allow Admin session to persist if exists
-        // Or we can clear them effectively "logging out" of that tab's context
-        // localStorage.removeItem('current_college_id'); 
-        // localStorage.removeItem('orgName');
         navigate(`/${orgSlug}/login`);
+    };
+
+    const handleSwitchBus = () => {
+        // Just clear selection, keeping session active
+        setSelectedBusId('');
+        // Stop current tracking if any
+        if (isTracking) {
+            endTrip();
+        }
     };
 
     // UI Components
@@ -257,50 +261,194 @@ const DriverDashboard = () => {
     }
 
     return (
-        <div className="min-h-screen bg-slate-100 flex flex-col">
+        <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
             {/* Header */}
-            <div className="bg-blue-800 text-white p-4 shadow-md flex justify-between items-center z-10">
-                <div className="flex items-center gap-2">
-                    <Navigation />
-                    <h1 className="font-bold text-lg">Driver App</h1>
+            <div className="bg-white border-b border-slate-200 px-4 py-3 flex justify-between items-center sticky top-0 z-20 shadow-sm">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-blue-200 shadow-lg">
+                        <Navigation size={20} />
+                    </div>
+                    <div>
+                        <h1 className="font-bold text-slate-800 leading-tight">Driver Portal</h1>
+                        <p className="text-xs text-slate-500 font-medium">{driverDetails?.name || 'Welcome'}</p>
+                    </div>
                 </div>
-                <button onClick={handleLogout} className="text-white/80 hover:text-white">
-                    <LogOut size={20} />
-                </button>
+                <div className="flex items-center gap-2">
+                    <button className="p-2 text-slate-400 hover:bg-slate-50 rounded-full transition-colors">
+                        <Settings size={20} />
+                    </button>
+                    <button onClick={handleLogout} className="p-2 text-red-500 hover:bg-red-50 rounded-full transition-colors">
+                        <LogOut size={20} />
+                    </button>
+                </div>
             </div>
 
             {/* Main Content */}
-            <div className="flex-1 p-4 flex flex-col gap-4 max-w-md mx-auto w-full">
+            <div className="flex-1 p-4 flex flex-col gap-5 max-w-md mx-auto w-full pb-20">
 
-                <div className={`rounded-2xl p-6 text-center shadow-lg transition-all ${isTracking ? 'bg-green-600 text-white' : 'bg-white text-slate-800'
+                {/* Status Card */}
+                <div className={`relative overflow-hidden rounded-3xl p-6 text-center shadow-xl transition-all duration-300 transform ${isTracking
+                    ? 'bg-gradient-to-br from-green-500 to-emerald-600 text-white shadow-green-200 scale-100'
+                    : 'bg-white text-slate-800 shadow-slate-200 scale-100'
                     }`}>
-                    <div className="mb-2 uppercase text-xs font-bold tracking-wider opacity-80">
-                        Current Status
-                    </div>
-                    <div className="text-2xl font-bold flex items-center justify-center gap-2">
+
+                    {/* Status Indicator */}
+                    <div className="relative z-10 flex flex-col items-center">
+                        <div className={`mb-3 inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold tracking-wider uppercase ${isTracking ? 'bg-white/20 text-white backdrop-blur-sm' : 'bg-slate-100 text-slate-500'
+                            }`}>
+                            <div className={`w-2 h-2 rounded-full ${isTracking ? 'bg-white animate-pulse' : 'bg-slate-400'}`}></div>
+                            Current Status
+                        </div>
+
+                        <div className="text-3xl font-black mb-4 tracking-tight">
+                            {isTracking ? 'ON TRIP' : 'READY FOR TRIP'}
+                        </div>
+
+                        {/* Speedometer or Icon */}
                         {isTracking ? (
-                            <>
-                                <span className="animate-pulse w-3 h-3 rounded-full bg-white"></span>
-                                ON TRIP
-                            </>
-                        ) : 'IDLE'}
-                    </div>
-                    {isTracking && (
-                        <>
-                            <div className="mt-4 text-6xl font-black">
-                                {Math.round(currentSpeed)} <span className="text-lg font-medium opacity-70">km/h</span>
+                            <div className="flex flex-col items-center">
+                                <div className="text-7xl font-black tabular-nums leading-none tracking-tighter">
+                                    {Math.round(currentSpeed)}
+                                </div>
+                                <div className="text-lg font-medium opacity-80 mt-1">km/h</div>
                             </div>
-                            {currentCoords && (
-                                <div className="mt-3 text-xs opacity-70 font-mono">
-                                    GPS: {currentCoords.lat.toFixed(6)}, {currentCoords.lng.toFixed(6)}
-                                    {lastSentTime && (
-                                        <div className="mt-1 opacity-80 border-t border-white/20 pt-1">
-                                            Last Sent: {lastSentTime}
+                        ) : (
+                            <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mb-2 shadow-inner">
+                                <Navigation size={40} className="text-slate-300" />
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Background decoration */}
+                    <div className="absolute -right-4 -bottom-4 opacity-10 rotate-12">
+                        <Navigation size={150} />
+                    </div>
+                </div>
+
+                {/* Bus Selection / Trip Controls */}
+                <div className="space-y-4">
+                    {!isTracking ? (
+                        <>
+                            {!selectedBusId ? (
+                                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                                    <div className="p-4 border-b border-slate-50 bg-slate-50/50">
+                                        <h3 className="font-bold text-slate-700 flex items-center gap-2">
+                                            <Bus size={18} className="text-blue-500" />
+                                            Select Your Bus
+                                        </h3>
+                                    </div>
+                                    <div className="p-4 grid grid-cols-1 gap-3">
+                                        {buses.length > 0 ? (
+                                            buses.map(bus => (
+                                                <button
+                                                    key={bus._id}
+                                                    onClick={() => setSelectedBusId(bus._id)}
+                                                    className="flex items-center justify-between p-4 rounded-xl border border-slate-100 hover:border-blue-500 hover:bg-blue-50 transition-all group text-left"
+                                                >
+                                                    <div>
+                                                        <div className="font-bold text-slate-800 text-lg group-hover:text-blue-700">{bus.busNumber}</div>
+                                                        <div className="text-xs text-slate-400 font-medium flex items-center gap-1 mt-1">
+                                                            <div className="w-1.5 h-1.5 rounded-full bg-slate-300"></div>
+                                                            {bus.routeName || 'No Route Assigned'}
+                                                        </div>
+                                                    </div>
+                                                    <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-blue-200 group-hover:text-blue-700 transition-colors">
+                                                        <Navigation size={16} />
+                                                    </div>
+                                                </button>
+                                            ))
+                                        ) : (
+                                            <div className="text-center py-8 text-slate-400">
+                                                No buses found assigned to you.
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                    {/* Selected Bus Card */}
+                                    <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+                                        <div className="flex justify-between items-start mb-4">
+                                            <div>
+                                                <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">Selected Vehicle</p>
+                                                <h3 className="text-2xl font-black text-slate-800">
+                                                    {buses.find(b => b._id === selectedBusId)?.busNumber}
+                                                </h3>
+                                                <p className="text-sm text-slate-500 font-medium mt-1">
+                                                    {buses.find(b => b._id === selectedBusId)?.routeName || 'General Route'}
+                                                </p>
+                                            </div>
+                                            <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600">
+                                                <Bus size={24} />
+                                            </div>
                                         </div>
-                                    )}
+
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={handleSwitchBus}
+                                                className="flex-1 py-2 text-sm font-semibold text-slate-500 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors"
+                                            >
+                                                Switch Bus
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Driver Info Card */}
+                                    <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex items-center gap-4">
+                                        <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
+                                            <User size={20} />
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="text-xs text-slate-400 font-bold uppercase">Driver</p>
+                                            <p className="font-bold text-slate-800">{driverDetails?.name || 'Unknown Driver'}</p>
+                                        </div>
+                                        {driverDetails?.phone && (
+                                            <div className="w-8 h-8 rounded-full bg-green-50 text-green-600 flex items-center justify-center">
+                                                <Phone size={14} />
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <button
+                                        onClick={startTrip}
+                                        className="w-full py-4 rounded-xl font-bold text-lg bg-blue-600 text-white shadow-lg shadow-blue-200 hover:bg-blue-700 hover:shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2"
+                                    >
+                                        <Navigation size={22} />
+                                        Start Trip
+                                    </button>
                                 </div>
                             )}
                         </>
+                    ) : (
+                        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4">
+                            <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+                                <div className="flex items-center gap-4 mb-4">
+                                    <div className="w-12 h-12 bg-green-50 rounded-full flex items-center justify-center text-green-600 animate-pulse">
+                                        <Navigation size={24} />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Currently Driving</p>
+                                        <h3 className="text-xl font-black text-slate-800">
+                                            {buses.find(b => b._id === selectedBusId)?.busNumber}
+                                        </h3>
+                                    </div>
+                                </div>
+                                <div className="h-1 w-full bg-slate-100 rounded-full overflow-hidden">
+                                    <div className="h-full bg-green-500 w-full animate-[progress_2s_ease-in-out_infinite] origin-left"></div>
+                                </div>
+                                <p className="text-center text-xs text-slate-400 mt-3 font-medium">
+                                    Sharing live location with college portal...
+                                </p>
+                            </div>
+
+                            <button
+                                onClick={endTrip}
+                                className="w-full py-4 rounded-xl font-bold text-lg bg-white text-red-600 border-2 border-red-100 hover:bg-red-50 hover:border-red-200 shadow-sm transition-all flex items-center justify-center gap-2"
+                            >
+                                <LogOut size={22} />
+                                End Trip
+                            </button>
+                        </div>
                     )}
                 </div>
 
@@ -321,87 +469,11 @@ const DriverDashboard = () => {
                     </div>
                 )}
 
-                {/* Controls */}
-                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 space-y-4">
-                    {!isTracking ? (
-                        <>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-600 mb-2">Select Your Bus</label>
-                                {buses.length === 0 ? (
-                                    <div className="p-4 text-center border-2 border-dashed border-slate-200 rounded-xl text-slate-400 text-sm">
-                                        No buses available for this college.
-                                    </div>
-                                ) : (
-                                    <div className="grid grid-cols-2 gap-2">
-                                        {buses.map(bus => (
-                                            <button
-                                                key={bus._id}
-                                                onClick={() => setSelectedBusId(bus._id)}
-                                                className={`p-3 rounded-xl border text-left transition-all ${selectedBusId === bus._id
-                                                    ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-200'
-                                                    : 'border-slate-200 hover:border-blue-300'
-                                                    }`}
-                                            >
-                                                <div className="font-bold text-slate-800">{bus.busNumber}</div>
-                                                <div className="text-xs text-slate-500 truncate">{bus.routeName || 'No Route'}</div>
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-
-                            <button
-                                onClick={startTrip}
-                                disabled={!selectedBusId}
-                                className={`w-full py-4 rounded-xl font-bold text-lg shadow-md transition-all flex items-center justify-center gap-2 ${selectedBusId
-                                    ? 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-lg transform active:scale-95'
-                                    : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                                    }`}
-                            >
-                                <Navigation size={24} />
-                                Start Trip
-                            </button>
-                        </>
-                    ) : (
-                        <div className="space-y-4">
-                            <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
-                                <div className="text-sm text-slate-500">Driving Bus</div>
-                                <div className="font-bold text-xl text-slate-800">
-                                    {buses.find(b => b._id === selectedBusId)?.busNumber}
-                                </div>
-                            </div>
-
-                            <button
-                                onClick={endTrip}
-                                className="w-full py-4 rounded-xl font-bold text-lg bg-red-100 text-red-600 border border-red-200 hover:bg-red-200 hover:shadow-md transition-all flex items-center justify-center gap-2 transform active:scale-95"
-                            >
-                                <LogOut size={24} />
-                                End Trip
-                            </button>
-                        </div>
-                    )}
-                </div>
-
                 {/* Instructions */}
                 <div className="text-center text-xs text-slate-400 mt-4 px-4">
                     Keep this screen open while driving to ensure location updates are sent.
                 </div>
 
-                {/* Diagnostics Panel (Always visible for debugging) */}
-                <div className="mt-4 p-4 bg-black/80 text-green-400 font-mono text-xs rounded-lg overflow-hidden">
-                    <h3 className="uppercase font-bold border-b border-white/20 pb-1 mb-2">Network Diagnostics</h3>
-                    <div className="grid grid-cols-2 gap-2">
-                        <div>Successes: {apiStatus.successes}</div>
-                        <div className="text-red-400">Failures: {apiStatus.failures}</div>
-                        <div>Last Code: {apiStatus.lastCode || '-'}</div>
-                        <div className="col-span-2 truncate">Last Msg: {apiStatus.msg || 'None'}</div>
-                        <div className="col-span-2 text-white/60 pt-2">
-                            Trip ID: {tripId ? 'Active' : 'Inactive'}<br />
-                            Accuracy: {currentCoords ? 'High' : 'N/A'}<br />
-                            Next Update: {Math.max(0, 3 - ((Date.now() - lastUpdateRef.current) / 1000)).toFixed(1)}s
-                        </div>
-                    </div>
-                </div>
             </div>
         </div>
     );
