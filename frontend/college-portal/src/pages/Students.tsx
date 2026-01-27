@@ -117,15 +117,30 @@ const Students = () => {
 
     const downloadStudentTemplate = () => {
         const headers = [['Name', 'Register Number', 'Roll Number', 'Email', 'Phone']];
-        const data = students.length > 0
-            ? students.map(s => [s.name, s.registerNumber, s.rollNumber || '', s.email, s.phone || ''])
-            : [['John Doe', 'REG001', 'R001', 'john@example.com', '9876543210']];
+        const data = [['John Doe', 'REG001', 'R001', 'john@example.com', '9876543210']];
 
         const wb = XLSX.utils.book_new();
         const ws = XLSX.utils.aoa_to_sheet([...headers, ...data]);
         ws['!cols'] = [{ wch: 25 }, { wch: 20 }, { wch: 15 }, { wch: 30 }, { wch: 15 }];
         XLSX.utils.book_append_sheet(wb, ws, 'Students');
         XLSX.writeFile(wb, 'Students_Template.xlsx');
+    };
+
+    const downloadStudentList = () => {
+        const headers = [['Name', 'Register Number', 'Roll Number', 'Email', 'Phone']];
+        const data = filteredStudents.map(s => [
+            s.name,
+            s.registerNumber,
+            s.rollNumber || '',
+            s.email,
+            s.phone || ''
+        ]);
+
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet([...headers, ...data]);
+        ws['!cols'] = [{ wch: 25 }, { wch: 20 }, { wch: 15 }, { wch: 30 }, { wch: 15 }];
+        XLSX.utils.book_append_sheet(wb, ws, 'Student_List');
+        XLSX.writeFile(wb, `Student_List_${new Date().toISOString().split('T')[0]}.xlsx`);
     };
 
     const handleProcessFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -209,6 +224,15 @@ const Students = () => {
                         <p className="text-slate-500 mt-1">Manage student records</p>
                     </div>
                     <div className="flex gap-2">
+                        <motion.button
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={downloadStudentList}
+                            className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-semibold"
+                        >
+                            <Download size={18} />
+                            Download List
+                        </motion.button>
                         <motion.button
                             whileHover={{ scale: 1.02 }}
                             whileTap={{ scale: 0.98 }}
