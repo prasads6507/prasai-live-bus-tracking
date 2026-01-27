@@ -15,10 +15,8 @@ const DriverDashboard = () => {
     const [error, setError] = useState<string | null>(null);
     const [locationError, setLocationError] = useState<string | null>(null);
     const [currentSpeed, setCurrentSpeed] = useState<number>(0);
-    const [currentCoords, setCurrentCoords] = useState<{ lat: number, lng: number } | null>(null);
     const [locationPermission, setLocationPermission] = useState<PermissionState>('prompt');
     const [tripId, setTripId] = useState<string | null>(null);
-    const [lastSentTime, setLastSentTime] = useState<string>('');
 
     // Refs for tracking
     const watchIdRef = useRef<number | null>(null);
@@ -127,7 +125,6 @@ const DriverDashboard = () => {
 
                 // Update UI state
                 setCurrentSpeed((speed || 0) * 3.6);
-                setCurrentCoords({ lat: latitude, lng: longitude });
                 setLocationError(null);
 
                 // Update real-time location every 3 seconds (was 5)
@@ -144,7 +141,6 @@ const DriverDashboard = () => {
                             status: 'ON_ROUTE'
                         });
                         lastUpdateRef.current = now;
-                        setLastSentTime(new Date().toLocaleTimeString());
                         console.log('Location update sent successfully');
                     } catch (err: any) {
                         console.error("Failed to send location update", err);
@@ -194,7 +190,6 @@ const DriverDashboard = () => {
         }
         setIsTracking(false);
         setCurrentSpeed(0);
-        setCurrentCoords(null);
 
         // End trip on backend (saves final state)
         if (tripId && selectedBusId) {
