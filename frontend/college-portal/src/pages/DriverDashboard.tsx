@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Navigation, LogOut, AlertCircle, User, Bus, Settings, Phone } from 'lucide-react';
-import { getDriverBuses, updateBusLocation, saveTripHistory, startNewTrip, endCurrentTrip } from '../services/api';
+import { Navigation, LogOut, AlertCircle, User, Bus, Settings, Phone, Search, X } from 'lucide-react';
+import { getDriverBuses, updateBusLocation, saveTripHistory, startNewTrip, endCurrentTrip, searchDriverBuses } from '../services/api';
 
 const DriverDashboard = () => {
     const { orgSlug } = useParams<{ orgSlug: string }>();
@@ -17,6 +17,12 @@ const DriverDashboard = () => {
     const [currentSpeed, setCurrentSpeed] = useState<number>(0);
     const [locationPermission, setLocationPermission] = useState<PermissionState>('prompt');
     const [tripId, setTripId] = useState<string | null>(null);
+    const [showSettings, setShowSettings] = useState(false);
+    const [manualEntryMode, setManualEntryMode] = useState(false);
+    const [manualBusNumber, setManualBusNumber] = useState('');
+    const [isSearching, setIsSearching] = useState(false);
+    const [currentCoords, setCurrentCoords] = useState<{ lat: number, lng: number } | null>(null);
+    const [lastSentTime, setLastSentTime] = useState<string>('');
 
     // Refs for tracking
     const watchIdRef = useRef<number | null>(null);
@@ -125,6 +131,7 @@ const DriverDashboard = () => {
 
                 // Update UI state
                 setCurrentSpeed((speed || 0) * 3.6);
+                setCurrentCoords({ lat: latitude, lng: longitude });
                 setLocationError(null);
 
                 // Update real-time location every 3 seconds (was 5)
@@ -141,6 +148,7 @@ const DriverDashboard = () => {
                             status: 'ON_ROUTE'
                         });
                         lastUpdateRef.current = now;
+                        setLastSentTime(new Date().toLocaleTimeString());
                         console.log('Location update sent successfully');
                     } catch (err: any) {
                         console.error("Failed to send location update", err);
@@ -241,6 +249,43 @@ const DriverDashboard = () => {
         }
     };
 
+    const handleManualSearch = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!manualBusNumber.trim()) return;
+
+        setIsSearching(true);
+        setError(null);
+        try {
+            const response = await searchDriverBuses(manualBusNumber);
+            // Assuming response has { success: true, data: [...] } structure like getDriverBuses
+            if (response.success && Array.isArray(response.data) && response.data.length > 0) {
+                setBuses(response.data);
+            } else if (Array.isArray(response) && response.length > 0) {
+                // Handle case where it returns direct array
+                setBuses(response);
+            } else {
+                setError('No bus found with that number');
+                setBuses([]);
+            }
+        } catch (err: any) {
+            setError(err.message || 'Failed to search bus');
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
+    const handleResetBusList = async () => {
+        setManualEntryMode(false);
+        setManualBusNumber('');
+        setError(null);
+        try {
+            const response = await getDriverBuses();
+            if (response.success) setBuses(response.data);
+        } catch (err) {
+            console.error("Failed to fetch buses:", err);
+        }
+    };
+
     // UI Components
     if (locationPermission === 'denied') {
         return (
@@ -269,7 +314,7 @@ const DriverDashboard = () => {
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    <button className="p-2 text-slate-400 hover:bg-slate-50 rounded-full transition-colors">
+                    <button onClick={() => setShowSettings(true)} className="p-2 text-slate-400 hover:bg-slate-50 rounded-full transition-colors">
                         <Settings size={20} />
                     </button>
                     <button onClick={handleLogout} className="p-2 text-red-500 hover:bg-red-50 rounded-full transition-colors">
@@ -326,13 +371,41 @@ const DriverDashboard = () => {
                         <>
                             {!selectedBusId ? (
                                 <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-                                    <div className="p-4 border-b border-slate-50 bg-slate-50/50">
+                                    <div className="p-4 border-b border-slate-50 bg-slate-50/50 flex justify-between items-center">
                                         <h3 className="font-bold text-slate-700 flex items-center gap-2">
                                             <Bus size={18} className="text-blue-500" />
-                                            Select Your Bus
+                                            {manualEntryMode ? 'Search Bus' : 'Select Your Bus'}
                                         </h3>
+                                        {manualEntryMode && (
+                                            <button onClick={handleResetBusList} className="text-xs text-blue-600 font-bold uppercase tracking-wider">
+                                                Show List
+                                            </button>
+                                        )}
                                     </div>
-                                    <div className="p-4 grid grid-cols-1 gap-3">
+
+                                    {manualEntryMode && (
+                                        <div className="p-4 bg-white border-b border-slate-100">
+                                            <form onSubmit={handleManualSearch} className="flex gap-2">
+                                                <input
+                                                    type="text"
+                                                    value={manualBusNumber}
+                                                    onChange={(e) => setManualBusNumber(e.target.value)}
+                                                    placeholder="Enter bus number..."
+                                                    className="flex-1 bg-slate-50 border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    autoFocus
+                                                />
+                                                <button
+                                                    type="submit"
+                                                    disabled={isSearching}
+                                                    className="bg-blue-600 text-white p-3 rounded-xl disabled:opacity-50"
+                                                >
+                                                    {isSearching ? <div className="animate-spin w-5 h-5 border-2 border-white/30 border-t-white rounded-full"></div> : <Search size={20} />}
+                                                </button>
+                                            </form>
+                                        </div>
+                                    )}
+
+                                    <div className="p-4 grid grid-cols-1 gap-3 max-h-[400px] overflow-y-auto">
                                         {buses.length > 0 ? (
                                             buses.map(bus => (
                                                 <button
@@ -344,7 +417,7 @@ const DriverDashboard = () => {
                                                         <div className="font-bold text-slate-800 text-lg group-hover:text-blue-700">{bus.busNumber}</div>
                                                         <div className="text-xs text-slate-400 font-medium flex items-center gap-1 mt-1">
                                                             <div className="w-1.5 h-1.5 rounded-full bg-slate-300"></div>
-                                                            {bus.routeName || 'No Route Assigned'}
+                                                            {bus.routeName || bus.route?.routeName || bus.assignedRoute?.routeName || 'No Route Assigned'}
                                                         </div>
                                                     </div>
                                                     <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-blue-200 group-hover:text-blue-700 transition-colors">
@@ -354,8 +427,17 @@ const DriverDashboard = () => {
                                             ))
                                         ) : (
                                             <div className="text-center py-8 text-slate-400">
-                                                No buses found assigned to you.
+                                                {manualEntryMode ? 'No buses found with that number.' : 'No buses found assigned to you.'}
                                             </div>
+                                        )}
+
+                                        {!manualEntryMode && (
+                                            <button
+                                                onClick={() => setManualEntryMode(true)}
+                                                className="mt-2 w-full py-3 text-sm text-blue-600 font-medium bg-blue-50 rounded-xl hover:bg-blue-100 transition-colors"
+                                            >
+                                                Bus not listed? Search Manually
+                                            </button>
                                         )}
                                     </div>
                                 </div>
@@ -434,6 +516,18 @@ const DriverDashboard = () => {
                                 <p className="text-center text-xs text-slate-400 mt-3 font-medium">
                                     Sharing live location with college portal...
                                 </p>
+                                <div className="grid grid-cols-2 gap-2 mt-4 text-center">
+                                    <div className="p-2 bg-slate-50 rounded-lg">
+                                        <p className="text-[10px] uppercase text-slate-400 font-bold">Last Update</p>
+                                        <p className="font-mono font-bold text-slate-700 text-sm">{lastSentTime || '--:--:--'}</p>
+                                    </div>
+                                    <div className="p-2 bg-slate-50 rounded-lg">
+                                        <p className="text-[10px] uppercase text-slate-400 font-bold">Coords</p>
+                                        <p className="font-mono font-bold text-slate-700 text-xs mt-0.5">
+                                            {currentCoords ? `${currentCoords.lat.toFixed(4)}, ${currentCoords.lng.toFixed(4)}` : 'Waiting...'}
+                                        </p>
+                                    </div>
+                                </div>
                             </div>
 
                             <button
@@ -470,7 +564,44 @@ const DriverDashboard = () => {
                 </div>
 
             </div>
-        </div>
+
+            {/* Settings Modal */}
+            {
+                showSettings && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in">
+                        <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl">
+                            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                                <h3 className="font-bold text-lg text-slate-800">Driver Profile</h3>
+                                <button onClick={() => setShowSettings(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+                                    <X size={20} className="text-slate-500" />
+                                </button>
+                            </div>
+                            <div className="p-6 space-y-6">
+                                <div className="flex flex-col items-center text-center">
+                                    <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 text-3xl font-bold mb-3">
+                                        {driverDetails?.name?.charAt(0) || 'D'}
+                                    </div>
+                                    <div>
+                                        <p className="font-bold text-xl text-slate-800">{driverDetails?.name || 'Unknown Driver'}</p>
+                                        <p className="text-slate-500">{driverDetails?.email || 'No email'}</p>
+                                        {driverDetails?.phone && <p className="text-slate-400 text-sm mt-1">{driverDetails.phone}</p>}
+                                    </div>
+                                </div>
+
+                                <hr className="border-slate-100" />
+
+                                <button
+                                    onClick={handleLogout}
+                                    className="w-full py-3 text-red-600 font-bold bg-red-50 hover:bg-red-100 rounded-xl flex items-center justify-center gap-2 transition-colors"
+                                >
+                                    <LogOut size={20} /> Logout
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
+        </div >
     );
 };
 
