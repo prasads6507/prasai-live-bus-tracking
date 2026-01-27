@@ -32,7 +32,7 @@ const StudentDashboard = () => {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         localStorage.removeItem('current_college_id');
-        navigate(`/${orgSlug}/student/login`);
+        navigate(`/${orgSlug}/login`);
     };
 
     return (
