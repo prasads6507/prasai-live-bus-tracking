@@ -29,7 +29,6 @@ const Drivers = () => {
 
     // Bulk Upload State
     const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
-    const [bulkFile, setBulkFile] = useState<File | null>(null);
     const [bulkPreview, setBulkPreview] = useState<any[]>([]);
     const [selectedBulkIndices, setSelectedBulkIndices] = useState<number[]>([]);
     const [bulkLoading, setBulkLoading] = useState(false);
@@ -133,7 +132,6 @@ const Drivers = () => {
 
     const handleProcessFile = async (file: File) => {
         try {
-            setBulkFile(file);
             const data = await file.arrayBuffer();
             const workbook = XLSX.read(data);
             const sheetName = workbook.SheetNames[0];
@@ -581,7 +579,6 @@ const Drivers = () => {
                                                 <button
                                                     onClick={() => {
                                                         setBulkPreview([]);
-                                                        setBulkFile(null);
                                                         setBulkError('');
                                                     }}
                                                     className="text-red-500 text-sm hover:underline"
