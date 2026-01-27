@@ -4,6 +4,119 @@ const xlsx = require('xlsx');
 // @desc    Upload and import routes from Excel/CSV file
 // @route   POST /api/admin/routes/bulk-upload
 // @access  Private (College Admin)
+// @desc    Bulk create routes from JSON (Frontend parsed)
+// @route   POST /api/admin/routes/bulk-json
+// @access  Private (College Admin)
+const createBulkRoutesJson = async (req, res) => {
+    try {
+        const { routes } = req.body;
+
+        if (!Array.isArray(routes) || routes.length === 0) {
+            return res.status(400).json({ message: 'No routes provided' });
+        }
+
+        const batch = db.batch();
+        const results = {
+            success: [],
+            errors: [],
+            createdRoutes: 0,
+            createdStops: 0
+        };
+
+        const collegeId = req.collegeId;
+
+        // Fetch existing routes to minimize reads? or just check one by one.
+        // For simplicity and correctness with overwrite, let's check one by one or fetch all.
+        // Fetching all routes for college to check existence efficiently.
+        const routesSnapshot = await db.collection('routes').where('collegeId', '==', collegeId).get();
+        const existingRoutesMap = new Map();
+        routesSnapshot.docs.forEach(doc => {
+            existingRoutesMap.set(doc.data().routeName, doc.id);
+        });
+
+        for (const routeItem of routes) {
+            try {
+                const routeName = routeItem.routeName;
+                const stopsStr = routeItem.stops || '';
+
+                if (!routeName) {
+                    results.errors.push({ route: routeItem, error: 'Missing route name' });
+                    continue;
+                }
+
+                let routeId = existingRoutesMap.get(routeName);
+
+                // create or update route
+                if (!routeId) {
+                    routeId = 'route-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+                    const newRoute = {
+                        routeId,
+                        collegeId,
+                        routeName,
+                        startPoint: '',
+                        endPoint: '',
+                        createdAt: new Date().toISOString()
+                    };
+                    batch.set(db.collection('routes').doc(routeId), newRoute);
+                    results.createdRoutes++;
+                } else {
+                    // If updating... we don't really change much on route itself unless start/end point provided
+                }
+
+                // Process Stops (Overwrite existing stops for simplicity? Or smart merge? User said "apply accordingly")
+                // Easiest is to delete existing stops for this route and re-create them from the list, ensuring order.
+                // However, we can't easily delete in a batch without reading them first.
+                // Alternative: Use a sub-batch or just create new ones and orphan old ones? No, bad.
+                // Let's standardise: If uploading via bulk, we REPLACE the stops for that route.
+
+                // 1. Find existing stops to delete
+                const stopsRef = db.collection('stops');
+                if (existingRoutesMap.has(routeName)) {
+                    // We need to delete old stops.
+                    // This is expensive in a loop.
+                    // IMPORTANT: Limit execution. If too many routes, this might timeout.
+                    const oldStops = await stopsRef.where('routeId', '==', routeId).where('collegeId', '==', collegeId).get();
+                    oldStops.docs.forEach(doc => {
+                        batch.delete(doc.ref);
+                    });
+                }
+
+                const stopNames = stopsStr.split(',').map(s => s.trim()).filter(s => s);
+                stopNames.forEach((name, index) => {
+                    const stopId = 'stop-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9) + '-' + index;
+                    const stopData = {
+                        stopId,
+                        collegeId,
+                        routeId,
+                        stopName: name,
+                        latitude: 0,
+                        longitude: 0,
+                        order: index + 1
+                    };
+                    batch.set(db.collection('stops').doc(stopId), stopData);
+                    results.createdStops++;
+                });
+
+                results.success.push(routeName);
+
+            } catch (err) {
+                results.errors.push({ route: routeItem, error: err.message });
+            }
+        }
+
+        await batch.commit();
+
+        res.json({
+            message: `Processed ${routes.length} routes. Created/Updated: ${results.success.length}`,
+            results
+        });
+
+    } catch (error) {
+        console.error('Bulk route json error:', error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
 const uploadRoutesFile = async (req, res) => {
     try {
         if (!req.file) {
@@ -188,5 +301,6 @@ const downloadTemplate = (req, res) => {
 
 module.exports = {
     uploadRoutesFile,
-    downloadTemplate
+    downloadTemplate,
+    createBulkRoutesJson
 };

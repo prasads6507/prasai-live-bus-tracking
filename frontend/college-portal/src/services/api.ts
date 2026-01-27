@@ -212,4 +212,9 @@ export const downloadRouteTemplate = async () => {
     link.remove();
 };
 
+export const bulkCreateRoutes = async (routesData: any[]) => {
+    const response = await api.post('/admin/routes/bulk-json', { routes: routesData });
+    return response.data;
+};
+
 export default api;

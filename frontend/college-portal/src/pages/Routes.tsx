@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { MapPin, Plus, Search, X, AlertCircle, CheckCircle, Edit2, Trash2, Upload, Download } from 'lucide-react';
-import { getRoutes, createRoute, updateRoute, deleteRoute, validateSlug, uploadRoutesFile, downloadRouteTemplate } from '../services/api';
+import { getRoutes, createRoute, updateRoute, deleteRoute, validateSlug, bulkCreateRoutes } from '../services/api';
 import { motion, AnimatePresence } from 'framer-motion';
+import * as XLSX from 'xlsx';
 import Layout from '../components/Layout';
 
 const Routes = () => {
@@ -27,9 +28,9 @@ const Routes = () => {
 
     // Upload State
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
-    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [uploadPreview, setUploadPreview] = useState<any[]>([]);
     const [uploadLoading, setUploadLoading] = useState(false);
-    const [uploadResults, setUploadResults] = useState<any>(null);
+    const [uploadResults, setUploadResults] = useState<any>(null); // For success/error messages
 
     useEffect(() => {
         initializeAndFetchRoutes();
@@ -137,39 +138,55 @@ const Routes = () => {
         setNewRoute({ ...newRoute, stops: updatedStops });
     };
 
-    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            setSelectedFile(e.target.files[0]);
+    const handleProcessFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        try {
+            const data = await file.arrayBuffer();
+            const workbook = XLSX.read(data);
+            const sheetName = workbook.SheetNames[0];
+            const sheet = workbook.Sheets[sheetName];
+            const jsonData = XLSX.utils.sheet_to_json(sheet);
+
+            // Map loosely: 'Route Name' or 'routeName', 'Stops' or 'stops'
+            const mappedData = jsonData.map((row: any) => ({
+                routeName: row['Route Name'] || row['RouteName'] || row['routeName'] || '',
+                stops: row['Stops'] || row['stops'] || ''
+            })).filter(r => r.routeName);
+
+            if (mappedData.length === 0) {
+                alert('No valid routes found. Please check column headers (Route Name, Stops).');
+                return;
+            }
+
+            setUploadPreview(mappedData);
             setUploadResults(null);
+
+            // Clear input so same file can be selected again if needed
+            e.target.value = '';
+        } catch (err) {
+            console.error(err);
+            alert('Failed to parse file');
         }
     };
 
-    const handleFileUpload = async () => {
-        if (!selectedFile) return;
+    const handleBulkUpload = async () => {
+        if (uploadPreview.length === 0) return;
 
         setUploadLoading(true);
         setUploadResults(null);
 
         try {
-            const result = await uploadRoutesFile(selectedFile);
+            const result = await bulkCreateRoutes(uploadPreview);
             setUploadResults(result);
-            setSelectedFile(null);
-
-            // Refresh routes list
+            setUploadPreview([]); // Clear preview on success (or keep it? better clear for result view)
             await fetchRoutes();
-
-            // Show success for a moment then close
-            setTimeout(() => {
-                if (result.results.createdRoutes > 0) {
-                    setIsUploadModalOpen(false);
-                    setUploadResults(null);
-                }
-            }, 3000);
         } catch (err: any) {
             setUploadResults({
                 message: 'Upload failed',
                 results: {
-                    errors: [{ error: err.response?.data?.message || err.message || 'Failed to upload file' }]
+                    errors: [{ error: err.response?.data?.message || err.message }]
                 }
             });
         } finally {
@@ -177,12 +194,29 @@ const Routes = () => {
         }
     };
 
-    const handleDownloadTemplate = async () => {
-        try {
-            await downloadRouteTemplate();
-        } catch (err) {
-            alert('Failed to download template');
-        }
+    const handleDownloadTemplate = () => {
+        const headers = [['Route Name', 'Stops']];
+
+        // Use existing routes to populate template
+        // Stops should be comma separated string
+        const data = routes.length > 0
+            ? routes.map(r => [
+                r.routeName,
+                Array.isArray(r.stops) ? r.stops.map((s: any) => s.stopName).join(', ') : ''
+            ])
+            : [
+                ['Route 101', 'Stop A, Stop B, Stop C'],
+                ['Route 202', 'Main St, High School, Library']
+            ];
+
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet([...headers, ...data]);
+
+        // Col widths
+        ws['!cols'] = [{ wch: 30 }, { wch: 50 }];
+
+        XLSX.utils.book_append_sheet(wb, ws, 'Routes');
+        XLSX.writeFile(wb, 'Routes_Template.xlsx');
     };
 
     const filteredRoutes = routes.filter(route =>
@@ -437,10 +471,13 @@ const Routes = () => {
                             animate={{ scale: 1, opacity: 1 }}
                             exit={{ scale: 0.95, opacity: 0 }}
                             onClick={(e) => e.stopPropagation()}
-                            className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6"
+                            className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl p-6 min-h-[500px] flex flex-col max-h-[90vh]"
                         >
-                            <div className="flex items-center justify-between mb-6">
-                                <h2 className="text-2xl font-bold text-slate-800">Upload Routes</h2>
+                            <div className="flex items-center justify-between mb-6 shrink-0">
+                                <div>
+                                    <h2 className="text-2xl font-bold text-slate-800">Batch Upload Routes</h2>
+                                    <p className="text-slate-500 text-sm">Upload Excel with "Route Name" and "Stops" (comma separated)</p>
+                                </div>
                                 <button
                                     onClick={() => setIsUploadModalOpen(false)}
                                     className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
@@ -449,72 +486,118 @@ const Routes = () => {
                                 </button>
                             </div>
 
-                            <div className="space-y-4">
-                                {/* Download Template Button */}
-                                <button
-                                    onClick={handleDownloadTemplate}
-                                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold transition-all"
-                                >
-                                    <Download size={20} />
-                                    <span>Download Sample Template</span>
-                                </button>
-
-                                {/* File Input */}
-                                <div>
-                                    <label className="block text-sm font-semibold text-slate-700 mb-2">
-                                        Select Excel/CSV File
-                                    </label>
-                                    <input
-                                        type="file"
-                                        accept=".xlsx,.xls,.csv"
-                                        onChange={handleFileSelect}
-                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all"
-                                    />
-                                    {selectedFile && (
-                                        <p className="mt-2 text-sm text-slate-600">
-                                            Selected: <span className="font-semibold">{selectedFile.name}</span>
-                                        </p>
-                                    )}
-                                </div>
-
-                                {/* Upload Button */}
-                                <motion.button
-                                    whileHover={{ scale: 1.02 }}
-                                    whileTap={{ scale: 0.98 }}
-                                    onClick={handleFileUpload}
-                                    disabled={!selectedFile || uploadLoading}
-                                    className={`w-full py-3 rounded-xl font-semibold text-white transition-all ${!selectedFile || uploadLoading
-                                        ? 'bg-slate-400 cursor-not-allowed'
-                                        : 'bg-green-600 hover:bg-green-700 shadow-lg shadow-green-200'
-                                        }`}
-                                >
-                                    {uploadLoading ? 'Uploading...' : 'Upload Routes'}
-                                </motion.button>
-
-                                {/* Results Display */}
-                                {uploadResults && (
-                                    <div className="mt-4 space-y-2">
-                                        {uploadResults.results.createdRoutes > 0 && (
-                                            <div className="p-4 bg-green-50 border-l-4 border-green-500 text-green-700 rounded-r">
-                                                <p className="font-semibold">{uploadResults.message}</p>
-                                                <p className="text-sm mt-1">
-                                                    Created {uploadResults.results.createdRoutes} routes with{' '}
-                                                    {uploadResults.results.createdStops} stops
-                                                </p>
-                                            </div>
-                                        )}
-
-                                        {uploadResults.results.errors && uploadResults.results.errors.length > 0 && (
-                                            <div className="p-4 bg-red-50 border-l-4 border-red-500 text-red-700 rounded-r max-h-48 overflow-y-auto">
-                                                <p className="font-semibold mb-2">Errors:</p>
-                                                <ul className="text-sm space-y-1">
-                                                    {uploadResults.results.errors.map((err: any, idx: number) => (
-                                                        <li key={idx}>• {err.error}</li>
-                                                    ))}
-                                                </ul>
-                                            </div>
-                                        )}
+                            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                                {/* Success/Result State */}
+                                {uploadResults && uploadResults.results ? (
+                                    <div className="flex flex-col items-center justify-center py-12 text-center animate-in fade-in">
+                                        <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-4">
+                                            <CheckCircle size={32} />
+                                        </div>
+                                        <h3 className="text-xl font-bold text-slate-800">{uploadResults.message}</h3>
+                                        <div className="mt-4 p-4 bg-slate-50 rounded-xl text-left max-w-md w-full max-h-60 overflow-y-auto">
+                                            {uploadResults.results.errors?.length > 0 && (
+                                                <div className="mb-4 text-red-600">
+                                                    <p className="font-bold mb-1">Errors ({uploadResults.results.errors.length}):</p>
+                                                    <ul className="text-sm list-disc pl-4">
+                                                        {uploadResults.results.errors.map((e: any, i: number) => (
+                                                            <li key={i}>{e.error} (Route: {e.route?.routeName})</li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            )}
+                                            {uploadResults.results.success?.length > 0 && (
+                                                <div className="text-green-600">
+                                                    <p className="font-bold mb-1">Success ({uploadResults.results.success.length}):</p>
+                                                    <p className="text-sm">Routes created/updated successfully.</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <button
+                                            onClick={() => {
+                                                setUploadResults(null);
+                                                setIsUploadModalOpen(false);
+                                            }}
+                                            className="mt-6 bg-slate-800 text-white px-6 py-2 rounded-lg"
+                                        >
+                                            Close
+                                        </button>
                                     </div>
+                                ) : (
+                                    <>
+                                        {/* Initial State / Upload Area */}
+                                        {!uploadPreview.length && (
+                                            <div className="flex-1 flex flex-col items-center justify-center">
+                                                <div className="border-2 border-dashed border-slate-300 rounded-2xl p-12 flex flex-col items-center justify-center text-center bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer w-full max-w-xl group"
+                                                    onClick={() => document.getElementById('route-file-input')?.click()}
+                                                >
+                                                    <input
+                                                        id="route-file-input"
+                                                        type="file"
+                                                        accept=".xlsx,.xls,.csv"
+                                                        className="hidden"
+                                                        onChange={handleProcessFile}
+                                                    />
+                                                    <div className="w-16 h-16 bg-white rounded-full shadow-sm flex items-center justify-center mb-4 group-hover:scale-110 transition-transform text-blue-500">
+                                                        <Upload size={32} />
+                                                    </div>
+                                                    <p className="font-bold text-slate-700 text-lg">Click to Upload Excel File</p>
+
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleDownloadTemplate();
+                                                        }}
+                                                        className="mt-6 flex items-center gap-2 text-blue-600 font-bold hover:underline"
+                                                    >
+                                                        <Download size={16} /> Download Template
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Preview Table */}
+                                        {uploadPreview.length > 0 && (
+                                            <div className="flex-1 flex flex-col min-h-0">
+                                                <div className="flex items-center justify-between mb-4">
+                                                    <p className="text-slate-600 font-medium">Found <span className="font-bold text-slate-900">{uploadPreview.length}</span> routes</p>
+                                                    <button
+                                                        onClick={() => setUploadPreview([])}
+                                                        className="text-red-500 text-sm hover:underline"
+                                                    >
+                                                        Clear & Upload New
+                                                    </button>
+                                                </div>
+                                                <div className="flex-1 overflow-auto border border-slate-200 rounded-xl">
+                                                    <table className="w-full text-left text-sm">
+                                                        <thead className="bg-slate-50 sticky top-0 z-10 border-b border-slate-200">
+                                                            <tr>
+                                                                <th className="p-3 font-semibold text-slate-700">Route Name</th>
+                                                                <th className="p-3 font-semibold text-slate-700">Stops Preview</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-slate-100">
+                                                            {uploadPreview.map((row, idx) => (
+                                                                <tr key={idx} className="hover:bg-slate-50">
+                                                                    <td className="p-3 font-medium text-slate-800">{row.routeName}</td>
+                                                                    <td className="p-3 text-slate-600 truncate max-w-md" title={row.stops}>
+                                                                        {row.stops}
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+
+                                                <button
+                                                    onClick={handleBulkUpload}
+                                                    disabled={uploadLoading}
+                                                    className="mt-6 w-full py-4 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl shadow-lg shadow-green-200 disabled:opacity-50"
+                                                >
+                                                    {uploadLoading ? 'Processing...' : `Import ${uploadPreview.length} Routes`}
+                                                </button>
+                                            </div>
+                                        )}
+                                    </>
                                 )}
                             </div>
                         </motion.div>

@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Clock, Bus, User, Calendar, RefreshCw, Pencil, Trash2, X, StopCircle } from 'lucide-react';
+import { Clock, Bus, User, Calendar, RefreshCw, Pencil, Trash2, X, StopCircle, Download } from 'lucide-react';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import * as XLSX from 'xlsx';
 import Layout from '../components/Layout';
 import { getTripHistory, updateTrip, deleteTrip, adminEndTrip } from '../services/api';
 
@@ -32,6 +33,9 @@ const TripHistory = () => {
     const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
     const [editForm, setEditForm] = useState({ startTime: '', endTime: '', driverName: '' });
     const [actionLoading, setActionLoading] = useState(false);
+
+    // Reporting
+    const [reportPeriod, setReportPeriod] = useState<'today' | 'week' | 'month' | 'year'>('week');
 
     // Verify auth on mount
     useEffect(() => {
@@ -173,23 +177,98 @@ const TripHistory = () => {
         }
     };
 
+    const downloadReport = () => {
+        const now = new Date();
+        const start = new Date();
+
+        switch (reportPeriod) {
+            case 'today':
+                start.setHours(0, 0, 0, 0);
+                break;
+            case 'week':
+                start.setDate(now.getDate() - 7);
+                break;
+            case 'month':
+                start.setMonth(now.getMonth() - 1);
+                break;
+            case 'year':
+                start.setFullYear(now.getFullYear() - 1);
+                break;
+        }
+
+        const filteredTrips = trips.filter(t => {
+            if (!t.startTime) return false;
+            const tripDate = new Date(t.startTime);
+            return tripDate >= start && tripDate <= now;
+        });
+
+        const data = filteredTrips.map(t => ({
+            'Bus Number': t.busNumber,
+            'Driver': t.driverName,
+            'Start Time': formatDateTime(t.startTime),
+            'End Time': formatDateTime(t.endTime),
+            'Duration': formatDuration(t.durationMinutes),
+            'Status': t.status
+        }));
+
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.json_to_sheet(data);
+
+        // Auto-width
+        const wscols = [
+            { wch: 15 }, { wch: 20 }, { wch: 25 }, { wch: 25 }, { wch: 15 }, { wch: 15 }
+        ];
+        ws['!cols'] = wscols;
+
+        XLSX.utils.book_append_sheet(wb, ws, 'Trip Report');
+        XLSX.writeFile(wb, `Trips_Report_${reportPeriod}_${now.toISOString().split('T')[0]}.xlsx`);
+    };
+
     return (
         <Layout activeItem="trip-history">
             <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
                 {/* Header */}
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+                <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4 mb-6">
                     <div>
                         <h1 className="text-2xl font-bold text-slate-800">Trip History</h1>
                         <p className="text-slate-500 mt-1">View all trip records with timestamps and status</p>
                     </div>
-                    <button
-                        onClick={fetchTrips}
-                        disabled={loading}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50"
-                    >
-                        <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
-                        Refresh
-                    </button>
+
+                    <div className="flex flex-wrap items-center gap-3">
+                        <div className="flex items-center bg-white border border-slate-200 rounded-lg p-1">
+                            {(['today', 'week', 'month', 'year'] as const).map((period) => (
+                                <button
+                                    key={period}
+                                    onClick={() => setReportPeriod(period)}
+                                    className={`px-3 py-1.5 text-sm font-medium rounded-md capitalize transition-colors ${reportPeriod === period
+                                        ? 'bg-blue-100 text-blue-700'
+                                        : 'text-slate-600 hover:bg-slate-50'
+                                        }`}
+                                >
+                                    {period}
+                                </button>
+                            ))}
+                        </div>
+
+                        <button
+                            onClick={downloadReport}
+                            className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg transition-colors font-medium text-sm"
+                        >
+                            <Download size={16} />
+                            Download Report
+                        </button>
+
+                        <div className="w-px h-8 bg-slate-200 mx-1 hidden sm:block"></div>
+
+                        <button
+                            onClick={fetchTrips}
+                            disabled={loading}
+                            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg transition-colors disabled:opacity-50 text-sm font-medium"
+                        >
+                            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+                            Refresh
+                        </button>
+                    </div>
                 </div>
 
                 {/* Last Updated */}

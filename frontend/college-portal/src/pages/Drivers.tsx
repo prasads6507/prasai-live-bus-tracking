@@ -119,13 +119,18 @@ const Drivers = () => {
 
     const downloadDriverTemplate = () => {
         const headers = [['Name', 'Email', 'Phone']];
-        const data = [
-            ['John Driver', 'driver1@example.com', '9876543210'],
-            ['Jane Doe', 'driver2@example.com', '8765432109']
-        ];
+
+        // Use existing drivers to populate the template
+        const data = drivers.length > 0
+            ? drivers.map(d => [d.name, d.email, d.phone || ''])
+            : [['John Driver', 'driver1@example.com', '9876543210']]; // Fallback example if no drivers
 
         const wb = XLSX.utils.book_new();
         const ws = XLSX.utils.aoa_to_sheet([...headers, ...data]);
+
+        // Set column widths
+        ws['!cols'] = [{ wch: 20 }, { wch: 30 }, { wch: 15 }];
+
         XLSX.utils.book_append_sheet(wb, ws, 'Drivers');
         XLSX.writeFile(wb, 'Drivers_Template.xlsx');
     };

@@ -6,6 +6,11 @@ const {
     createUser, getUsersByRole, updateUser, deleteUser, createBulkUsers,
     assignDriver, getAssignments, getTripHistory, updateTrip, deleteTrip, adminEndTrip
 } = require('../controllers/collegeAdminController');
+const {
+    uploadRoutesFile,
+    downloadTemplate,
+    createBulkRoutesJson
+} = require('../controllers/bulkRouteController');
 const { protect, authorize } = require('../middleware/auth');
 const tenantIsolation = require('../middleware/tenantIsolation');
 
@@ -25,6 +30,8 @@ router.route('/buses/:busId')
 router.route('/routes')
     .post(createRoute)
     .get(getRoutes);
+
+router.post('/routes/bulk-json', createBulkRoutesJson);
 
 router.route('/routes/:routeId')
     .put(updateRoute)
