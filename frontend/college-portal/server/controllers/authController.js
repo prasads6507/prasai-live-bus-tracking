@@ -111,6 +111,7 @@ const loginUser = async (req, res) => {
                     _id: student.studentId,
                     name: student.name,
                     email: student.email,
+                    registerNumber: student.registerNumber,
                     collegeId: student.collegeId,
                     role: 'STUDENT',
                     isFirstLogin, // Frontend needs this to trigger password change modal
