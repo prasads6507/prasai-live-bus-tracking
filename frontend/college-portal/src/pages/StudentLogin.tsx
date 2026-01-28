@@ -32,7 +32,7 @@ const StudentLogin = () => {
         if (location.state?.preAuthenticated && location.state?.isFirstLogin) {
             // Auto-open set password modal
             const data = location.state;
-            localStorage.setItem('token', data.token);
+            localStorage.setItem('student_token', data.token);
             localStorage.setItem('current_college_id', data.collegeId);
             setShowSetPasswordModal(true);
         }
@@ -69,13 +69,13 @@ const StudentLogin = () => {
 
             if (data.isFirstLogin) {
                 // Store temp token for set-password call
-                localStorage.setItem('token', data.token); // Needed for interceptor
+                localStorage.setItem('student_token', data.token);
                 localStorage.setItem('current_college_id', data.collegeId);
                 setShowSetPasswordModal(true);
             } else {
                 // Normal login, go to dashboard
-                localStorage.setItem('token', data.token);
-                localStorage.setItem('user', JSON.stringify(data));
+                localStorage.setItem('student_token', data.token);
+                localStorage.setItem('student_user', JSON.stringify(data));
                 localStorage.setItem('current_college_id', data.collegeId);
                 navigate(`/${orgSlug}/student/dashboard`);
             }

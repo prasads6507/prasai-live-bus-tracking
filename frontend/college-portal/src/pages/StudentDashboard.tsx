@@ -15,11 +15,11 @@ const StudentDashboard = () => {
     const [loading, setLoading] = useState(true);
     const [focusedBusLocation, setFocusedBusLocation] = useState<{ lat: number, lng: number } | null>(null);
     const [refreshing, setRefreshing] = useState(false);
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const user = JSON.parse(localStorage.getItem('student_user') || '{}');
     const collegeId = localStorage.getItem('current_college_id');
 
     useEffect(() => {
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('student_token');
         if (!token) {
             navigate(`/${orgSlug}/student/login`);
             return;
@@ -70,8 +70,8 @@ const StudentDashboard = () => {
     }, [collegeId]);
 
     const handleLogout = () => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
+        localStorage.removeItem('student_token');
+        localStorage.removeItem('student_user');
         localStorage.removeItem('current_college_id');
         navigate(`/${orgSlug}/login`);
     };
