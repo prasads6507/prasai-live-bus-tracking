@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Bus, LogOut, User, MapPin, Navigation, RotateCw } from 'lucide-react';
-import { validateSlug, getBuses } from '../services/api';
+import { validateSlug, getStudentBuses } from '../services/api';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import MapComponent from '../components/MapComponent';
@@ -41,7 +41,7 @@ const StudentDashboard = () => {
     useEffect(() => {
         const fetchBuses = async () => {
             try {
-                const response = await getBuses();
+                const response = await getStudentBuses();
                 const busData = Array.isArray(response) ? response : response.data || [];
                 setBuses(busData);
             } catch (err) {
@@ -77,7 +77,8 @@ const StudentDashboard = () => {
     };
 
     const handleBusClick = (bus: any) => {
-        if (bus.location?.latitude && bus.location?.longitude) {
+        // Only focus if the bus is ON_ROUTE and has valid location
+        if (bus.status === 'ON_ROUTE' && bus.location?.latitude && bus.location?.longitude) {
             setFocusedBusLocation({ lat: bus.location.latitude, lng: bus.location.longitude });
         }
     };
@@ -85,7 +86,7 @@ const StudentDashboard = () => {
     const handleRefresh = async () => {
         setRefreshing(true);
         try {
-            const response = await getBuses();
+            const response = await getStudentBuses();
             const busData = Array.isArray(response) ? response : response.data || [];
             setBuses(busData);
         } catch (err) {

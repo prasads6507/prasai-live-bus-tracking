@@ -260,4 +260,10 @@ export const resetStudentPassword = async (studentId: string) => {
     return response.data;
 };
 
+// Student Portal - Get buses for student's college
+export const getStudentBuses = async () => {
+    const response = await api.get('/student/buses');
+    return response.data;
+};
+
 export default api;

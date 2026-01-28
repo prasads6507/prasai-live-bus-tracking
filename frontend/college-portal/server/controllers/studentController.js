@@ -245,6 +245,32 @@ const getLiveLocation = async (req, res) => {
     res.json({ message: 'Live tracking coming soon' });
 };
 
+// @desc    Get all buses for a student's college
+// @route   GET /api/student/buses
+// @access  Private (Student)
+const getStudentBuses = async (req, res) => {
+    try {
+        const collegeId = req.collegeId;
+        if (!collegeId) {
+            return res.status(400).json({ message: 'College ID not found' });
+        }
+
+        const snapshot = await db.collection('buses')
+            .where('collegeId', '==', collegeId)
+            .get();
+
+        const buses = snapshot.docs.map(doc => ({
+            _id: doc.id,
+            ...doc.data()
+        }));
+
+        res.json({ success: true, data: buses });
+    } catch (error) {
+        console.error('Get student buses error:', error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
 // @desc    Reset student password to register number
 // @route   PUT /api/admin/students/:id/reset-password
 // @access  Private (College Admin)
@@ -281,5 +307,6 @@ module.exports = {
     createBulkStudents,
     getMyBus,
     getLiveLocation,
+    getStudentBuses,
     resetStudentPassword
 };
