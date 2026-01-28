@@ -6,7 +6,7 @@ const Login: React.FC = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
-    const { loginUser, signInWithGoogle } = useAuth();
+    const { loginUser } = useAuth();
     const navigate = useNavigate();
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -17,15 +17,6 @@ const Login: React.FC = () => {
             navigate('/dashboard');
         } catch (err: any) {
             setError(err.response?.data?.message || err.message || 'Login failed');
-        }
-    };
-
-    const handleGoogleLogin = async () => {
-        try {
-            await signInWithGoogle();
-            navigate('/dashboard');
-        } catch (err: any) {
-            setError('Google Login failed');
         }
     };
 
@@ -116,23 +107,6 @@ const Login: React.FC = () => {
                             Sign In to Portal
                         </button>
                     </form>
-
-                    <div className="mt-8 relative">
-                        <div className="absolute inset-0 flex items-center">
-                            <div className="w-full border-t border-slate-100"></div>
-                        </div>
-                        <div className="relative flex justify-center text-sm uppercase tracking-tighter">
-                            <span className="bg-white px-4 text-slate-400 font-bold">or continue with</span>
-                        </div>
-                    </div>
-
-                    <button
-                        onClick={handleGoogleLogin}
-                        className="mt-6 sm:mt-8 w-full flex items-center justify-center bg-white border border-slate-200 text-slate-700 py-3 sm:py-4 rounded-xl sm:rounded-2xl hover:bg-slate-50 hover:border-slate-300 active:scale-[0.98] transition-all font-bold text-sm shadow-sm"
-                    >
-                        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
-                        Google Marketplace
-                    </button>
 
                     <div className="mt-10 text-center text-sm font-medium text-slate-500 italic">
                         Access restricted for system owners. <br className="hidden sm:block" />
