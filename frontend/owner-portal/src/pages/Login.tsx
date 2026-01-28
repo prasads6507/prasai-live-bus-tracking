@@ -86,9 +86,8 @@ const Login: React.FC = () => {
                             />
                         </div>
                         <div className="space-y-1 sm:space-y-2">
-                            <label className="text-xs sm:text-sm font-bold text-slate-700 uppercase tracking-wider ml-1 flex justify-between">
+                            <label className="text-xs sm:text-sm font-bold text-slate-700 uppercase tracking-wider ml-1">
                                 Password
-                                <span className="text-xs text-blue-600 lowercase tracking-normal italic cursor-pointer hover:underline">Forgot?</span>
                             </label>
                             <input
                                 type="password"
