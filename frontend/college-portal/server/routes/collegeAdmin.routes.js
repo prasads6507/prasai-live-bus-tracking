@@ -66,7 +66,8 @@ const {
     getStudents,
     updateStudent,
     deleteStudent,
-    createBulkStudents
+    createBulkStudents,
+    resetStudentPassword
 } = require('../controllers/studentController');
 
 router.route('/students')
@@ -76,5 +77,7 @@ router.post('/students/bulk-json', createBulkStudents);
 router.route('/students/:id')
     .put(updateStudent)
     .delete(deleteStudent);
+
+router.put('/students/:id/reset-password', resetStudentPassword);
 
 module.exports = router;

@@ -245,6 +245,34 @@ const getLiveLocation = async (req, res) => {
     res.json({ message: 'Live tracking coming soon' });
 };
 
+// @desc    Reset student password to register number
+// @route   PUT /api/admin/students/:id/reset-password
+// @access  Private (College Admin)
+const resetStudentPassword = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const collegeId = req.collegeId;
+
+        const studentRef = db.collection('students').doc(id);
+        const studentDoc = await studentRef.get();
+
+        if (!studentDoc.exists || studentDoc.data().collegeId !== collegeId) {
+            return res.status(404).json({ message: 'Student not found' });
+        }
+
+        // Reset to first login state
+        await studentRef.update({
+            passwordHash: null,
+            isFirstLogin: true
+        });
+
+        res.json({ success: true, message: 'Student password reset to register number' });
+    } catch (error) {
+        console.error('Reset student password error:', error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
 module.exports = {
     createStudent,
     getStudents,
@@ -252,5 +280,6 @@ module.exports = {
     deleteStudent,
     createBulkStudents,
     getMyBus,
-    getLiveLocation
+    getLiveLocation,
+    resetStudentPassword
 };

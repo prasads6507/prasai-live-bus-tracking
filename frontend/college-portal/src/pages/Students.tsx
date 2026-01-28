@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { User, Plus, Search, Mail, Phone, Hash, X, AlertCircle, CheckCircle, Edit2, Trash2, Upload, Download } from 'lucide-react';
-import { getStudents, createStudent, updateStudent, deleteStudent, bulkCreateStudents } from '../services/api';
+import { User, Plus, Search, Mail, Phone, Hash, X, AlertCircle, CheckCircle, Edit2, Trash2, Upload, Download, Key } from 'lucide-react';
+import { getStudents, createStudent, updateStudent, deleteStudent, bulkCreateStudents, resetStudentPassword } from '../services/api';
 import * as XLSX from 'xlsx';
 import { motion, AnimatePresence } from 'framer-motion';
 import Layout from '../components/Layout';
@@ -112,6 +112,17 @@ const Students = () => {
             fetchStudents();
         } catch (err: any) {
             setError(err.response?.data?.message || 'Failed to delete student');
+        }
+    };
+
+    const handleResetPassword = async (studentId: string, studentName: string) => {
+        if (!confirm(`Are you sure you want to reset the password for ${studentName}?\n\nThis will reset their password to their Register Number and require them to set a new password on next login.`)) return;
+
+        try {
+            await resetStudentPassword(studentId);
+            alert(`Password for ${studentName} has been reset successfully.`);
+        } catch (err: any) {
+            setError(err.response?.data?.message || 'Failed to reset password');
         }
     };
 
@@ -321,8 +332,9 @@ const Students = () => {
                                         </div>
                                     </div>
                                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={() => handleEditStudent(student)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"><Edit2 size={16} /></button>
-                                        <button onClick={() => handleDeleteStudent(student.studentId, student.name)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg"><Trash2 size={16} /></button>
+                                        <button onClick={() => handleEditStudent(student)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg" title="Edit"><Edit2 size={16} /></button>
+                                        <button onClick={() => handleDeleteStudent(student.studentId, student.name)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg" title="Delete"><Trash2 size={16} /></button>
+                                        <button onClick={() => handleResetPassword(student.studentId, student.name)} className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg" title="Reset Password"><Key size={16} /></button>
                                     </div>
                                 </div>
                                 <div className="space-y-2 text-sm">

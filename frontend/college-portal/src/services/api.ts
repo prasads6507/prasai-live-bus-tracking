@@ -254,4 +254,10 @@ export const studentSetPassword = async (newPassword: string) => {
     return response.data;
 };
 
+
+export const resetStudentPassword = async (studentId: string) => {
+    const response = await api.put(`/admin/students/${studentId}/reset-password`);
+    return response.data;
+};
+
 export default api;
