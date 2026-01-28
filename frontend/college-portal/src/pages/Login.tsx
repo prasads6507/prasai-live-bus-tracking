@@ -277,7 +277,7 @@ const Login = () => {
                                     className="w-full pl-12 pr-4 py-3 sm:py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all font-medium text-slate-700 placeholder:text-slate-400 text-base"
                                     placeholder="email@college.edu"
                                     value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
+                                    onChange={(e) => { setEmail(e.target.value); setError(''); }}
                                 />
                             </div>
                         </div>
@@ -294,7 +294,7 @@ const Login = () => {
                                     className="w-full pl-12 pr-4 py-3 sm:py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all font-medium text-slate-700 placeholder:text-slate-400 text-base"
                                     placeholder="••••••••"
                                     value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
+                                    onChange={(e) => { setPassword(e.target.value); setError(''); }}
                                 />
                             </div>
                         </div>
@@ -304,8 +304,8 @@ const Login = () => {
                                 whileHover={{ scale: 1.01 }}
                                 whileTap={{ scale: 0.99 }}
                                 type="submit"
-                                disabled={loading || !!error}
-                                className={`w-full py-3 sm:py-4 rounded-xl font-bold text-base sm:text-lg shadow-lg flex items-center justify-center space-x-2 transition-all ${loading || error
+                                disabled={loading}
+                                className={`w-full py-3 sm:py-4 rounded-xl font-bold text-base sm:text-lg shadow-lg flex items-center justify-center space-x-2 transition-all ${loading
                                     ? 'bg-slate-200 text-slate-400 shadow-none cursor-not-allowed'
                                     : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-blue-200'
                                     }`}

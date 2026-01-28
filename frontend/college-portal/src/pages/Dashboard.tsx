@@ -163,7 +163,7 @@ const Dashboard = () => {
                     </div>
 
                     {/* Map Section */}
-                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden h-[500px]">
+                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden h-[500px] flex flex-col">
                         <div className="p-4 border-b border-slate-100 flex justify-between items-center">
                             <h3 className="font-semibold text-slate-800 flex items-center gap-2">
                                 <MapPin size={20} className="text-blue-600" />
