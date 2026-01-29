@@ -811,7 +811,7 @@ const createCollegeAdmin = async (req, res) => {
             role: 'COLLEGE_ADMIN',
             collegeId: collegeId || req.collegeId,
             createdAt: new Date().toISOString(),
-            createdBy: req.user.userId
+            createdBy: req.user?.id || req.user?._id || req.user?.userId || 'system'
         };
 
         await db.collection('users').doc(userId).set(newAdmin);
