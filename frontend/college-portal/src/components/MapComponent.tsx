@@ -28,30 +28,68 @@ const ChangeView = ({ center, shouldAnimate = false }: { center: [number, number
 // Component to get and update user location
 const UserLocationMarker = ({ onLocationFound, shouldCenterOnUser }: { onLocationFound: (pos: [number, number]) => void, shouldCenterOnUser: boolean }) => {
     const [position, setPosition] = useState<[number, number] | null>(null);
+    const [hasCenteredOnUser, setHasCenteredOnUser] = useState(false);
     const map = useMap();
 
     useEffect(() => {
-        // Request geolocation permission and get current position
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                (pos) => {
-                    const userPos: [number, number] = [pos.coords.latitude, pos.coords.longitude];
-                    setPosition(userPos);
-                    onLocationFound(userPos);
-                    console.log('User location obtained:', userPos);
-
-                    // Auto-center map on user location if no buses are active
-                    if (shouldCenterOnUser) {
-                        map.flyTo(userPos, 14, { duration: 1.5 });
-                    }
-                },
-                (error) => {
-                    console.warn('Geolocation error:', error.message);
-                },
-                { enableHighAccuracy: true, timeout: 10000 }
-            );
+        if (!navigator.geolocation) {
+            console.warn('Geolocation not supported');
+            return;
         }
-    }, [map]); // Only run on mount, not when callbacks change
+
+        // Force fresh location with maximumAge: 0 (no cache)
+        const options: PositionOptions = {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 0 // CRITICAL: Force fresh position, no cache
+        };
+
+        // First, get immediate position
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                const userPos: [number, number] = [pos.coords.latitude, pos.coords.longitude];
+                setPosition(userPos);
+                onLocationFound(userPos);
+                console.log('Fresh user location obtained:', userPos);
+
+                // Center map on user location if appropriate
+                if (shouldCenterOnUser && !hasCenteredOnUser) {
+                    map.flyTo(userPos, 14, { duration: 1.5 });
+                    setHasCenteredOnUser(true);
+                }
+            },
+            (error) => {
+                console.warn('Geolocation error:', error.message);
+            },
+            options
+        );
+
+        // Then watch for continuous updates
+        const watchId = navigator.geolocation.watchPosition(
+            (pos) => {
+                const userPos: [number, number] = [pos.coords.latitude, pos.coords.longitude];
+                setPosition(userPos);
+                onLocationFound(userPos);
+            },
+            (error) => {
+                console.warn('Watch position error:', error.message);
+            },
+            options
+        );
+
+        // Cleanup watch on unmount
+        return () => {
+            navigator.geolocation.clearWatch(watchId);
+        };
+    }, []); // Only run on mount
+
+    // Re-center when shouldCenterOnUser becomes true
+    useEffect(() => {
+        if (shouldCenterOnUser && position && !hasCenteredOnUser) {
+            map.flyTo(position, 14, { duration: 1.5 });
+            setHasCenteredOnUser(true);
+        }
+    }, [shouldCenterOnUser, position, hasCenteredOnUser, map]);
 
     if (!position) return null;
 
