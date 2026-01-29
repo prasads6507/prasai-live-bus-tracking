@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { UserCog, Plus, Edit, Trash2, X, Check, AlertTriangle } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { UserCog, Plus, Edit, Trash2, X, Check, AlertTriangle, Shield, Mail, Phone, Crown } from 'lucide-react';
 import Layout from '../components/Layout';
 import { getCollegeAdmins, createCollegeAdmin, updateCollegeAdmin, deleteCollegeAdmin } from '../services/api';
 
@@ -104,235 +105,361 @@ const CollegeAdmins = () => {
     return (
         <Layout activeItem="admins">
             <div className="space-y-6">
-                {/* Header */}
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                    <div>
-                        <h1 className="text-2xl font-bold text-white flex items-center gap-3">
-                            <UserCog className="text-blue-400" />
-                            Manage Admins
-                        </h1>
-                        <p className="text-slate-400 text-sm mt-1">Add or manage college administrators</p>
+                {/* Hero Header */}
+                <motion.div
+                    initial={{ opacity: 0, y: -20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-500 p-8"
+                >
+                    <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4xIj48cGF0aCBkPSJNMzYgMzRoLTJ2LTRoMnY0em0wLTZ2LTJoMnYyaC0yem0tNC0yaC0ydjJoMnYtMnptMCAydjRoLTJ2LTRoMnptLTYgMGgydjJoLTJ2LTJ6bTItMmgtMnYyaDJ2LTJ6Ii8+PC9nPjwvZz48L3N2Zz4=')] opacity-30"></div>
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-32 -mt-32"></div>
+                    <div className="absolute bottom-0 left-0 w-48 h-48 bg-purple-300/20 rounded-full blur-2xl -ml-24 -mb-24"></div>
+
+                    <div className="relative flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                        <div className="flex items-center gap-4">
+                            <div className="p-4 bg-white/20 backdrop-blur-xl rounded-2xl border border-white/20">
+                                <Shield className="w-8 h-8 text-white" />
+                            </div>
+                            <div>
+                                <h1 className="text-3xl font-black text-white tracking-tight">Admin Management</h1>
+                                <p className="text-white/70 font-medium">Add or manage college administrators</p>
+                            </div>
+                        </div>
+                        <motion.button
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={() => setShowAddModal(true)}
+                            className="flex items-center gap-2 px-6 py-3 bg-white text-purple-600 rounded-2xl font-bold shadow-xl shadow-purple-900/30 hover:shadow-2xl transition-all"
+                        >
+                            <Plus size={20} />
+                            Add New Admin
+                        </motion.button>
                     </div>
-                    <button
-                        onClick={() => setShowAddModal(true)}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold transition-all"
-                    >
-                        <Plus size={18} />
-                        Add Admin
-                    </button>
-                </div>
+
+                    {/* Stats */}
+                    <div className="relative mt-6 grid grid-cols-2 sm:grid-cols-3 gap-4">
+                        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10">
+                            <p className="text-white/60 text-sm font-medium">Total Admins</p>
+                            <p className="text-3xl font-black text-white">{admins.length}</p>
+                        </div>
+                        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10">
+                            <p className="text-white/60 text-sm font-medium">Super Admins</p>
+                            <p className="text-3xl font-black text-white">{admins.filter(a => a.role === 'SUPER_ADMIN').length}</p>
+                        </div>
+                        <div className="hidden sm:block bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10">
+                            <p className="text-white/60 text-sm font-medium">College Admins</p>
+                            <p className="text-3xl font-black text-white">{admins.filter(a => a.role === 'COLLEGE_ADMIN').length}</p>
+                        </div>
+                    </div>
+                </motion.div>
 
                 {/* Alerts */}
-                {error && (
-                    <div className="bg-red-500/20 border border-red-500/30 text-red-400 px-4 py-3 rounded-xl flex items-center gap-2">
-                        <AlertTriangle size={18} />
-                        {error}
-                        <button onClick={() => setError('')} className="ml-auto"><X size={16} /></button>
-                    </div>
-                )}
-                {success && (
-                    <div className="bg-green-500/20 border border-green-500/30 text-green-400 px-4 py-3 rounded-xl flex items-center gap-2">
-                        <Check size={18} />
-                        {success}
-                    </div>
-                )}
-
-                {/* Admins Table */}
-                <div className="bg-slate-800/50 backdrop-blur-md border border-white/5 rounded-2xl overflow-hidden">
-                    {loading ? (
-                        <div className="p-8 text-center">
-                            <div className="animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto"></div>
-                        </div>
-                    ) : admins.length === 0 ? (
-                        <div className="p-8 text-center text-slate-400">
-                            <UserCog size={48} className="mx-auto mb-4 opacity-50" />
-                            <p>No admins found. Add your first admin.</p>
-                        </div>
-                    ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full">
-                                <thead className="bg-slate-700/50">
-                                    <tr>
-                                        <th className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Name</th>
-                                        <th className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Email</th>
-                                        <th className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Phone</th>
-                                        <th className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Role</th>
-                                        <th className="px-6 py-4 text-right text-xs font-bold text-slate-400 uppercase tracking-wider">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-700/50">
-                                    {admins.map((admin) => (
-                                        <tr key={admin.userId} className="hover:bg-slate-700/30 transition-colors">
-                                            <td className="px-6 py-4">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold">
-                                                        {admin.name.charAt(0).toUpperCase()}
-                                                    </div>
-                                                    <span className="font-medium text-white">{admin.name}</span>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4 text-slate-300">{admin.email}</td>
-                                            <td className="px-6 py-4 text-slate-400">{admin.phone || 'N/A'}</td>
-                                            <td className="px-6 py-4">
-                                                <span className={`px-2 py-1 rounded-full text-xs font-bold ${admin.role === 'SUPER_ADMIN'
-                                                    ? 'bg-purple-500/20 text-purple-400'
-                                                    : 'bg-blue-500/20 text-blue-400'
-                                                    }`}>
-                                                    {admin.role === 'SUPER_ADMIN' ? 'Super Admin' : 'College Admin'}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 text-right space-x-2">
-                                                <button
-                                                    onClick={() => setEditAdmin(admin)}
-                                                    className="p-2 text-blue-400 hover:bg-blue-500/20 rounded-lg transition-colors"
-                                                >
-                                                    <Edit size={16} />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDelete(admin.userId)}
-                                                    className="p-2 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors"
-                                                >
-                                                    <Trash2 size={16} />
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
+                <AnimatePresence>
+                    {error && (
+                        <motion.div
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            className="bg-gradient-to-r from-red-500/20 to-red-600/20 border border-red-500/30 text-red-400 px-5 py-4 rounded-2xl flex items-center gap-3 backdrop-blur-md"
+                        >
+                            <div className="p-2 bg-red-500/20 rounded-xl">
+                                <AlertTriangle size={18} />
+                            </div>
+                            <span className="flex-1 font-medium">{error}</span>
+                            <button onClick={() => setError('')} className="p-1 hover:bg-red-500/20 rounded-lg transition-colors"><X size={16} /></button>
+                        </motion.div>
                     )}
-                </div>
+                    {success && (
+                        <motion.div
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            className="bg-gradient-to-r from-green-500/20 to-emerald-500/20 border border-green-500/30 text-green-400 px-5 py-4 rounded-2xl flex items-center gap-3 backdrop-blur-md"
+                        >
+                            <div className="p-2 bg-green-500/20 rounded-xl">
+                                <Check size={18} />
+                            </div>
+                            <span className="font-medium">{success}</span>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                {/* Admins Grid */}
+                {loading ? (
+                    <div className="flex justify-center py-16">
+                        <div className="relative">
+                            <div className="w-16 h-16 border-4 border-purple-500/30 rounded-full"></div>
+                            <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin absolute top-0 left-0"></div>
+                        </div>
+                    </div>
+                ) : admins.length === 0 ? (
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-xl border border-white/5 rounded-3xl p-12 text-center"
+                    >
+                        <div className="w-20 h-20 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-3xl flex items-center justify-center mx-auto mb-6">
+                            <UserCog size={40} className="text-purple-400" />
+                        </div>
+                        <h3 className="text-xl font-bold text-white mb-2">No Administrators Yet</h3>
+                        <p className="text-slate-400 mb-6">Add your first administrator to get started</p>
+                        <button
+                            onClick={() => setShowAddModal(true)}
+                            className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-bold hover:shadow-lg hover:shadow-purple-500/25 transition-all"
+                        >
+                            Add First Admin
+                        </button>
+                    </motion.div>
+                ) : (
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                        {admins.map((admin, index) => (
+                            <motion.div
+                                key={admin.userId}
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: index * 0.1 }}
+                                className="group relative bg-gradient-to-br from-slate-800/90 to-slate-900/90 backdrop-blur-xl border border-white/5 rounded-2xl p-6 hover:border-purple-500/30 transition-all duration-300 hover:shadow-xl hover:shadow-purple-500/10"
+                            >
+                                {admin.role === 'SUPER_ADMIN' && (
+                                    <div className="absolute -top-2 -right-2">
+                                        <div className="p-2 bg-gradient-to-r from-amber-400 to-orange-500 rounded-xl shadow-lg shadow-amber-500/30">
+                                            <Crown size={14} className="text-white" />
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="flex items-start gap-4">
+                                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-bold text-xl shadow-lg ${admin.role === 'SUPER_ADMIN'
+                                            ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-amber-500/30'
+                                            : 'bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-blue-500/30'
+                                        }`}>
+                                        {admin.name.charAt(0).toUpperCase()}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <h3 className="font-bold text-white text-lg truncate">{admin.name}</h3>
+                                        <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold mt-1 ${admin.role === 'SUPER_ADMIN'
+                                                ? 'bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-400 border border-amber-500/20'
+                                                : 'bg-gradient-to-r from-blue-500/20 to-indigo-500/20 text-blue-400 border border-blue-500/20'
+                                            }`}>
+                                            {admin.role === 'SUPER_ADMIN' ? '👑 Super Admin' : '🔑 College Admin'}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="mt-5 space-y-3">
+                                    <div className="flex items-center gap-3 text-slate-400">
+                                        <div className="p-2 bg-slate-700/50 rounded-lg">
+                                            <Mail size={14} />
+                                        </div>
+                                        <span className="text-sm truncate">{admin.email}</span>
+                                    </div>
+                                    <div className="flex items-center gap-3 text-slate-400">
+                                        <div className="p-2 bg-slate-700/50 rounded-lg">
+                                            <Phone size={14} />
+                                        </div>
+                                        <span className="text-sm">{admin.phone || 'Not provided'}</span>
+                                    </div>
+                                </div>
+
+                                <div className="mt-5 pt-5 border-t border-white/5 flex gap-2">
+                                    <button
+                                        onClick={() => setEditAdmin(admin)}
+                                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-500/10 text-blue-400 rounded-xl font-semibold hover:bg-blue-500/20 transition-colors"
+                                    >
+                                        <Edit size={16} />
+                                        Edit
+                                    </button>
+                                    <button
+                                        onClick={() => handleDelete(admin.userId)}
+                                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-red-500/10 text-red-400 rounded-xl font-semibold hover:bg-red-500/20 transition-colors"
+                                    >
+                                        <Trash2 size={16} />
+                                        Delete
+                                    </button>
+                                </div>
+                            </motion.div>
+                        ))}
+                    </div>
+                )}
             </div>
 
             {/* Add Modal */}
-            {showAddModal && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                    <div className="bg-slate-800 rounded-2xl p-6 w-full max-w-md border border-white/10">
-                        <div className="flex justify-between items-center mb-6">
-                            <h3 className="text-xl font-bold text-white">Add New Admin</h3>
-                            <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-white">
-                                <X size={20} />
-                            </button>
-                        </div>
-                        <form onSubmit={handleCreate} className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-slate-400 mb-1">Full Name</label>
-                                <input
-                                    type="text"
-                                    required
-                                    value={formData.name}
-                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                    className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-400 mb-1">Email</label>
-                                <input
-                                    type="email"
-                                    required
-                                    value={formData.email}
-                                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                    className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-400 mb-1">Phone</label>
-                                <input
-                                    type="tel"
-                                    value={formData.phone}
-                                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                                    className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-400 mb-1">Password</label>
-                                <input
-                                    type="password"
-                                    required
-                                    value={formData.password}
-                                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                                    className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                            </div>
-                            <div className="flex gap-3 pt-4">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowAddModal(false)}
-                                    className="flex-1 px-4 py-3 bg-slate-700 text-slate-300 rounded-xl font-semibold hover:bg-slate-600 transition-colors"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-colors"
-                                >
-                                    Create Admin
+            <AnimatePresence>
+                {showAddModal && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 z-50"
+                        onClick={() => setShowAddModal(false)}
+                    >
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-3xl p-8 w-full max-w-md border border-white/10 shadow-2xl"
+                        >
+                            <div className="flex items-center justify-between mb-8">
+                                <div className="flex items-center gap-4">
+                                    <div className="p-3 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl">
+                                        <Plus size={24} className="text-white" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-xl font-bold text-white">Add New Admin</h3>
+                                        <p className="text-slate-400 text-sm">Create a new administrator account</p>
+                                    </div>
+                                </div>
+                                <button onClick={() => setShowAddModal(false)} className="p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-xl transition-colors">
+                                    <X size={20} />
                                 </button>
                             </div>
-                        </form>
-                    </div>
-                </div>
-            )}
+                            <form onSubmit={handleCreate} className="space-y-5">
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-300 mb-2">Full Name</label>
+                                    <input
+                                        type="text"
+                                        required
+                                        value={formData.name}
+                                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                        placeholder="Enter full name"
+                                        className="w-full px-4 py-3.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-300 mb-2">Email Address</label>
+                                    <input
+                                        type="email"
+                                        required
+                                        value={formData.email}
+                                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                        placeholder="admin@college.edu"
+                                        className="w-full px-4 py-3.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-300 mb-2">Phone Number</label>
+                                    <input
+                                        type="tel"
+                                        value={formData.phone}
+                                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                                        placeholder="+91 98765 43210"
+                                        className="w-full px-4 py-3.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-300 mb-2">Initial Password</label>
+                                    <input
+                                        type="password"
+                                        required
+                                        value={formData.password}
+                                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                                        placeholder="••••••••"
+                                        className="w-full px-4 py-3.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                                    />
+                                </div>
+                                <div className="flex gap-3 pt-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowAddModal(false)}
+                                        className="flex-1 px-4 py-3.5 bg-slate-700/50 text-slate-300 rounded-xl font-semibold hover:bg-slate-700 transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="flex-1 px-4 py-3.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-bold hover:shadow-lg hover:shadow-purple-500/25 transition-all"
+                                    >
+                                        Create Admin
+                                    </button>
+                                </div>
+                            </form>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* Edit Modal */}
-            {editAdmin && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                    <div className="bg-slate-800 rounded-2xl p-6 w-full max-w-md border border-white/10">
-                        <div className="flex justify-between items-center mb-6">
-                            <h3 className="text-xl font-bold text-white">Edit Admin</h3>
-                            <button onClick={() => setEditAdmin(null)} className="text-slate-400 hover:text-white">
-                                <X size={20} />
-                            </button>
-                        </div>
-                        <form onSubmit={handleUpdate} className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-slate-400 mb-1">Full Name</label>
-                                <input
-                                    type="text"
-                                    required
-                                    value={editAdmin.name}
-                                    onChange={(e) => setEditAdmin({ ...editAdmin, name: e.target.value })}
-                                    className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-400 mb-1">Email</label>
-                                <input
-                                    type="email"
-                                    required
-                                    value={editAdmin.email}
-                                    onChange={(e) => setEditAdmin({ ...editAdmin, email: e.target.value })}
-                                    className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-400 mb-1">Phone</label>
-                                <input
-                                    type="tel"
-                                    value={editAdmin.phone || ''}
-                                    onChange={(e) => setEditAdmin({ ...editAdmin, phone: e.target.value })}
-                                    className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                            </div>
-                            <div className="flex gap-3 pt-4">
-                                <button
-                                    type="button"
-                                    onClick={() => setEditAdmin(null)}
-                                    className="flex-1 px-4 py-3 bg-slate-700 text-slate-300 rounded-xl font-semibold hover:bg-slate-600 transition-colors"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-colors"
-                                >
-                                    Save Changes
+            <AnimatePresence>
+                {editAdmin && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 z-50"
+                        onClick={() => setEditAdmin(null)}
+                    >
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-3xl p-8 w-full max-w-md border border-white/10 shadow-2xl"
+                        >
+                            <div className="flex items-center justify-between mb-8">
+                                <div className="flex items-center gap-4">
+                                    <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-2xl">
+                                        <Edit size={24} className="text-white" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-xl font-bold text-white">Edit Admin</h3>
+                                        <p className="text-slate-400 text-sm">Update administrator details</p>
+                                    </div>
+                                </div>
+                                <button onClick={() => setEditAdmin(null)} className="p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-xl transition-colors">
+                                    <X size={20} />
                                 </button>
                             </div>
-                        </form>
-                    </div>
-                </div>
-            )}
+                            <form onSubmit={handleUpdate} className="space-y-5">
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-300 mb-2">Full Name</label>
+                                    <input
+                                        type="text"
+                                        required
+                                        value={editAdmin.name}
+                                        onChange={(e) => setEditAdmin({ ...editAdmin, name: e.target.value })}
+                                        className="w-full px-4 py-3.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-300 mb-2">Email Address</label>
+                                    <input
+                                        type="email"
+                                        required
+                                        value={editAdmin.email}
+                                        onChange={(e) => setEditAdmin({ ...editAdmin, email: e.target.value })}
+                                        className="w-full px-4 py-3.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-300 mb-2">Phone Number</label>
+                                    <input
+                                        type="tel"
+                                        value={editAdmin.phone || ''}
+                                        onChange={(e) => setEditAdmin({ ...editAdmin, phone: e.target.value })}
+                                        className="w-full px-4 py-3.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                                    />
+                                </div>
+                                <div className="flex gap-3 pt-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setEditAdmin(null)}
+                                        className="flex-1 px-4 py-3.5 bg-slate-700/50 text-slate-300 rounded-xl font-semibold hover:bg-slate-700 transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="flex-1 px-4 py-3.5 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-xl font-bold hover:shadow-lg hover:shadow-blue-500/25 transition-all"
+                                    >
+                                        Save Changes
+                                    </button>
+                                </div>
+                            </form>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </Layout>
     );
 };
