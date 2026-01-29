@@ -746,6 +746,179 @@ const adminEndTrip = async (req, res) => {
     }
 };
 
+// --- COLLEGE ADMINS MANAGEMENT (SUPER_ADMIN/OWNER only) ---
+
+// @desc    Get all admins for this college
+// @route   GET /api/admin/college-admins
+// @access  Private (Super Admin / Owner)
+const getCollegeAdmins = async (req, res) => {
+    try {
+        // Only SUPER_ADMIN and OWNER can access this
+        if (req.user.role !== 'SUPER_ADMIN' && req.user.role !== 'OWNER') {
+            return res.status(403).json({ message: 'Access denied. Super Admin or Owner privileges required.' });
+        }
+
+        const snapshot = await db.collection('users')
+            .where('collegeId', '==', req.collegeId)
+            .where('role', 'in', ['COLLEGE_ADMIN', 'SUPER_ADMIN'])
+            .get();
+
+        const admins = snapshot.docs.map(doc => ({
+            userId: doc.id,
+            ...doc.data(),
+            passwordHash: undefined // Don't expose password
+        }));
+
+        res.json(admins);
+    } catch (error) {
+        console.error('Error fetching college admins:', error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Create a new admin for this college
+// @route   POST /api/admin/college-admins
+// @access  Private (Super Admin / Owner)
+const createCollegeAdmin = async (req, res) => {
+    try {
+        // Only SUPER_ADMIN and OWNER can create admins
+        if (req.user.role !== 'SUPER_ADMIN' && req.user.role !== 'OWNER') {
+            return res.status(403).json({ message: 'Access denied. Super Admin or Owner privileges required.' });
+        }
+
+        const { name, email, phone, password, collegeId } = req.body;
+
+        if (!name || !email || !password) {
+            return res.status(400).json({ message: 'Name, email, and password are required' });
+        }
+
+        // Check if email already exists
+        const existingUser = await db.collection('users').where('email', '==', email).get();
+        if (!existingUser.empty) {
+            return res.status(400).json({ message: 'Email already in use' });
+        }
+
+        const userId = 'user-' + Date.now();
+        const salt = await bcrypt.genSalt(10);
+        const passwordHash = await bcrypt.hash(password, salt);
+
+        const newAdmin = {
+            userId,
+            name,
+            email,
+            phone: phone || '',
+            passwordHash,
+            role: 'COLLEGE_ADMIN',
+            collegeId: collegeId || req.collegeId,
+            createdAt: new Date().toISOString(),
+            createdBy: req.user.userId
+        };
+
+        await db.collection('users').doc(userId).set(newAdmin);
+
+        res.status(201).json({
+            userId,
+            name,
+            email,
+            phone: phone || '',
+            role: 'COLLEGE_ADMIN',
+            collegeId: collegeId || req.collegeId
+        });
+    } catch (error) {
+        console.error('Error creating college admin:', error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Update a college admin
+// @route   PUT /api/admin/college-admins/:userId
+// @access  Private (Super Admin / Owner)
+const updateCollegeAdmin = async (req, res) => {
+    try {
+        // Only SUPER_ADMIN and OWNER can update admins
+        if (req.user.role !== 'SUPER_ADMIN' && req.user.role !== 'OWNER') {
+            return res.status(403).json({ message: 'Access denied. Super Admin or Owner privileges required.' });
+        }
+
+        const { userId } = req.params;
+        const { name, email, phone, password, role } = req.body;
+
+        const userRef = db.collection('users').doc(userId);
+        const userDoc = await userRef.get();
+
+        if (!userDoc.exists) {
+            return res.status(404).json({ message: 'Admin not found' });
+        }
+
+        // Ensure the admin belongs to the same college
+        if (userDoc.data().collegeId !== req.collegeId) {
+            return res.status(403).json({ message: 'Cannot modify admin from another college' });
+        }
+
+        const updateData = { updatedAt: new Date().toISOString() };
+        if (name) updateData.name = name;
+        if (email) updateData.email = email;
+        if (phone !== undefined) updateData.phone = phone;
+        if (role && (role === 'COLLEGE_ADMIN' || role === 'SUPER_ADMIN')) {
+            updateData.role = role;
+        }
+
+        if (password) {
+            const salt = await bcrypt.genSalt(10);
+            updateData.passwordHash = await bcrypt.hash(password, salt);
+        }
+
+        await userRef.update(updateData);
+        const updated = await userRef.get();
+
+        res.json({
+            userId: updated.id,
+            ...updated.data(),
+            passwordHash: undefined
+        });
+    } catch (error) {
+        console.error('Error updating college admin:', error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Delete a college admin
+// @route   DELETE /api/admin/college-admins/:userId
+// @access  Private (Super Admin / Owner)
+const deleteCollegeAdmin = async (req, res) => {
+    try {
+        // Only SUPER_ADMIN and OWNER can delete admins
+        if (req.user.role !== 'SUPER_ADMIN' && req.user.role !== 'OWNER') {
+            return res.status(403).json({ message: 'Access denied. Super Admin or Owner privileges required.' });
+        }
+
+        const { userId } = req.params;
+
+        const userRef = db.collection('users').doc(userId);
+        const userDoc = await userRef.get();
+
+        if (!userDoc.exists) {
+            return res.status(404).json({ message: 'Admin not found' });
+        }
+
+        // Ensure the admin belongs to the same college
+        if (userDoc.data().collegeId !== req.collegeId) {
+            return res.status(403).json({ message: 'Cannot delete admin from another college' });
+        }
+
+        // Prevent deleting yourself
+        if (userId === req.user.userId) {
+            return res.status(400).json({ message: 'Cannot delete your own account' });
+        }
+
+        await userRef.delete();
+        res.json({ message: 'Admin deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting college admin:', error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
 module.exports = {
     createBus,
     getBuses,
@@ -765,5 +938,9 @@ module.exports = {
     updateTrip,
     deleteTrip,
     adminEndTrip,
-    createBulkUsers
+    createBulkUsers,
+    getCollegeAdmins,
+    createCollegeAdmin,
+    updateCollegeAdmin,
+    deleteCollegeAdmin
 };

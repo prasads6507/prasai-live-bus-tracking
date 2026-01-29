@@ -1,7 +1,7 @@
 import { type ReactNode, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bus, Menu, User, LayoutDashboard, Settings, LogOut, MapPin, X, Clock } from 'lucide-react';
+import { Bus, Menu, User, LayoutDashboard, Settings, LogOut, MapPin, X, Clock, UserCog } from 'lucide-react';
 
 interface LayoutProps {
     children: ReactNode;
@@ -13,6 +13,9 @@ const Layout = ({ children, activeItem = 'dashboard' }: LayoutProps) => {
     const navigate = useNavigate();
     const user = JSON.parse(localStorage.getItem('user') || '{}');
     const [sidebarOpen, setSidebarOpen] = useState(false);
+
+    // Role check for admin-only features
+    const canManageAdmins = user?.role === 'SUPER_ADMIN' || user?.role === 'OWNER';
 
     const handleLogout = () => {
         localStorage.removeItem('token');
@@ -85,6 +88,14 @@ const Layout = ({ children, activeItem = 'dashboard' }: LayoutProps) => {
                     active={activeItem === 'trip-history'}
                     onClick={() => handleNavigation(`/${orgSlug}/trip-history`)}
                 />
+                {canManageAdmins && (
+                    <SidebarItem
+                        icon={<UserCog size={20} />}
+                        label="Manage Admins"
+                        active={activeItem === 'admins'}
+                        onClick={() => handleNavigation(`/${orgSlug}/admins`)}
+                    />
+                )}
                 <SidebarItem
                     icon={<Settings size={20} />}
                     label="Settings"

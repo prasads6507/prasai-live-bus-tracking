@@ -4,7 +4,8 @@ const {
     createBus, getBuses, updateBus, deleteBus,
     createRoute, getRoutes, updateRoute, deleteRoute,
     createUser, getUsersByRole, updateUser, deleteUser, createBulkUsers,
-    assignDriver, getAssignments, getTripHistory, updateTrip, deleteTrip, adminEndTrip
+    assignDriver, getAssignments, getTripHistory, updateTrip, deleteTrip, adminEndTrip,
+    getCollegeAdmins, createCollegeAdmin, updateCollegeAdmin, deleteCollegeAdmin
 } = require('../controllers/collegeAdminController');
 const {
     uploadRoutesFile,
@@ -79,5 +80,14 @@ router.route('/students/:id')
     .delete(deleteStudent);
 
 router.put('/students/:id/reset-password', resetStudentPassword);
+
+// College Admin Management (Super Admin / Owner only)
+router.route('/college-admins')
+    .get(getCollegeAdmins)
+    .post(createCollegeAdmin);
+
+router.route('/college-admins/:userId')
+    .put(updateCollegeAdmin)
+    .delete(deleteCollegeAdmin);
 
 module.exports = router;

@@ -267,4 +267,25 @@ export const getStudentBuses = async () => {
     return response.data;
 };
 
+// Admin Management (Super Admin / Owner only)
+export const getCollegeAdmins = async () => {
+    const response = await api.get('/admin/college-admins');
+    return response.data;
+};
+
+export const createCollegeAdmin = async (adminData: any) => {
+    const response = await api.post('/admin/college-admins', adminData);
+    return response.data;
+};
+
+export const updateCollegeAdmin = async (userId: string, adminData: any) => {
+    const response = await api.put(`/admin/college-admins/${userId}`, adminData);
+    return response.data;
+};
+
+export const deleteCollegeAdmin = async (userId: string) => {
+    const response = await api.delete(`/admin/college-admins/${userId}`);
+    return response.data;
+};
+
 export default api;

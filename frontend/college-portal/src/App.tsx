@@ -13,6 +13,7 @@ import Buses from './pages/Buses';
 import RoutesPage from './pages/Routes';
 import Settings from './pages/Settings';
 import TripHistory from './pages/TripHistory';
+import CollegeAdmins from './pages/CollegeAdmins';
 
 function App() {
   return (
@@ -43,6 +44,7 @@ function App() {
         <Route path="/:orgSlug/routes" element={<RoutesPage />} />
         <Route path="/:orgSlug/settings" element={<Settings />} />
         <Route path="/:orgSlug/trip-history" element={<TripHistory />} />
+        <Route path="/:orgSlug/admins" element={<CollegeAdmins />} />
 
         {/* Protected Routes placeholder */}
         <Route path="/:orgSlug/*" element={<Navigate to={`login`} replace />} />
