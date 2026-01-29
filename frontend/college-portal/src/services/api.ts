@@ -14,7 +14,7 @@ api.interceptors.request.use(
     (config) => {
         // Determine request type based on URL pattern
         const isDriverPortalRequest = config.url?.startsWith('/driver/') || config.url === '/driver';
-        const isStudentPortalRequest = config.url?.startsWith('/student/');
+        const isStudentPortalRequest = config.url?.startsWith('/student/') || config.url?.startsWith('/auth/student/');
 
         // Use appropriate token based on request type
         let token: string | null = null;
