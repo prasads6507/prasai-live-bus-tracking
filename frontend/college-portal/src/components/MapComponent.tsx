@@ -8,7 +8,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 interface MapComponentProps {
     buses: any[];
     focusedLocation?: { lat: number, lng: number } | null;
-    stopMarkers?: { lat: number, lng: number, name: string }[];
+    stopMarkers?: { lat: number, lng: number, name: string, isCompleted?: boolean }[];
     followBus?: boolean;
     path?: [number, number][]; // Array of [lat, lng] for drawing trip history
 }
@@ -201,14 +201,21 @@ const MapComponent = ({ buses, focusedLocation, stopMarkers = [], followBus: ext
     }, []);
 
     // Stop point icon
-    const createStopIcon = useCallback(() => {
+    const createStopIcon = useCallback((isCompleted: boolean = false) => {
+        const color = isCompleted ? '#22c55e' : '#f59e0b'; // Green if completed, Amber otherwise
         const iconMarkup = renderToStaticMarkup(
             <div className="relative flex items-center justify-center">
-                <div className="relative z-10 p-1 rounded-full shadow-md border-2 border-white bg-amber-500 text-white">
+                <div className="relative z-10 p-1 rounded-full shadow-md border-2 border-white text-white" style={{ backgroundColor: color }}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="12" cy="12" r="10" />
-                        <line x1="12" y1="8" x2="12" y2="12" />
-                        <line x1="12" y1="16" x2="12.01" y2="16" />
+                        {isCompleted ? (
+                            <path d="M20 6L9 17l-5-5" />
+                        ) : (
+                            <>
+                                <circle cx="12" cy="12" r="10" />
+                                <line x1="12" y1="8" x2="12" y2="12" />
+                                <line x1="12" y1="16" x2="12.01" y2="16" />
+                            </>
+                        )}
                     </svg>
                 </div>
             </div>
@@ -345,12 +352,14 @@ const MapComponent = ({ buses, focusedLocation, stopMarkers = [], followBus: ext
                     <Marker
                         key={`stop-${idx}`}
                         position={[stop.lat, stop.lng]}
-                        icon={createStopIcon()}
+                        icon={createStopIcon(stop.isCompleted)}
                     >
                         <Popup>
                             <div className="p-1 text-center">
-                                <p className="font-bold text-amber-700 text-sm">{stop.name}</p>
-                                <p className="text-xs text-slate-500">Bus Stop</p>
+                                <p className="font-bold text-slate-800 text-sm">{stop.name}</p>
+                                <p className={`text-[10px] font-bold uppercase ${stop.isCompleted ? 'text-green-600' : 'text-amber-600'}`}>
+                                    {stop.isCompleted ? 'Bus Reached' : 'Upcoming Stop'}
+                                </p>
                             </div>
                         </Popup>
                     </Marker>

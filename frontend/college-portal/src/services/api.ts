@@ -278,6 +278,11 @@ export const getStudentBuses = async () => {
     return response.data;
 };
 
+export const getStudentRoutes = async () => {
+    const response = await api.get('/student/routes');
+    return response.data;
+};
+
 export const getStudentTripHistory = async () => {
     const response = await api.get('/student/trips');
     return response.data;

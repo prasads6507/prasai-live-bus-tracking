@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Bus, LogOut, User, MapPin, Search, Star, X, Crosshair, History, ChevronRight, AlertCircle } from 'lucide-react';
-import { validateSlug, getStudentBuses } from '../services/api';
+import { validateSlug, getStudentBuses, getStudentRoutes } from '../services/api';
 import { getStreetName } from '../services/geocoding';
 import { collection, query, where, onSnapshot, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -14,6 +14,7 @@ const StudentDashboard = () => {
     const navigate = useNavigate();
     const [college, setCollege] = useState<any>(null);
     const [buses, setBuses] = useState<any[]>([]);
+    const [routes, setRoutes] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [focusedBusLocation, setFocusedBusLocation] = useState<{ lat: number, lng: number } | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
@@ -74,6 +75,9 @@ const StudentDashboard = () => {
                 const busData = Array.isArray(response) ? response : response.data || [];
                 const fetchedBuses = busData;
                 setBuses(fetchedBuses);
+
+                const routeResp = await getStudentRoutes();
+                setRoutes(Array.isArray(routeResp) ? routeResp : routeResp.data || []);
 
                 // Check for assigned bus and substitute (Phase 5.3)
                 if (user?.assignedBusId) {
@@ -357,7 +361,29 @@ const StudentDashboard = () => {
                         </div>
                     </div>
                     <div className="flex-1 relative">
-                        <MapComponent buses={buses} focusedLocation={focusedBusLocation} />
+                        <MapComponent
+                            buses={buses}
+                            focusedLocation={focusedBusLocation}
+                            stopMarkers={(() => {
+                                // Find stops for the bus the user is currently focused on or their assigned bus
+                                const targetBus = focusedBusLocation
+                                    ? buses.find(b => b.location?.latitude === focusedBusLocation.lat && b.location?.longitude === focusedBusLocation.lng)
+                                    : assignedBus || buses.find(b => b.status === 'ON_ROUTE');
+
+                                if (!targetBus || !targetBus.assignedRouteId) return [];
+
+                                const route = routes.find(r => r._id === targetBus.assignedRouteId);
+                                if (!route || !route.stops) return [];
+
+                                return route.stops.map((s: any) => ({
+                                    lat: s.latitude,
+                                    lng: s.longitude,
+                                    name: s.stopName,
+                                    id: s.stopId || s._id,
+                                    isCompleted: (targetBus.completedStops || []).includes(s.stopId || s._id)
+                                }));
+                            })()}
+                        />
                     </div>
                 </motion.div>
 

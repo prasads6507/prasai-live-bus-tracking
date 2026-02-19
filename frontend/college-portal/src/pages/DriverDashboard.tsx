@@ -114,7 +114,7 @@ const DriverDashboard = () => {
                     // Update local state to avoid repeated writes
                     setCompletedStops(prev => new Set(prev).add(stop.stopId || stop._id));
 
-                    // Write completion to Firestore
+                    // Write completion to Firestore (Trip History)
                     try {
                         const stopRef = doc(db, 'trips', tripId, 'stops', stop.stopId || stop._id);
                         await setDoc(stopRef, {
@@ -123,6 +123,14 @@ const DriverDashboard = () => {
                             arrivedAt: serverTimestamp(),
                             status: 'COMPLETED'
                         });
+
+                        // Sync to BUS document for real-time student view
+                        const busRef = doc(db, 'buses', selectedBusId);
+                        const updatedCompletedStops = Array.from(new Set([...Array.from(completedStops), stop.stopId || stop._id]));
+                        await updateDoc(busRef, {
+                            completedStops: updatedCompletedStops
+                        });
+
                     } catch (err) {
                         console.error("Failed to mark stop as completed:", err);
                     }
@@ -195,6 +203,12 @@ const DriverDashboard = () => {
 
             // Persist to localStorage
             localStorage.setItem('driver_active_trip', JSON.stringify({ tripId: newTripId, busId: selectedBusId }));
+
+            // Reset completed stops on the bus document for the new trip
+            const busRef = doc(db, 'buses', selectedBusId);
+            await updateDoc(busRef, {
+                completedStops: []
+            });
 
             // Start Tracking
             startTrackingLoop(selectedBusId, newTripId);
