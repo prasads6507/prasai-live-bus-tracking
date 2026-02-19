@@ -4,10 +4,7 @@ import { messaging } from '../config/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
-const VAPID_KEY = "BNu_SOME_PUBLIC_KEY_FROM_USER_OR_FIREBASE_CONSOLE"; // User needs to provide this or I use a default if I can guess it, but usually it's unique.
-// Actually, with Firebase v9, we might not strictly need it if we used the simpler setup, but usually getToken requires it.
-// Let's try without it first or use a placeholder. The user didn't provide it.
-// Wait, VITE_FIREBASE_API_KEY is for config. Vapid key is "Web Push Certificate" from Cloud Messaging tab.
+// Firebase messaging hook for handling push notifications
 
 const useNotification = (userId: string | null) => {
     const [token, setToken] = useState<string | null>(null);

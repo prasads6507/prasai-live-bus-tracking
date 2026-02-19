@@ -82,8 +82,8 @@ const StudentDashboard = () => {
                         setAssignedBus(myBus);
 
                         // Check for substitute (Phase 5.3)
-                        if (myBus.substituteBusId) {
-                            const sub = fetchedBuses.find(b => b._id === myBus.substituteBusId);
+                        if ((myBus as any).substituteBusId) {
+                            const sub = fetchedBuses.find((b: any) => b._id === (myBus as any).substituteBusId);
                             setSubstituteBus(sub);
                         } else {
                             setSubstituteBus(null);
@@ -116,8 +116,8 @@ const StudentDashboard = () => {
                 const myBus = updatedBuses.find((b: any) => b._id === user.assignedBusId);
                 if (myBus) {
                     setAssignedBus(myBus);
-                    if (myBus.substituteBusId) {
-                        const sub = updatedBuses.find(b => b._id === myBus.substituteBusId);
+                    if ((myBus as any).substituteBusId) {
+                        const sub = updatedBuses.find((b: any) => b._id === (myBus as any).substituteBusId);
                         setSubstituteBus(sub);
                     } else {
                         setSubstituteBus(null);
