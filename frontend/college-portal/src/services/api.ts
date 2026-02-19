@@ -9,6 +9,8 @@ const api = axios.create({
     baseURL: getBaseUrl(),
 });
 
+export { api }; // Export for direct use
+
 // Add a request interceptor to attach the token
 api.interceptors.request.use(
     (config) => {

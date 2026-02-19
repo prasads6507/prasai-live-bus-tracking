@@ -128,66 +128,101 @@ const UserLocationMarker = ({ onLocationFound, shouldCenterOnUser }: { onLocatio
     );
 };
 
-// Bus Marker Component with Animation
+// Bus Marker Component with Animation (5-Point Buffer Interpolation)
+import { interpolatePosition, calculateBearing } from '../utils/mapUtils';
+
 const AnimatedBusMarker = ({ bus, icon }: { bus: any, icon: any }) => {
     const [position, setPosition] = useState<[number, number]>([bus.location.latitude, bus.location.longitude]);
-    const trailRef = useRef<any[]>([]);
-    const animationRef = useRef<number | undefined>(undefined);
+    const [bearing, setBearing] = useState<number>(bus.location.heading || 0);
+    const animationFrameRef = useRef<number>();
+    const startTimeRef = useRef<number>(0);
 
-    // Update position when bus updates
+    // Store latest buffer for animation loop access
+    const bufferRef = useRef<any[]>([]);
+
     useEffect(() => {
-        if (bus.liveTrail && Array.isArray(bus.liveTrail) && bus.liveTrail.length > 0) {
-            // Sort trail by timestamp
-            const sortedTrail = [...bus.liveTrail].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+        // Prepare buffer: Sort by timestamp
+        const rawBuffer = bus.liveTrackBuffer || [];
+        // Ensure we include current location as the absolute latest point
+        const currentPoint = {
+            latitude: bus.location.latitude,
+            longitude: bus.location.longitude,
+            heading: bus.location.heading,
+            timestamp: bus.lastUpdated
+        };
 
-            // Add current location as final point
-            sortedTrail.push({
-                lat: bus.location.latitude,
-                lng: bus.location.longitude,
-                timestamp: bus.lastUpdated
-            });
+        // Merge and sort uniquely
+        const combined = [...rawBuffer, currentPoint]
+            .filter((v, i, a) => a.findIndex(t => t.timestamp === v.timestamp) === i) // Unique by timestamp
+            .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
-            trailRef.current = sortedTrail;
+        // Keep relevant history (last 5 points)
+        bufferRef.current = combined.slice(-5);
 
-            // Start animation
-            let startTime = performance.now();
-            const durationPerSegment = 1000; // 1s per segment since we capture at 1s intervals
+        // Reset animation trigger
+        startTimeRef.current = performance.now();
 
-            const animate = (time: number) => {
-                const elapsed = time - startTime;
-                const totalDuration = (trailRef.current.length - 1) * durationPerSegment;
+        const animate = (time: number) => {
+            if (bufferRef.current.length < 2) {
+                // Not enough history to interpolate, snap to latest
+                setPosition([bus.location.latitude, bus.location.longitude]);
+                return;
+            }
 
-                if (elapsed < totalDuration) {
-                    const segmentIndex = Math.floor(elapsed / durationPerSegment);
-                    const segmentProgress = (elapsed % durationPerSegment) / durationPerSegment;
+            // Algorithm: 
+            // We want to arrive at P_latest in 5 seconds (since updates come every 5s).
+            // Actually, we are effectively 5 seconds BEHIND real-time to allow interpolation between known points.
+            // But simpler approach: Interpolate from P_last_known to P_current over 5 seconds?
+            // User requested: "Take last two points P4->P5 (5 sec apart) and produce interpolated positions"
 
-                    const startPoint = trailRef.current[segmentIndex];
-                    const endPoint = trailRef.current[segmentIndex + 1];
+            // Let's use the last two points for smooth movement
+            const targetPoint = bufferRef.current[bufferRef.current.length - 1]; // P5 (Latest)
+            const prevPoint = bufferRef.current[bufferRef.current.length - 2];   // P4 (Previous)
 
-                    if (startPoint && endPoint) {
-                        const lat = startPoint.lat + (endPoint.lat - startPoint.lat) * segmentProgress;
-                        const lng = startPoint.lng + (endPoint.lng - startPoint.lng) * segmentProgress;
-                        setPosition([lat, lng]);
-                    }
+            if (!prevPoint || !targetPoint) return;
 
-                    animationRef.current = requestAnimationFrame(animate);
-                } else {
-                    setPosition([bus.location.latitude, bus.location.longitude]);
-                }
-            };
+            const timeSinceUpdate = time - startTimeRef.current;
+            const duration = 5000; // 5 seconds between updates
 
-            cancelAnimationFrame(animationRef.current!);
-            animationRef.current = requestAnimationFrame(animate);
+            if (timeSinceUpdate < duration) {
+                const fraction = timeSinceUpdate / duration;
 
-        } else {
-            setPosition([bus.location.latitude, bus.location.longitude]);
-        }
+                // Interpolate Lat/Lng
+                const interpolated = interpolatePosition(
+                    { lat: prevPoint.latitude, lng: prevPoint.longitude },
+                    { lat: targetPoint.latitude, lng: targetPoint.longitude },
+                    fraction
+                );
 
-        return () => cancelAnimationFrame(animationRef.current!);
-    }, [bus.lastUpdated, bus.liveTrail, bus.location]);
+                setPosition([interpolated.lat, interpolated.lng]);
+
+                // Update Bearing
+                // Use actual heading if available, else calculate
+                const newBearing = targetPoint.heading || calculateBearing(
+                    { lat: prevPoint.latitude, lng: prevPoint.longitude },
+                    { lat: targetPoint.latitude, lng: targetPoint.longitude }
+                );
+                setBearing(newBearing);
+
+                animationFrameRef.current = requestAnimationFrame(animate);
+            } else {
+                // Animation complete, snap to target
+                setPosition([targetPoint.latitude, targetPoint.longitude]);
+                setBearing(targetPoint.heading || bearing);
+            }
+        };
+
+        cancelAnimationFrame(animationFrameRef.current!);
+        animationFrameRef.current = requestAnimationFrame(animate);
+
+        return () => {
+            if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+        };
+    }, [bus.lastUpdated, bus.liveTrackBuffer, bus.location]);
 
     return (
-        <Marker position={position} icon={icon}>
+        // @ts-ignore - rotationAngle is supported by some Leaflet plugins or custom implementations
+        <Marker position={position} icon={icon} rotationAngle={bearing} rotationOrigin="center">
             <Popup>
                 <div className="p-2 min-w-[150px]">
                     <h3 className="font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-2 mb-2 text-sm">
@@ -199,23 +234,15 @@ const AnimatedBusMarker = ({ bus, icon }: { bus: any, icon: any }) => {
                             <span className="text-slate-500">Status:</span>
                             <span className="font-bold px-2 py-0.5 rounded-full text-[10px]"
                                 style={{
-                                    backgroundColor: bus.status === 'ON_ROUTE' ? '#dcfce7' : '#eff6ff',
-                                    color: bus.status === 'ON_ROUTE' ? '#16a34a' : '#3b82f6'
+                                    backgroundColor: bus.status === 'ON_ROUTE' ? '#dcfce7' : '#f1f5f9',
+                                    color: bus.status === 'ON_ROUTE' ? '#166534' : '#64748b'
                                 }}>
-                                {bus.status === 'ON_ROUTE' ? 'MOVING' : 'IDLE'}
+                                {bus.status?.replace('_', ' ') || 'IDLE'}
                             </span>
                         </div>
-                        {bus.speed != null && (
-                            <div className="flex justify-between items-center bg-slate-50 p-1 rounded">
-                                <span className="text-slate-500">Speed:</span>
-                                <span className="font-mono font-bold text-slate-700">{bus.speed} km/h</span>
-                            </div>
-                        )}
-                        <div className="flex justify-between items-center bg-blue-50 p-1 rounded border border-blue-100">
-                            <span className="text-blue-500 font-medium">Updated:</span>
-                            <span className="font-mono font-bold text-blue-700">
-                                {bus.lastUpdated ? new Date(bus.lastUpdated).toLocaleTimeString() : 'N/A'}
-                            </span>
+                        <div className="flex justify-between items-center">
+                            <span className="text-slate-500">Speed:</span>
+                            <span className="font-mono text-slate-700">{Math.round(bus.speed || 0)} km/h</span>
                         </div>
                     </div>
                 </div>

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Navigation, LogOut, AlertCircle, User, Bus, Settings, Phone, Search, X, MapPin } from 'lucide-react';
-import { getDriverBuses, updateBusLocation, saveTripHistory, startNewTrip, endCurrentTrip, searchDriverBuses, checkProximity } from '../services/api';
+import { getDriverBuses, updateBusLocation, saveTripHistory, startNewTrip, searchDriverBuses, checkProximity, api } from '../services/api';
 import { doc, updateDoc, collection, addDoc, serverTimestamp, getDocs, query, where, setDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { getStreetName } from '../services/geocoding';
@@ -394,13 +394,16 @@ const DriverDashboard = () => {
         setIsTracking(false);
         setCurrentSpeed(0);
 
-        // End trip on backend (saves final state)
+        // End trip on backend (Atomic Transaction)
         if (tripId && selectedBusId) {
             try {
-                await endCurrentTrip(selectedBusId, tripId);
-                console.log('Trip ended:', tripId);
+                // Call critical atomic endpoint
+                await api.post(`/driver/trips/${tripId}/end`, { busId: selectedBusId });
+                console.log('Trip ended atomically via API:', tripId);
             } catch (err) {
                 console.error('Failed to end trip on backend', err);
+                // Fallback: Try to reset bus status manually if API fails (network issue?)
+                // But generally we want the server to handle this.
             }
         }
 
@@ -410,13 +413,7 @@ const DriverDashboard = () => {
         setTripId(null);
         lastHistorySaveRef.current = 0;
         currentPositionRef.current = null;
-
-        // Reset bus status
-        const busRef = doc(db, 'buses', selectedBusId);
-        await updateBusStatus('ACTIVE', selectedBusId);
-        await updateDoc(busRef, {
-            liveTrail: []
-        });
+        liveTrailBufferRef.current = [];
 
         // Reset Selection to "Redirect" to Dashboard Home
         setSelectedBusId('');
