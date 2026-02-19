@@ -807,17 +807,19 @@ const getTripPath = async (req, res) => {
             return res.json({ success: true, data: [] });
         }
 
-        const path = pathSnapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-                lat: data.lat || data.latitude || 0,
-                lng: data.lng || data.longitude || 0,
-                speed: data.speed || 0,
-                timestamp: data.recordedAt ?
-                    (data.recordedAt.toDate ? data.recordedAt.toDate().toISOString() : data.recordedAt) :
-                    data.timestamp
-            };
-        });
+        const path = pathSnapshot.docs
+            .map(doc => {
+                const data = doc.data();
+                return {
+                    lat: data.lat || data.latitude || 0,
+                    lng: data.lng || data.longitude || 0,
+                    speed: data.speed || 0,
+                    timestamp: data.recordedAt ?
+                        (data.recordedAt.toDate ? data.recordedAt.toDate().toISOString() : data.recordedAt) :
+                        data.timestamp
+                };
+            })
+            .filter(point => point.lat !== 0 && point.lng !== 0);
 
         console.log(`Returning ${path.length} path points for trip ${tripId}`);
         res.json({ success: true, data: path });

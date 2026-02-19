@@ -306,9 +306,15 @@ const DriverDashboard = () => {
                     }
                 }
 
-                // Save to trip path history every 2 minutes (120 seconds)
-                if (currentTripId && now - lastHistorySaveRef.current > 120000) {
+                // Save to trip path history every 15 seconds
+                if (currentTripId && now - lastHistorySaveRef.current > 15000) {
                     console.log('--- SAVING TRIP PATH POINT ---', currentTripId);
+
+                    // Validate coordinates
+                    if (latitude === 0 && longitude === 0) {
+                        console.warn('Skipping history save: Invalid coordinates (0,0)');
+                        return;
+                    }
 
                     // 1. Try Direct Firestore write (Real-time subcollection)
                     try {
