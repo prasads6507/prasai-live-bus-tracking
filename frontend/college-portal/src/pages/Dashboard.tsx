@@ -8,6 +8,18 @@ import { getStreetName } from '../services/geocoding';
 import Layout from '../components/Layout';
 import MapComponent from '../components/MapComponent';
 
+const isLiveBus = (bus: any) => {
+    if (bus.status !== 'ON_ROUTE') return false;
+    // Strict check: Must have active activeTripId
+    if (!bus.activeTripId) return false;
+    if (!bus.lastLocationUpdate) return false;
+    try {
+        const lastUpdate = bus.lastLocationUpdate.toDate ? bus.lastLocationUpdate.toDate() : new Date(bus.lastLocationUpdate);
+        const diffMinutes = (new Date().getTime() - lastUpdate.getTime()) / 60000;
+        return diffMinutes < 2; // Strict 2 minute limit for "LIVE" badge
+    } catch (e) { return false; }
+};
+
 const Dashboard = () => {
     const { orgSlug } = useParams<{ orgSlug: string }>();
     const navigate = useNavigate();
@@ -193,15 +205,7 @@ const Dashboard = () => {
                         />
                         <StatCard
                             title="On Route"
-                            value={buses.filter(b => {
-                                if (b.status !== 'ON_ROUTE') return false;
-                                if (!b.lastLocationUpdate) return false;
-                                try {
-                                    const lastUpdate = b.lastLocationUpdate.toDate ? b.lastLocationUpdate.toDate() : new Date(b.lastLocationUpdate);
-                                    const diffMinutes = (new Date().getTime() - lastUpdate.getTime()) / 60000;
-                                    return diffMinutes < 15;
-                                } catch (e) { return false; }
-                            }).length.toString()}
+                            value={buses.filter(isLiveBus).length.toString()}
                             total={buses.length.toString()}
                             icon={<Navigation className="text-green-600" size={24} />}
                             color="bg-green-50"
@@ -225,22 +229,22 @@ const Dashboard = () => {
                                 Live Fleet Tracking
                             </h3>
                             <div className="flex items-center gap-2">
-                                <div className="px-3 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full flex items-center gap-1">
-                                    <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                                    LIVE
-                                </div>
+                                {buses.some(isLiveBus) && (
+                                    <div className="px-3 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full flex items-center gap-1">
+                                        <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                                        LIVE
+                                    </div>
+                                )}
                             </div>
                         </div>
                         <MapComponent buses={buses.map(b => {
-                            // Apply staleness check logic to status for visualization
-                            if (b.status !== 'ON_ROUTE') return b;
-                            if (!b.lastLocationUpdate) return { ...b, status: 'Active (No GPS)' };
-                            try {
-                                const lastUpdate = b.lastLocationUpdate.toDate ? b.lastLocationUpdate.toDate() : new Date(b.lastLocationUpdate);
-                                const now = new Date();
-                                const diffMinutes = (now.getTime() - lastUpdate.getTime()) / 60000;
-                                if (diffMinutes >= 15) return { ...b, status: 'Active (Offline)' }; // Downgrade status
-                            } catch (e) { }
+                            // Apply strict staleness check logic to status for visualization
+                            if (isLiveBus(b)) return b; // It is truly active
+
+                            // If it claims to be ON_ROUTE but fails strict check, downgrade it for map
+                            if (b.status === 'ON_ROUTE') {
+                                return { ...b, status: 'Active (Offline)' };
+                            }
                             return b;
                         })} focusedLocation={focusedBusLocation} />
                     </div>
@@ -316,12 +320,12 @@ const BusCard = ({ bus, address }: { bus: any, address?: string }) => (
                     </p>
                 </div>
             </div>
-            <span className={`px-2 py-1 rounded-full text-xs font-bold ${bus.status === 'ON_ROUTE' ? 'bg-green-100 text-green-700 animate-pulse' :
+            <span className={`px-2 py-1 rounded-full text-xs font-bold ${isLiveBus(bus) ? 'bg-green-100 text-green-700 animate-pulse' :
                 bus.status === 'ACTIVE' ? 'bg-blue-100 text-blue-700' :
                     bus.status === 'MAINTENANCE' ? 'bg-orange-100 text-orange-700' :
                         'bg-slate-100 text-slate-600'
                 }`}>
-                {bus.status === 'ON_ROUTE' ? 'LIVE' : bus.status || 'Unknown'}
+                {isLiveBus(bus) ? 'LIVE' : bus.status || 'Unknown'}
             </span>
         </div>
         <div className="space-y-2">
@@ -346,7 +350,7 @@ const BusCard = ({ bus, address }: { bus: any, address?: string }) => (
             <span className="text-xs font-medium text-slate-400">
                 Updated: {getRelativeTime(bus.lastUpdated)}
             </span>
-            {bus.status === 'ON_ROUTE' && (
+            {isLiveBus(bus) && (
                 <span className="text-xs font-bold text-green-600 flex items-center gap-1">
                     <span className="w-2 h-2 rounded-full bg-green-500 animate-ping"></span>
                     Tracking

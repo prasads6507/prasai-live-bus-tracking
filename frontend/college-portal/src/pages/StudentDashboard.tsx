@@ -9,6 +9,18 @@ import { db } from '../config/firebase';
 import MapComponent from '../components/MapComponent';
 import useNotification from '../hooks/useNotification';
 
+const isLiveBus = (bus: any) => {
+    if (bus.status !== 'ON_ROUTE') return false;
+    // Strict check: Must have active activeTripId
+    if (!bus.activeTripId) return false;
+    if (!bus.lastLocationUpdate) return false;
+    try {
+        const lastUpdate = bus.lastLocationUpdate.toDate ? bus.lastLocationUpdate.toDate() : new Date(bus.lastLocationUpdate);
+        const diffMinutes = (new Date().getTime() - lastUpdate.getTime()) / 60000;
+        return diffMinutes < 2; // Strict 2 minute limit for "LIVE" badge
+    } catch (e) { return false; }
+};
+
 const StudentDashboard = () => {
     const { orgSlug } = useParams<{ orgSlug: string }>();
     const navigate = useNavigate();
@@ -176,7 +188,7 @@ const StudentDashboard = () => {
     // Fetch street names for active buses
     useEffect(() => {
         buses.forEach(async (bus) => {
-            if (bus.status === 'ON_ROUTE' && bus.location?.latitude && bus.location?.longitude) {
+            if (isLiveBus(bus) && bus.location?.latitude && bus.location?.longitude) {
                 const street = await getStreetName(bus.location.latitude, bus.location.longitude);
                 setBusLocations(prev => ({ ...prev, [bus._id]: street }));
             }
@@ -191,7 +203,7 @@ const StudentDashboard = () => {
     };
 
     const handleTrackBus = (bus: any) => {
-        if (bus.status === 'ON_ROUTE' && bus.location?.latitude && bus.location?.longitude) {
+        if (isLiveBus(bus) && bus.location?.latitude && bus.location?.longitude) {
             setFocusedBusLocation({ lat: bus.location.latitude, lng: bus.location.longitude });
             setTrackedBus(bus); // Switch to tracking view
             setSelectedBus(null);
@@ -203,8 +215,8 @@ const StudentDashboard = () => {
         if (trackedBus) {
             const updatedBus = buses.find(b => b._id === trackedBus._id);
             if (updatedBus) {
-                if (updatedBus.status !== 'ON_ROUTE') {
-                    // Trip ended or bus went offline, exit tracking mode
+                if (!isLiveBus(updatedBus)) {
+                    // Trip ended or bus went offline (ghost), exit tracking mode
                     setTrackedBus(null);
                     setFocusedBusLocation(null);
                 } else {
@@ -226,22 +238,7 @@ const StudentDashboard = () => {
 
 
 
-    const activeBuses = buses.filter(b => {
-        if (b.status !== 'ON_ROUTE') return false;
-
-        // precise staleness check
-        if (!b.lastLocationUpdate) return false;
-
-        try {
-            // Handle Firestore Timestamp or serialized string
-            const lastUpdate = b.lastLocationUpdate.toDate ? b.lastLocationUpdate.toDate() : new Date(b.lastLocationUpdate);
-            const now = new Date();
-            const diffMinutes = (now.getTime() - lastUpdate.getTime()) / 60000;
-            return diffMinutes < 15; // Consider offline if no update for 15 mins
-        } catch (e) {
-            return false;
-        }
-    });
+    const activeBuses = buses.filter(isLiveBus);
 
     // Filter buses by search
     const filteredBuses = useMemo(() => {
@@ -462,15 +459,15 @@ const StudentDashboard = () => {
                                 <button
                                     key={bus._id}
                                     onClick={() => handleTrackBus(bus)}
-                                    className={`flex-shrink-0 px-4 py-3 rounded-xl border transition-all ${bus.status === 'ON_ROUTE'
+                                    className={`flex-shrink-0 px-4 py-3 rounded-xl border transition-all ${isLiveBus(bus)
                                         ? 'bg-green-500/20 border-green-500/30 hover:border-green-500/50'
                                         : 'bg-slate-800/50 border-white/10 hover:border-white/20'
                                         }`}
                                 >
                                     <div className="flex items-center gap-2">
-                                        <Bus size={16} className={bus.status === 'ON_ROUTE' ? 'text-green-400' : 'text-slate-400'} />
+                                        <Bus size={16} className={isLiveBus(bus) ? 'text-green-400' : 'text-slate-400'} />
                                         <span className="font-bold text-white">{bus.busNumber}</span>
-                                        {bus.status === 'ON_ROUTE' && (
+                                        {isLiveBus(bus) && (
                                             <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
                                         )}
                                     </div>
@@ -630,14 +627,14 @@ const StudentDashboard = () => {
                                     whileHover={{ scale: 1.02 }}
                                     whileTap={{ scale: 0.98 }}
                                     onClick={() => setSelectedBus(bus)}
-                                    className={`bg-slate-800/50 backdrop-blur-md border rounded-2xl p-5 cursor-pointer transition-all ${bus.status === 'ON_ROUTE'
+                                    className={`bg-slate-800/50 backdrop-blur-md border rounded-2xl p-5 cursor-pointer transition-all ${isLiveBus(bus)
                                         ? 'border-green-500/30 hover:border-green-500/50'
                                         : 'border-white/5 hover:border-white/10'
                                         }`}
                                 >
                                     <div className="flex items-center justify-between mb-3">
                                         <div className="flex items-center gap-3">
-                                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm ${bus.status === 'ON_ROUTE' ? 'bg-green-500/20 text-green-400' : 'bg-blue-500/20 text-blue-400'
+                                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm ${isLiveBus(bus) ? 'bg-green-500/20 text-green-400' : 'bg-blue-500/20 text-blue-400'
                                                 }`}>
                                                 <Bus size={20} />
                                             </div>
@@ -653,11 +650,11 @@ const StudentDashboard = () => {
                                             >
                                                 <Star size={16} className={favorites.includes(bus._id) ? 'text-yellow-400 fill-yellow-400' : 'text-slate-500'} />
                                             </button>
-                                            <span className={`px-2 py-1 rounded-full text-xs font-bold ${bus.status === 'ON_ROUTE' ? 'bg-green-500/20 text-green-400' :
+                                            <span className={`px-2 py-1 rounded-full text-xs font-bold ${isLiveBus(bus) ? 'bg-green-500/20 text-green-400' :
                                                 bus.status === 'ACTIVE' ? 'bg-blue-500/20 text-blue-400' :
                                                     'bg-slate-500/20 text-slate-400'
                                                 }`}>
-                                                {bus.status === 'ON_ROUTE' ? 'LIVE' : bus.status || 'Unknown'}
+                                                {isLiveBus(bus) ? 'LIVE' : bus.status || 'Unknown'}
                                             </span>
                                         </div>
                                     </div>
@@ -666,7 +663,7 @@ const StudentDashboard = () => {
                                             <User size={14} />
                                             <span>{bus.driverName || 'Unassigned'}</span>
                                         </div>
-                                        {bus.status === 'ON_ROUTE' && busLocations[bus._id] && (
+                                        {isLiveBus(bus) && busLocations[bus._id] && (
                                             <div className="flex items-center gap-2 text-green-400 bg-green-500/10 p-2 rounded-lg">
                                                 <MapPin size={14} />
                                                 <span className="text-sm truncate">{busLocations[bus._id]}</span>
@@ -699,15 +696,15 @@ const StudentDashboard = () => {
                         >
                             <div className="flex items-center justify-between mb-6">
                                 <div className="flex items-center gap-3">
-                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${selectedBus.status === 'ON_ROUTE' ? 'bg-green-500/20' : 'bg-blue-500/20'
+                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${isLiveBus(selectedBus) ? 'bg-green-500/20' : 'bg-blue-500/20'
                                         }`}>
-                                        <Bus size={24} className={selectedBus.status === 'ON_ROUTE' ? 'text-green-400' : 'text-blue-400'} />
+                                        <Bus size={24} className={isLiveBus(selectedBus) ? 'text-green-400' : 'text-blue-400'} />
                                     </div>
                                     <div>
                                         <h3 className="text-xl font-bold text-white">{selectedBus.busNumber}</h3>
-                                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${selectedBus.status === 'ON_ROUTE' ? 'bg-green-500/20 text-green-400' : 'bg-slate-500/20 text-slate-400'
+                                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${isLiveBus(selectedBus) ? 'bg-green-500/20 text-green-400' : 'bg-slate-500/20 text-slate-400'
                                             }`}>
-                                            {selectedBus.status === 'ON_ROUTE' ? 'LIVE' : selectedBus.status}
+                                            {isLiveBus(selectedBus) ? 'LIVE' : selectedBus.status}
                                         </span>
                                     </div>
                                 </div>
@@ -725,7 +722,7 @@ const StudentDashboard = () => {
                                     <span className="text-slate-400">Driver</span>
                                     <span className="font-bold text-white">{selectedBus.driverName || 'Unassigned'}</span>
                                 </div>
-                                {selectedBus.status === 'ON_ROUTE' && busLocations[selectedBus._id] && (
+                                {isLiveBus(selectedBus) && busLocations[selectedBus._id] && (
                                     <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-xl">
                                         <div className="flex items-center gap-2 mb-1">
                                             <MapPin size={16} className="text-green-400" />
@@ -734,7 +731,7 @@ const StudentDashboard = () => {
                                         <p className="text-white font-semibold">{busLocations[selectedBus._id]}</p>
                                     </div>
                                 )}
-                                {selectedBus.speed != null && selectedBus.status === 'ON_ROUTE' && (
+                                {selectedBus.speed != null && isLiveBus(selectedBus) && (
                                     <div className="flex items-center justify-between p-3 bg-slate-700/50 rounded-xl">
                                         <span className="text-slate-400">Speed</span>
                                         <span className="font-bold text-white">{selectedBus.speed} km/h</span>
@@ -753,7 +750,7 @@ const StudentDashboard = () => {
                                     <Star size={18} className={favorites.includes(selectedBus._id) ? 'fill-yellow-400' : ''} />
                                     {favorites.includes(selectedBus._id) ? 'Favorited' : 'Add to Favorites'}
                                 </button>
-                                {selectedBus.status === 'ON_ROUTE' && (
+                                {isLiveBus(selectedBus) && (
                                     <button
                                         onClick={() => handleTrackBus(selectedBus)}
                                         className="flex-1 flex items-center justify-center gap-2 py-3 bg-green-600 hover:bg-green-500 text-white rounded-xl font-semibold transition-all"

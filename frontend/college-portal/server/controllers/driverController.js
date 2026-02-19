@@ -113,19 +113,33 @@ const searchDriverBuses = async (req, res) => {
 const updateBusLocation = async (req, res) => {
     try {
         const { busId } = req.params;
-        const { latitude, longitude, speed, heading, status } = req.body;
-
-        // console.log(`--- UPDATE BUS LOCATION: ${busId} ---`);
+        const { latitude, longitude, speed, heading } = req.body;
+        // NOTE: We IGNORE client-provided 'status' to prevent ghost-live issues.
 
         // Verify bus exists and belongs to college
         const busRef = db.collection('buses').doc(busId);
 
+        // We need to fetch the bus to check activeTripId
+        const busDoc = await busRef.get();
+        if (!busDoc.exists) {
+            return res.status(404).json({ success: false, message: 'Bus not found' });
+        }
+        const busData = busDoc.data();
+
+        // Determine True Status based on activeTripId
+        // If activeTripId exists, it's ON_ROUTE. Otherwise IDLE (or MAINTENANCE if set previously, but here we assume tracking = active)
+        // Actually, if tracking is sending updates, we might want to allow MAINTENCE updates?
+        // But for "Live" status, we strictly check activeTripId.
+        const isActiveTrip = !!busData.activeTripId;
+        const newStatus = isActiveTrip ? 'ON_ROUTE' : 'IDLE';
+
         const updateData = {
             lastUpdated: new Date().toISOString(),
-            currentDriverId: req.user.id
+            currentDriverId: req.user.id,
+            status: newStatus, // Enforce server-side status
+            lastLocationUpdate: admin.firestore.FieldValue.serverTimestamp() // Critical for freshness check
         };
 
-        if (status) updateData.status = status;
         if (speed !== undefined) updateData.speed = speed;
 
         // Only update location object if coordinates are actually provided
@@ -153,8 +167,10 @@ const updateBusLocation = async (req, res) => {
 
         // Maintain Buffer Size (Keep last 5)
         if (latitude !== undefined) {
-            const doc = await busRef.get();
-            const currentBuffer = doc.data().liveTrackBuffer || [];
+            // We already fetched busDoc, but arrayUnion happens on server. 
+            // Valid to check length on next read or just let it grow slightly?
+            // To be safe and strict:
+            const currentBuffer = busData.liveTrackBuffer || [];
             if (currentBuffer.length > 5) {
                 const newBuffer = currentBuffer.slice(-5);
                 await busRef.update({ liveTrackBuffer: newBuffer });
@@ -239,9 +255,12 @@ const startTrip = async (req, res) => {
         const userDoc = await db.collection('users').doc(req.user.id).get();
         const driverName = userDoc.exists ? userDoc.data().name : 'Unknown Driver';
 
-        // Create trip document in ROOT trips collection (easier to browse in Firebase Console)
+        // Use a Batch for Atomic Operations
+        const batch = db.batch();
         const tripRef = db.collection('trips').doc(tripId);
-        await tripRef.set({
+
+        // 1. Create Trip Doc
+        batch.set(tripRef, {
             tripId,
             busId,
             busNumber: busData.busNumber || busData.number || 'Unknown',
@@ -254,16 +273,19 @@ const startTrip = async (req, res) => {
             totalPoints: 0
         });
 
-        // Update bus with current trip info and driver name
-        await busRef.update({
-            currentTripId: tripId,
+        // 2. Update Bus Doc (Canonical Source of Truth)
+        batch.update(busRef, {
+            activeTripId: tripId, // Canonically set active trip
+            currentTripId: tripId, // Keep for legacy compatibility if needed
             status: 'ON_ROUTE',
             driverName: driverName,
-            currentDriverId: req.user.id
+            currentDriverId: req.user.id,
+            lastUpdated: new Date().toISOString()
         });
 
-        console.log('Trip started successfully:', tripId);
-        console.log('Trip started successfully:', tripId);
+        await batch.commit();
+
+        console.log('Trip started atomically:', tripId);
 
         // Send 'Bus Started' Notification (Phase 4.2)
         // Fire and forget - don't await/block response

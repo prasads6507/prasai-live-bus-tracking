@@ -387,14 +387,24 @@ const DriverDashboard = () => {
 
     // 3. Stop Tracking
     const endTrip = async () => {
+        // 1. Stop Geolocation Immediately
         if (watchIdRef.current !== null) {
             navigator.geolocation.clearWatch(watchIdRef.current);
             watchIdRef.current = null;
         }
+
+        // 2. Clear Persistence IMMEIDATELY (Critical to prevent auto-resume on reload)
+        localStorage.removeItem('driver_active_trip');
+
+        // 3. Reset Local State
         setIsTracking(false);
         setCurrentSpeed(0);
+        setTripId(null);
+        lastHistorySaveRef.current = 0;
+        currentPositionRef.current = null;
+        liveTrailBufferRef.current = [];
 
-        // End trip on backend (Atomic Transaction)
+        // 4. End trip on backend (Atomic Transaction)
         if (tripId && selectedBusId) {
             try {
                 // Call critical atomic endpoint
@@ -402,24 +412,17 @@ const DriverDashboard = () => {
                 console.log('Trip ended atomically via API:', tripId);
             } catch (err) {
                 console.error('Failed to end trip on backend', err);
-                // Fallback: Try to reset bus status manually if API fails (network issue?)
-                // But generally we want the server to handle this.
+                // Even if backend fails, we have cleared local state, so we won't be stuck in "resume" loop.
             }
         }
-
-        // Clear persistence
-        localStorage.removeItem('driver_active_trip');
-
-        setTripId(null);
-        lastHistorySaveRef.current = 0;
-        currentPositionRef.current = null;
-        liveTrailBufferRef.current = [];
 
         // Reset Selection to "Redirect" to Dashboard Home
         setSelectedBusId('');
         setManualBusNumber('');
         setManualEntryMode(false);
     };
+
+
 
     const updateBusStatus = async (status: string, busId?: string) => {
         const targetBusId = busId || selectedBusId;
