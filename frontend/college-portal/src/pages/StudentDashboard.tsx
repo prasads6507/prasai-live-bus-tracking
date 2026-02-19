@@ -198,6 +198,32 @@ const StudentDashboard = () => {
         }
     };
 
+    // Sync trackedBus with real-time data to handle trip completion/status changes
+    useEffect(() => {
+        if (trackedBus) {
+            const updatedBus = buses.find(b => b._id === trackedBus._id);
+            if (updatedBus) {
+                if (updatedBus.status !== 'ON_ROUTE') {
+                    // Trip ended or bus went offline, exit tracking mode
+                    setTrackedBus(null);
+                    setFocusedBusLocation(null);
+                } else {
+                    // Update the tracked bus object to reflect latest data (completed stops, location etc.)
+                    setTrackedBus(updatedBus);
+
+                    // Also update focused location if we are in tracking mode
+                    setFocusedBusLocation({
+                        lat: updatedBus.location.latitude,
+                        lng: updatedBus.location.longitude
+                    });
+                }
+            } else {
+                // Bus removed from list
+                setTrackedBus(null);
+            }
+        }
+    }, [buses]);
+
 
 
     const activeBuses = buses.filter(b => {
@@ -532,8 +558,8 @@ const StudentDashboard = () => {
                                                     <div key={idx} className={`relative flex gap-2 p-2 rounded-lg transition-colors ${isNext ? 'bg-blue-50 border border-blue-100' : 'hover:bg-slate-50'}`}>
                                                         {/* Dot */}
                                                         <div className={`relative z-10 flex-shrink-0 w-4 h-4 rounded-full border-2 flex items-center justify-center bg-white ${isCompleted ? 'border-green-500' :
-                                                                isNext ? 'border-blue-600 ring-2 ring-blue-50' :
-                                                                    'border-slate-300'
+                                                            isNext ? 'border-blue-600 ring-2 ring-blue-50' :
+                                                                'border-slate-300'
                                                             }`}>
                                                             {isCompleted && <div className="w-1.5 h-1.5 rounded-full bg-green-500" />}
                                                             {isNext && <div className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" />}
