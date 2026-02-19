@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { Bus, Plus, Search, Trash2, Edit2, Wrench, X, AlertCircle, CheckCircle } from 'lucide-react';
+import { Bus, Plus, Search, Trash2, Edit2, Wrench, X, AlertCircle, CheckCircle, Settings } from 'lucide-react';
 import { getBuses, createBus, updateBus, deleteBus, validateSlug, getDrivers, getRoutes } from '../services/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import Layout from '../components/Layout';
@@ -140,6 +140,21 @@ const Buses = () => {
             console.error('Update Status Error:', err);
             setFormError(err.message || 'Failed to update status');
         }
+    }
+
+
+    const handleAssignSubstitute = async (busId: string, substituteBusId: string) => {
+        try {
+            const updatedBus = await updateBus(busId, {
+                substituteBusId: substituteBusId || null,
+                trackingMode: substituteBusId ? 'substitute' : 'gps'
+            });
+            setBuses(buses.map(b => b._id === busId ? updatedBus : b));
+            setSuccessMessage(substituteBusId ? 'Substitute bus assigned' : 'Substitute bus removed');
+        } catch (err: any) {
+            console.error('Assign Substitute Error:', err);
+            setFormError(err.message || 'Failed to assign substitute');
+        }
     };
 
     const filteredBuses = buses.filter(bus =>
@@ -254,6 +269,26 @@ const Buses = () => {
                                                         >
                                                             <Wrench size={18} />
                                                         </button>
+
+                                                        {/* Substitute Bus Dropdown (Phase 5.2) */}
+                                                        {bus.status === 'MAINTENANCE' && (
+                                                            <div className="relative group">
+                                                                <select
+                                                                    className="appearance-none bg-orange-50 text-orange-700 text-xs py-1 pl-2 pr-6 rounded border border-orange-200 focus:outline-none focus:ring-1 focus:ring-orange-500 cursor-pointer"
+                                                                    value={bus.substituteBusId || ''}
+                                                                    onChange={(e) => handleAssignSubstitute(bus._id, e.target.value)}
+                                                                >
+                                                                    <option value="">No Sub</option>
+                                                                    {buses.filter(b => b._id !== bus._id && b.status === 'ACTIVE').map(b => (
+                                                                        <option key={b._id} value={b._id}>{b.busNumber}</option>
+                                                                    ))}
+                                                                </select>
+                                                                <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none">
+                                                                    <Settings size={10} className="text-orange-400" />
+                                                                </div>
+                                                            </div>
+                                                        )}
+
                                                         <button
                                                             onClick={() => handleEditBus(bus)}
                                                             className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"

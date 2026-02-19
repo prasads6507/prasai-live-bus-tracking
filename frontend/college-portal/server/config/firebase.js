@@ -54,5 +54,5 @@ if (!initializationError && admin.apps.length) {
     }
 }
 
-module.exports = { admin, db, auth, initializationError };
+module.exports = { admin, db, auth, messaging: admin.messaging(), initializationError };
 

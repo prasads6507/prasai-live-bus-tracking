@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Clock, Bus, User, Calendar, RefreshCw, Pencil, Trash2, X, StopCircle, Download } from 'lucide-react';
+import { Clock, Bus, User, Calendar, RefreshCw, Pencil, Trash2, X, StopCircle, Download, Map } from 'lucide-react';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import * as XLSX from 'xlsx';
 import Layout from '../components/Layout';
-import { getTripHistory, updateTrip, deleteTrip, adminEndTrip } from '../services/api';
+import MapComponent from '../components/MapComponent';
+import { getTripHistory, updateTrip, deleteTrip, adminEndTrip, getTripPath } from '../services/api';
 
 interface Trip {
     _id: string;
@@ -30,7 +31,9 @@ const TripHistory = () => {
     const [editModalOpen, setEditModalOpen] = useState(false);
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
     const [stopModalOpen, setStopModalOpen] = useState(false);
+    const [pathModalOpen, setPathModalOpen] = useState(false);
     const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
+    const [tripPath, setTripPath] = useState<[number, number][]>([]); // Array of [lat, lng]
     const [editForm, setEditForm] = useState({ startTime: '', endTime: '', driverName: '' });
     const [actionLoading, setActionLoading] = useState(false);
 
@@ -172,6 +175,36 @@ const TripHistory = () => {
             fetchTrips();
         } catch (err: any) {
             setError(err.response?.data?.message || 'Failed to stop trip');
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    const handleViewPath = async (trip: Trip) => {
+        console.log("Viewing path for selected trip object:", trip);
+        if (!trip._id) {
+            console.error("Trip object missing _id!");
+            setError("Cannot view path: Trip ID is missing.");
+            return;
+        }
+        setSelectedTrip(trip);
+        setTripPath([]);
+        setPathModalOpen(true);
+        setActionLoading(true);
+        try {
+            console.log("Calling getTripPath API...");
+            const response = await getTripPath(trip._id);
+            console.log("Trip Path Response:", response);
+            if (response.success && Array.isArray(response.data)) {
+                // Convert to [lat, lng] format
+                const pathPoints = response.data
+                    .filter((p: any) => p.lat && p.lng)
+                    .map((p: any) => [p.lat, p.lng] as [number, number]);
+                setTripPath(pathPoints);
+            }
+        } catch (err) {
+            console.error("Failed to fetch trip path", err);
+            // Don't show global error, just maybe an empty map or console log
         } finally {
             setActionLoading(false);
         }
@@ -382,9 +415,16 @@ const TripHistory = () => {
                                                         </button>
                                                     )}
                                                     <button
-                                                        onClick={() => handleEditClick(trip)}
+                                                        onClick={() => handleViewPath(trip)}
                                                         className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                                        title="Edit Trip"
+                                                        title="View Route Path"
+                                                    >
+                                                        <Map size={16} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleEditClick(trip)}
+                                                        className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors"
+                                                        title="Edit Trip Details"
                                                     >
                                                         <Pencil size={16} />
                                                     </button>
@@ -572,6 +612,49 @@ const TripHistory = () => {
                             >
                                 {actionLoading ? 'Stopping...' : 'Stop Trip'}
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* Path View Modal */}
+            {pathModalOpen && selectedTrip && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl h-[80vh] flex flex-col overflow-hidden">
+                        <div className="flex items-center justify-between p-4 border-b border-slate-200 shrink-0">
+                            <div>
+                                <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                    <Map size={20} className="text-blue-600" />
+                                    Trip Path: {selectedTrip.busNumber}
+                                </h3>
+                                <p className="text-sm text-slate-500">
+                                    {formatDateTime(selectedTrip.startTime)} - {formatDateTime(selectedTrip.endTime)}
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setPathModalOpen(false)}
+                                className="p-2 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
+                            >
+                                <X size={24} />
+                            </button>
+                        </div>
+
+                        <div className="flex-1 relative bg-slate-100">
+                            {actionLoading ? (
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <RefreshCw size={32} className="animate-spin text-blue-600" />
+                                </div>
+                            ) : tripPath.length > 0 ? (
+                                <MapComponent
+                                    buses={[]} // No live buses needed 
+                                    path={tripPath}
+                                    followBus={false}
+                                />
+                            ) : (
+                                <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400">
+                                    <Map size={48} className="mb-2 opacity-50" />
+                                    <p>No path data available for this trip.</p>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

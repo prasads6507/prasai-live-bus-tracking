@@ -1,27 +1,49 @@
-import { MapContainer, TileLayer, Marker, Popup, useMap, Circle } from 'react-leaflet';
-import { useEffect, useState } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, useMap, Circle, Polyline } from 'react-leaflet';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import 'leaflet/dist/leaflet.css';
 import { divIcon } from 'leaflet';
-import { Bus, MapPin } from 'lucide-react';
+import { MapPin, Crosshair } from 'lucide-react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 interface MapComponentProps {
     buses: any[];
     focusedLocation?: { lat: number, lng: number } | null;
+    stopMarkers?: { lat: number, lng: number, name: string }[];
+    followBus?: boolean;
+    path?: [number, number][]; // Array of [lat, lng] for drawing trip history
 }
 
 // Component to handle map re-centering with smooth animation
-const ChangeView = ({ center, shouldAnimate = false }: { center: [number, number], shouldAnimate?: boolean }) => {
+const ChangeView = ({ center, zoom, shouldAnimate = false }: { center: [number, number], zoom: number, shouldAnimate?: boolean }) => {
     const map = useMap();
     useEffect(() => {
         if (center[0] !== 0 && center[1] !== 0) {
             if (shouldAnimate) {
-                map.flyTo(center, 15, { duration: 1.5 }); // Increased zoom for focused view
+                map.flyTo(center, zoom, { duration: 1.5 });
             } else {
-                map.setView(center);
+                map.setView(center, zoom);
             }
         }
-    }, [center, map, shouldAnimate]);
+    }, [center, zoom, map, shouldAnimate]);
+    return null;
+};
+
+// Component to smoothly follow a bus location
+const FollowBus = ({ position, enabled }: { position: [number, number] | null, enabled: boolean }) => {
+    const map = useMap();
+    const lastPanRef = useRef<number>(0);
+
+    useEffect(() => {
+        if (enabled && position && position[0] !== 0 && position[1] !== 0) {
+            const now = Date.now();
+            // Throttle panTo to avoid jarring movements, pan at most every 3 seconds
+            if (now - lastPanRef.current > 3000) {
+                map.panTo(position, { animate: true, duration: 1 });
+                lastPanRef.current = now;
+            }
+        }
+    }, [position, enabled, map]);
+
     return null;
 };
 
@@ -37,22 +59,18 @@ const UserLocationMarker = ({ onLocationFound, shouldCenterOnUser }: { onLocatio
             return;
         }
 
-        // Force fresh location with maximumAge: 0 (no cache)
         const options: PositionOptions = {
             enableHighAccuracy: true,
             timeout: 15000,
-            maximumAge: 0 // CRITICAL: Force fresh position, no cache
+            maximumAge: 0
         };
 
-        // First, get immediate position
         navigator.geolocation.getCurrentPosition(
             (pos) => {
                 const userPos: [number, number] = [pos.coords.latitude, pos.coords.longitude];
                 setPosition(userPos);
                 onLocationFound(userPos);
-                console.log('Fresh user location obtained:', userPos);
 
-                // Center map on user location if appropriate
                 if (shouldCenterOnUser && !hasCenteredOnUser) {
                     map.flyTo(userPos, 14, { duration: 1.5 });
                     setHasCenteredOnUser(true);
@@ -64,26 +82,10 @@ const UserLocationMarker = ({ onLocationFound, shouldCenterOnUser }: { onLocatio
             options
         );
 
-        // Then watch for continuous updates
-        const watchId = navigator.geolocation.watchPosition(
-            (pos) => {
-                const userPos: [number, number] = [pos.coords.latitude, pos.coords.longitude];
-                setPosition(userPos);
-                onLocationFound(userPos);
-            },
-            (error) => {
-                console.warn('Watch position error:', error.message);
-            },
-            options
-        );
+        // Single position capture for student (no continuous watch)
+        // watchPosition is avoided to conserve battery per spec
+    }, []);
 
-        // Cleanup watch on unmount
-        return () => {
-            navigator.geolocation.clearWatch(watchId);
-        };
-    }, []); // Only run on mount
-
-    // Re-center when shouldCenterOnUser becomes true
     useEffect(() => {
         if (shouldCenterOnUser && position && !hasCenteredOnUser) {
             map.flyTo(position, 14, { duration: 1.5 });
@@ -93,7 +95,6 @@ const UserLocationMarker = ({ onLocationFound, shouldCenterOnUser }: { onLocatio
 
     if (!position) return null;
 
-    // Create user location icon
     const userIconMarkup = renderToStaticMarkup(
         <div className="relative flex items-center justify-center">
             <div className="absolute w-8 h-8 bg-blue-500/30 rounded-full animate-ping"></div>
@@ -127,41 +128,64 @@ const UserLocationMarker = ({ onLocationFound, shouldCenterOnUser }: { onLocatio
     );
 };
 
-const MapComponent = ({ buses, focusedLocation }: MapComponentProps) => {
-    // Default center (Hyderabad)
+const MapComponent = ({ buses, focusedLocation, stopMarkers = [], followBus: externalFollowBus, path }: MapComponentProps) => { // Destructure path
+    const props = { path }; // Keep props ref for use in logic above if needed
+
     const defaultCenter: [number, number] = [17.3850, 78.4867];
     const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
+    const [followBusEnabled, setFollowBusEnabled] = useState(externalFollowBus ?? true);
 
-    // activeBusWithLocation logic...
+    // Track the active bus position for follow mode
     const activeBusWithLocation = buses.find(b => b.status === 'ON_ROUTE' && b.location?.latitude && b.location?.longitude);
     const anyBusWithLocation = buses.find(b => b.location?.latitude && b.location?.longitude);
 
-    // Priority: Focused Location > Active bus > Any bus with location > User location > Default
+    const activeBusPosition: [number, number] | null = activeBusWithLocation
+        ? [activeBusWithLocation.location.latitude, activeBusWithLocation.location.longitude]
+        : null;
+
+    // Priority: Focused Location > Active bus > Any bus with location > Path start > User location > Default
     let mapCenter: [number, number] = defaultCenter;
     let shouldAnimate = false;
+    let zoomLevel = 13;
 
     if (focusedLocation) {
         mapCenter = [focusedLocation.lat, focusedLocation.lng];
         shouldAnimate = true;
+        zoomLevel = 15;
     } else if (activeBusWithLocation) {
         mapCenter = [activeBusWithLocation.location.latitude, activeBusWithLocation.location.longitude];
-        // Only animate if we're tracking a moving bus and we haven't manually focused
         shouldAnimate = false;
     } else if (anyBusWithLocation) {
         mapCenter = [anyBusWithLocation.location.latitude, anyBusWithLocation.location.longitude];
+    } else if (props.path && props.path.length > 0) {
+        // Center on the start of the path
+        mapCenter = props.path[0];
+        shouldAnimate = true;
     } else if (userLocation) {
         mapCenter = userLocation;
+        zoomLevel = 14;
     }
 
-    // Custom Bus Icon
-    const createBusIcon = (status: string) => {
+    // Custom Bus Icon with heading rotation
+    const createBusIcon = useCallback((status: string, heading?: number) => {
         const color = status === 'ON_ROUTE' ? '#16a34a' : (status === 'MAINTENANCE' ? '#ea580c' : '#3b82f6');
+        const rotation = heading && !isNaN(heading) ? heading : 0;
 
         const iconMarkup = renderToStaticMarkup(
             <div className="relative flex items-center justify-center">
                 <div className={`absolute -inset-1 rounded-full opacity-50 ${status === 'ON_ROUTE' ? 'animate-pulse' : ''}`} style={{ backgroundColor: color }}></div>
-                <div className="relative z-10 p-1.5 rounded-full shadow-lg border-2 border-white text-white" style={{ backgroundColor: color }}>
-                    <Bus size={18} />
+                <div
+                    className="relative z-10 p-1.5 rounded-full shadow-lg border-2 border-white text-white"
+                    style={{
+                        backgroundColor: color,
+                        transform: `rotate(${rotation}deg)`,
+                        transition: 'transform 0.5s ease'
+                    }}
+                >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 2L4 22l8-6 8 6z" fill="currentColor" opacity="0.3" />
+                        <path d="M12 2L4 22l8-6 8 6z" />
+                    </svg>
                 </div>
                 <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 translate-y-full w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px]" style={{ borderTopColor: color }}></div>
             </div>
@@ -174,7 +198,30 @@ const MapComponent = ({ buses, focusedLocation }: MapComponentProps) => {
             iconAnchor: [16, 40],
             popupAnchor: [0, -40]
         });
-    };
+    }, []);
+
+    // Stop point icon
+    const createStopIcon = useCallback(() => {
+        const iconMarkup = renderToStaticMarkup(
+            <div className="relative flex items-center justify-center">
+                <div className="relative z-10 p-1 rounded-full shadow-md border-2 border-white bg-amber-500 text-white">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="12" y1="8" x2="12" y2="12" />
+                        <line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
+                </div>
+            </div>
+        );
+
+        return divIcon({
+            html: iconMarkup,
+            className: 'custom-stop-icon',
+            iconSize: [24, 24],
+            iconAnchor: [12, 12],
+            popupAnchor: [0, -16]
+        });
+    }, []);
 
     return (
         <div className="h-full w-full relative z-0">
@@ -190,38 +237,75 @@ const MapComponent = ({ buses, focusedLocation }: MapComponentProps) => {
                 </div>
             )}
 
+            {/* Follow Bus Toggle */}
+            {activeBusWithLocation && !path && (
+                <button
+                    onClick={() => setFollowBusEnabled(prev => !prev)}
+                    className={`absolute top-3 right-3 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold shadow-lg transition-all ${followBusEnabled
+                        ? 'bg-blue-600 text-white shadow-blue-200'
+                        : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                        }`}
+                    title={followBusEnabled ? 'Stop following bus' : 'Follow bus'}
+                >
+                    <Crosshair size={14} />
+                    {followBusEnabled ? 'Following' : 'Follow Bus'}
+                </button>
+            )}
+
             <MapContainer
                 center={mapCenter}
-                zoom={13}
+                zoom={zoomLevel}
+                key={`${mapCenter[0]}-${mapCenter[1]}`} // Key change usage to force re-center if needed, or use ChangeView
                 scrollWheelZoom={true}
                 className="h-full w-full"
             >
-                <ChangeView center={mapCenter} shouldAnimate={shouldAnimate} />
+                <ChangeView center={mapCenter} zoom={zoomLevel} shouldAnimate={shouldAnimate} />
+                <FollowBus position={activeBusPosition} enabled={followBusEnabled && !focusedLocation && !path} />
                 <TileLayer
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
 
-                {/* User location marker with geolocation request */}
+                {/* Trip History Path */}
+                {path && path.length > 0 && (
+                    <>
+                        <Polyline
+                            positions={path}
+                            pathOptions={{ color: '#3b82f6', weight: 4, opacity: 0.7 }}
+                        />
+                        {/* Start Marker */}
+                        <Marker position={path[0]} icon={createStopIcon()}>
+                            <Popup>Start Point</Popup>
+                        </Marker>
+                        {/* End Marker */}
+                        <Marker position={path[path.length - 1]} icon={createStopIcon()}>
+                            <Popup>End Point</Popup>
+                        </Marker>
+                    </>
+                )}
+
+                {/* User location marker */}
                 <UserLocationMarker
                     onLocationFound={setUserLocation}
                     shouldCenterOnUser={!activeBusWithLocation && !anyBusWithLocation}
                 />
 
+                {/* Bus markers with heading rotation */}
                 {buses.map((bus) => {
-                    // Only show buses that are actively ON_ROUTE and have valid location
                     if (bus.status !== 'ON_ROUTE' || bus.location?.latitude == null || bus.location?.longitude == null) return null;
+
+                    const heading = bus.heading || bus.currentHeading || 0;
 
                     return (
                         <Marker
-                            key={bus._id} // Fixed: Stable key to prevent remounting and closing popup
+                            key={bus._id}
                             position={[bus.location.latitude, bus.location.longitude]}
-                            icon={createBusIcon(bus.status)}
+                            icon={createBusIcon(bus.status, heading)}
                         >
                             <Popup>
                                 <div className="p-2 min-w-[150px]">
                                     <h3 className="font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-2 mb-2 text-sm">
-                                        <Bus size={16} className="text-blue-600" />
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="3" width="22" height="18" rx="2" ry="2"></rect><line x1="5" y1="21" x2="5" y2="3"></line><line x1="19" y1="21" x2="19" y2="3"></line></svg>
                                         {bus.busNumber}
                                     </h3>
                                     <div className="space-y-2 text-xs">
@@ -255,10 +339,25 @@ const MapComponent = ({ buses, focusedLocation }: MapComponentProps) => {
                         </Marker>
                     );
                 })}
+
+                {/* Stop point markers */}
+                {stopMarkers.map((stop, idx) => (
+                    <Marker
+                        key={`stop-${idx}`}
+                        position={[stop.lat, stop.lng]}
+                        icon={createStopIcon()}
+                    >
+                        <Popup>
+                            <div className="p-1 text-center">
+                                <p className="font-bold text-amber-700 text-sm">{stop.name}</p>
+                                <p className="text-xs text-slate-500">Bus Stop</p>
+                            </div>
+                        </Popup>
+                    </Marker>
+                ))}
             </MapContainer>
         </div>
     );
 };
 
 export default MapComponent;
-

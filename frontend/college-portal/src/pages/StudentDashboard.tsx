@@ -1,36 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bus, LogOut, User, MapPin, RotateCw, Search, Star, X, Crosshair } from 'lucide-react';
+import { Bus, LogOut, User, MapPin, Search, Star, X, Crosshair, History, ChevronRight, AlertCircle } from 'lucide-react';
 import { validateSlug, getStudentBuses } from '../services/api';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { getStreetName } from '../services/geocoding';
+import { collection, query, where, onSnapshot, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import MapComponent from '../components/MapComponent';
-
-// Reverse geocoding cache to avoid repeated API calls
-const locationCache: { [key: string]: string } = {};
-
-const getStreetName = async (lat: number, lon: number): Promise<string> => {
-    const cacheKey = `${lat.toFixed(4)},${lon.toFixed(4)}`;
-    if (locationCache[cacheKey]) return locationCache[cacheKey];
-
-    try {
-        const response = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=16`
-        );
-        const data = await response.json();
-        const address = data.address || {};
-        const parts = [
-            address.road || address.neighbourhood || address.suburb,
-            address.city || address.town || address.village || address.county
-        ].filter(Boolean);
-        const result = parts.join(', ') || 'Unknown Location';
-        locationCache[cacheKey] = result;
-        return result;
-    } catch {
-        return 'Location unavailable';
-    }
-};
+import useNotification from '../hooks/useNotification';
 
 const StudentDashboard = () => {
     const { orgSlug } = useParams<{ orgSlug: string }>();
@@ -39,14 +16,19 @@ const StudentDashboard = () => {
     const [buses, setBuses] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [focusedBusLocation, setFocusedBusLocation] = useState<{ lat: number, lng: number } | null>(null);
-    const [refreshing, setRefreshing] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedBus, setSelectedBus] = useState<any>(null);
+    const [assignedBus, setAssignedBus] = useState<any>(null);
+    const [substituteBus, setSubstituteBus] = useState<any>(null);
     const [busLocations, setBusLocations] = useState<{ [id: string]: string }>({});
     const [favorites, setFavorites] = useState<string[]>([]);
 
+
     const user = JSON.parse(localStorage.getItem('student_user') || '{}');
     const collegeId = localStorage.getItem('current_college_id');
+
+    // Initialize notifications
+    useNotification(user?._id);
 
     // Load favorites from localStorage
     useEffect(() => {
@@ -90,7 +72,24 @@ const StudentDashboard = () => {
             try {
                 const response = await getStudentBuses();
                 const busData = Array.isArray(response) ? response : response.data || [];
-                setBuses(busData);
+                const fetchedBuses = busData;
+                setBuses(fetchedBuses);
+
+                // Check for assigned bus and substitute (Phase 5.3)
+                if (user?.assignedBusId) {
+                    const myBus = fetchedBuses.find((b: any) => b._id === user.assignedBusId);
+                    if (myBus) {
+                        setAssignedBus(myBus);
+
+                        // Check for substitute (Phase 5.3)
+                        if (myBus.substituteBusId) {
+                            const sub = fetchedBuses.find(b => b._id === myBus.substituteBusId);
+                            setSubstituteBus(sub);
+                        } else {
+                            setSubstituteBus(null);
+                        }
+                    }
+                }
             } catch (err) {
                 console.error('Failed to fetch buses:', err);
             } finally {
@@ -98,7 +97,7 @@ const StudentDashboard = () => {
             }
         };
         if (collegeId) fetchBuses();
-    }, [collegeId]);
+    }, [collegeId, user?.assignedBusId]);
 
     // Real-time bus updates
     useEffect(() => {
@@ -111,10 +110,63 @@ const StudentDashboard = () => {
                 ...doc.data()
             }));
             setBuses(updatedBuses);
+
+            // Update assigned and substitute bus if they exist
+            if (user?.assignedBusId) {
+                const myBus = updatedBuses.find((b: any) => b._id === user.assignedBusId);
+                if (myBus) {
+                    setAssignedBus(myBus);
+                    if (myBus.substituteBusId) {
+                        const sub = updatedBuses.find(b => b._id === myBus.substituteBusId);
+                        setSubstituteBus(sub);
+                    } else {
+                        setSubstituteBus(null);
+                    }
+                }
+            }
         });
 
         return () => unsubscribe();
-    }, [collegeId]);
+    }, [collegeId, user?.assignedBusId]);
+
+    // 10-minute interval GPS tracking for student location (Battery efficient)
+    useEffect(() => {
+        if (!user?._id) return;
+
+        const trackStudentLocation = () => {
+            if (!navigator.geolocation) return;
+
+            navigator.geolocation.getCurrentPosition(
+                async (position) => {
+                    const { latitude, longitude } = position.coords;
+                    try {
+                        const address = await getStreetName(latitude, longitude);
+
+                        // Update student document with last known location
+                        const studentRef = doc(db, 'students', user._id);
+                        await updateDoc(studentRef, {
+                            lastLocation: { latitude, longitude },
+                            lastLocationAddress: address,
+                            lastLocationUpdateTime: serverTimestamp()
+                        });
+                        console.log('Student location updated:', address);
+                    } catch (err) {
+                        console.error('Failed to update student location:', err);
+                    }
+                },
+                (error) => console.warn('Student location error:', error.message),
+                { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+            );
+        };
+
+        // Initial call
+        trackStudentLocation();
+
+        // 10-minute interval (600,000 ms)
+        const intervalId = setInterval(trackStudentLocation, 600000);
+
+        return () => clearInterval(intervalId);
+    }, [user?._id]);
 
     // Fetch street names for active buses
     useEffect(() => {
@@ -140,20 +192,24 @@ const StudentDashboard = () => {
         }
     };
 
-    const handleRefresh = async () => {
-        setRefreshing(true);
-        try {
-            const response = await getStudentBuses();
-            const busData = Array.isArray(response) ? response : response.data || [];
-            setBuses(busData);
-        } catch (err) {
-            console.error('Refresh failed:', err);
-        } finally {
-            setRefreshing(false);
-        }
-    };
 
-    const activeBuses = buses.filter(b => b.status === 'ON_ROUTE');
+
+    const activeBuses = buses.filter(b => {
+        if (b.status !== 'ON_ROUTE') return false;
+
+        // precise staleness check
+        if (!b.lastLocationUpdate) return false;
+
+        try {
+            // Handle Firestore Timestamp or serialized string
+            const lastUpdate = b.lastLocationUpdate.toDate ? b.lastLocationUpdate.toDate() : new Date(b.lastLocationUpdate);
+            const now = new Date();
+            const diffMinutes = (now.getTime() - lastUpdate.getTime()) / 60000;
+            return diffMinutes < 15; // Consider offline if no update for 15 mins
+        } catch (e) {
+            return false;
+        }
+    });
 
     // Filter buses by search
     const filteredBuses = useMemo(() => {
@@ -214,13 +270,40 @@ const StudentDashboard = () => {
                         </div>
                         <div className="flex-1">
                             <h2 className="text-3xl font-bold text-white mb-2">Hello, {user?.name?.split(' ')[0] || 'Student'}!</h2>
-                            <div className="flex flex-wrap gap-4 text-sm text-blue-200/80">
-                                <span className="bg-white/10 px-3 py-1 rounded-full border border-white/10">{user?.email}</span>
-                                <span className="bg-white/10 px-3 py-1 rounded-full border border-white/10">Reg No: {user?.registerNumber || user?.email?.split('@')[0] || 'N/A'}</span>
+                            <div className="flex flex-wrap gap-4 text-sm text-blue-200/80 mb-4">
+                                <span className="bg-white/10 px-3 py-1 rounded-full border border-white/10 tracking-wide">{user?.email}</span>
+                                <span className="bg-white/10 px-3 py-1 rounded-full border border-white/10 tracking-wide">Reg No: {user?.registerNumber || user?.email?.split('@')[0] || 'N/A'}</span>
                             </div>
+                            <button
+                                onClick={() => navigate(`/${orgSlug}/student/trip-history`)}
+                                className="flex items-center gap-2 px-6 py-2.5 bg-white/10 hover:bg-white/20 border border-white/10 rounded-xl text-sm font-bold transition-all hover:scale-105 active:scale-95 group"
+                            >
+                                <History size={16} className="text-blue-400 group-hover:rotate-[-45deg] transition-transform" />
+                                <span>Recent Trip History</span>
+                                <ChevronRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity ml-1" />
+                            </button>
                         </div>
                     </div>
                 </motion.div>
+
+                {/* Substitute Bus Warning (Phase 5.3) */}
+                {substituteBus && assignedBus && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.02 }}
+                        className="bg-red-500/10 border-l-4 border-red-500 p-4 rounded-r-xl flex items-start gap-3 animate-in fade-in slide-in-from-top-2"
+                    >
+                        <AlertCircle className="text-red-400 shrink-0 mt-0.5" size={20} />
+                        <div>
+                            <h4 className="font-bold text-red-300">Substitute Bus Assigned</h4>
+                            <p className="text-sm text-red-200">
+                                Your regular bus <strong>{assignedBus?.busNumber}</strong> is in maintenance.
+                                Please board substitute bus <strong>{substituteBus.busNumber}</strong> ({substituteBus.numberPlate}).
+                            </p>
+                        </div>
+                    </motion.div>
+                )}
 
                 {/* Favorites Section */}
                 {favoriteBuses.length > 0 && (
@@ -265,14 +348,6 @@ const StudentDashboard = () => {
                             Live Bus Tracking
                         </h3>
                         <div className="flex items-center gap-2">
-                            <button
-                                onClick={handleRefresh}
-                                className={`p-1.5 text-slate-400 hover:text-blue-400 hover:bg-white/5 rounded-lg transition-all ${refreshing ? 'animate-spin text-blue-400' : ''}`}
-                                title="Refresh"
-                                disabled={refreshing}
-                            >
-                                <RotateCw size={18} />
-                            </button>
                             {activeBuses.length > 0 && (
                                 <div className="px-3 py-1 bg-green-500/20 text-green-400 text-xs font-bold rounded-full flex items-center gap-1">
                                     <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>

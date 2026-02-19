@@ -19,7 +19,13 @@ const tenantIsolation = (req, res, next) => {
 
     // For all other roles, STRICTLY enforce collegeId from their token
     // We override any input collegeId with the one from the token
+    console.log(`[TenantIsolation] Enforcing collegeId from token for role ${req.user.role}: ${req.user.collegeId}`);
     req.collegeId = req.user.collegeId;
+
+    if (!req.collegeId) {
+        console.error(`[TenantIsolation] Missing collegeId in token for user ${req.user.id}`);
+        return res.status(403).json({ message: 'Access denied: Invalid session (Missing Organization Context). Please log out and log in again.' });
+    }
 
     // Also enforce it in body and query to prevent accidents
     if (req.body) req.body.collegeId = req.user.collegeId;

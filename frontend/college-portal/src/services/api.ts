@@ -128,6 +128,12 @@ export const saveTripHistory = async (busId: string, tripId: string, locationDat
     return response.data;
 };
 
+// Driver Notifications
+export const checkProximity = async (data: any) => {
+    const response = await api.post('/driver/notifications/proximity', data);
+    return response.data;
+};
+
 // Bus Management
 export const createBus = async (busData: any) => {
     const response = await api.post('/admin/buses', busData);
@@ -183,6 +189,11 @@ export const deleteTrip = async (tripId: string) => {
 
 export const adminEndTrip = async (tripId: string) => {
     const response = await api.post(`/admin/trips/${tripId}/end`);
+    return response.data;
+};
+
+export const getTripPath = async (tripId: string) => {
+    const response = await api.get(`/admin/trips/${tripId}/path`);
     return response.data;
 };
 
@@ -264,6 +275,11 @@ export const resetStudentPassword = async (studentId: string) => {
 // Student Portal - Get buses for student's college
 export const getStudentBuses = async () => {
     const response = await api.get('/student/buses');
+    return response.data;
+};
+
+export const getStudentTripHistory = async () => {
+    const response = await api.get('/student/trips');
     return response.data;
 };
 

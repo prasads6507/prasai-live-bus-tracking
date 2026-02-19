@@ -1,4 +1,5 @@
 const { db, admin } = require('../config/firebase');
+const { sendBusStartedNotification, checkProximityAndNotify } = require('./notificationController');
 
 // @desc    Get available buses for the driver's college
 // @route   GET /api/driver/buses
@@ -213,6 +214,13 @@ const startTrip = async (req, res) => {
         });
 
         console.log('Trip started successfully:', tripId);
+        console.log('Trip started successfully:', tripId);
+
+        // Send 'Bus Started' Notification (Phase 4.2)
+        // Fire and forget - don't await/block response
+        sendBusStartedNotification(tripId, busId, req.collegeId, busData.assignedRouteId)
+            .catch(err => console.error('Failed to send bus start notification:', err));
+
         res.status(201).json({ success: true, message: 'Trip started', tripId });
     } catch (error) {
         console.error('Error starting trip:', error);
@@ -296,9 +304,15 @@ const saveTripHistory = async (req, res) => {
             return res.status(403).json({ success: false, message: 'Unauthorized college access' });
         }
 
-        // Save to trip history subcollection
-        const tripRef = busRef.collection('trips').doc(tripId);
+        // Save to trip history in ROOT trips collection
+        const tripRef = db.collection('trips').doc(tripId);
         const historyRef = tripRef.collection('history');
+
+        // Check if trip exists in root (optional but good for consistency)
+        // We trust tripId is valid from client state, but could verify ownership here if needed.
+        // For performance, we skip a read unless strictly necessary, 
+        // but we should ensure we are not writing to a dead trip. 
+        // Actually, let's just write. Firestore handles loose collections fine.
 
         await historyRef.add({
             latitude,
@@ -309,7 +323,7 @@ const saveTripHistory = async (req, res) => {
             recordedAt: admin.firestore.FieldValue.serverTimestamp()
         });
 
-        // Increment total points counter
+        // Increment total points counter on the root trip doc
         await tripRef.update({
             totalPoints: admin.firestore.FieldValue.increment(1)
         });
@@ -322,12 +336,32 @@ const saveTripHistory = async (req, res) => {
     }
 };
 
+// @desc    Trigger proximity check (Phase 4.3)
+// @route   POST /api/driver/notifications/proximity
+// @access  Private (Driver)
+const checkProximity = async (req, res) => {
+    try {
+        const { busId, location, tripId, routeId } = req.body;
+        // console.log('Checking proximity for bus:', busId); 
+
+        // Fire and forget
+        checkProximityAndNotify(busId, location, req.collegeId, routeId)
+            .catch(console.error);
+
+        res.status(200).json({ success: true });
+    } catch (error) {
+        console.error('Error checking proximity:', error);
+        res.status(500).json({ success: false });
+    }
+};
+
 module.exports = {
     getDriverBuses,
     searchDriverBuses,
     updateBusLocation,
     startTrip,
     endTrip,
-    saveTripHistory
+    saveTripHistory,
+    checkProximity
 };
 

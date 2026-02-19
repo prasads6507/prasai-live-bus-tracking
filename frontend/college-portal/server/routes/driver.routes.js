@@ -6,7 +6,8 @@ const {
     updateBusLocation,
     startTrip,
     endTrip,
-    saveTripHistory
+    saveTripHistory,
+    checkProximity
 } = require('../controllers/driverController');
 const { protect, authorize } = require('../middleware/auth');
 const tenantIsolation = require('../middleware/tenantIsolation');
@@ -25,6 +26,7 @@ router.post('/tracking/:busId', updateBusLocation);
 router.post('/trip/start/:busId', startTrip);
 router.post('/trip/end/:busId', endTrip);
 router.post('/trip/history/:busId', saveTripHistory);
+router.post('/notifications/proximity', checkProximity);
 
 module.exports = router;
 

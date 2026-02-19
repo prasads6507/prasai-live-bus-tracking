@@ -84,14 +84,24 @@ const Routes = () => {
                 setSuccessMessage(`Route ${newRoute.routeName} created successfully!`);
             }
 
-            setNewRoute({ routeName: '', stops: [] });
-            setIsEditMode(false);
-            setEditingRoute(null);
-            fetchRoutes(); // Refresh list
-            setTimeout(() => {
+            // fetchRoutes() is safe to call before closing as it's async
+            fetchRoutes();
+
+            // Handle success state and close modal after delay
+            const timerId = setTimeout(() => {
                 setSuccessMessage('');
                 setIsModalOpen(false);
+                // Clear active state AFTER modal is visually gone
+                setTimeout(() => {
+                    setNewRoute({ routeName: '', stops: [] });
+                    setIsEditMode(false);
+                    setEditingRoute(null);
+                }, 300);
             }, 1500);
+
+            // Optional: Store timer if needed to clear it on manual close
+            (window as any)._routeSuccessTimer = timerId;
+
         } catch (err: any) {
             setFormError(err.response?.data?.message || err.message || 'Operation failed');
         } finally {
@@ -134,7 +144,11 @@ const Routes = () => {
 
     const updateStop = (index: number, field: string, value: string) => {
         const updatedStops = [...newRoute.stops];
-        updatedStops[index][field] = value;
+        if (field === 'latitude' || field === 'longitude') {
+            updatedStops[index][field] = parseFloat(value) || 0;
+        } else {
+            updatedStops[index][field] = value;
+        }
         setNewRoute({ ...newRoute, stops: updatedStops });
     };
 
@@ -350,7 +364,12 @@ const Routes = () => {
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-                        onClick={() => setIsModalOpen(false)}
+                        onClick={(e) => {
+                            // Only close if exactly the background was clicked
+                            if (e.target === e.currentTarget) {
+                                setIsModalOpen(false);
+                            }
+                        }}
                     >
                         <motion.div
                             initial={{ scale: 0.95, opacity: 0 }}
@@ -416,13 +435,29 @@ const Routes = () => {
                                         <div className="space-y-3 max-h-64 overflow-y-auto">
                                             {newRoute.stops.map((stop, index) => (
                                                 <div key={index} className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-                                                    <div className="flex items-start gap-3">
+                                                    <div className="flex items-start gap-2 w-full">
                                                         <input
                                                             type="text"
                                                             placeholder="Stop Name"
-                                                            className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
+                                                            className="flex-grow px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
                                                             value={stop.stopName}
                                                             onChange={(e) => updateStop(index, 'stopName', e.target.value)}
+                                                        />
+                                                        <input
+                                                            type="number"
+                                                            placeholder="Lat"
+                                                            className="w-24 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
+                                                            value={stop.latitude || ''}
+                                                            onChange={(e) => updateStop(index, 'latitude', e.target.value)}
+                                                            step="any"
+                                                        />
+                                                        <input
+                                                            type="number"
+                                                            placeholder="Lng"
+                                                            className="w-24 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
+                                                            value={stop.longitude || ''}
+                                                            onChange={(e) => updateStop(index, 'longitude', e.target.value)}
+                                                            step="any"
                                                         />
                                                         <button
                                                             type="button"

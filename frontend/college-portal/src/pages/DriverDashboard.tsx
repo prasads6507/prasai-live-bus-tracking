@@ -1,7 +1,22 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Navigation, LogOut, AlertCircle, User, Bus, Settings, Phone, Search, X } from 'lucide-react';
-import { getDriverBuses, updateBusLocation, saveTripHistory, startNewTrip, endCurrentTrip, searchDriverBuses } from '../services/api';
+import { Navigation, LogOut, AlertCircle, User, Bus, Settings, Phone, Search, X, MapPin } from 'lucide-react';
+import { getDriverBuses, updateBusLocation, saveTripHistory, startNewTrip, endCurrentTrip, searchDriverBuses, checkProximity } from '../services/api';
+import { doc, updateDoc, collection, addDoc, serverTimestamp, getDocs, query, where, setDoc } from 'firebase/firestore';
+import { db } from '../config/firebase';
+import { getStreetName } from '../services/geocoding';
+
+const getDistanceFromLatLonInKm = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+};
 
 const DriverDashboard = () => {
     const { orgSlug } = useParams<{ orgSlug: string }>();
@@ -10,6 +25,8 @@ const DriverDashboard = () => {
     // State
     const [buses, setBuses] = useState<any[]>([]);
     const [selectedBusId, setSelectedBusId] = useState<string>('');
+    const [stops, setStops] = useState<any[]>([]);
+    const [completedStops, setCompletedStops] = useState<Set<string>>(new Set());
     const [driverDetails, setDriverDetails] = useState<any>(null);
     const [isTracking, setIsTracking] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -17,18 +34,102 @@ const DriverDashboard = () => {
     const [currentSpeed, setCurrentSpeed] = useState<number>(0);
     const [locationPermission, setLocationPermission] = useState<PermissionState>('prompt');
     const [tripId, setTripId] = useState<string | null>(null);
+
     const [showSettings, setShowSettings] = useState(false);
+
     const [manualEntryMode, setManualEntryMode] = useState(false);
     const [manualBusNumber, setManualBusNumber] = useState('');
     const [isSearching, setIsSearching] = useState(false);
     const [currentCoords, setCurrentCoords] = useState<{ lat: number, lng: number } | null>(null);
     const [lastSentTime, setLastSentTime] = useState<string>('');
+    const [currentStreetName, setCurrentStreetName] = useState<string>('');
 
     // Refs for tracking
     const watchIdRef = useRef<number | null>(null);
     const lastUpdateRef = useRef<number>(0);
     const lastHistorySaveRef = useRef<number>(0); // Track when we last saved to history
     const currentPositionRef = useRef<{ latitude: number, longitude: number, speed: number, heading: number } | null>(null);
+
+    // Proximity Check Interval (Phase 4.3)
+    useEffect(() => {
+        if (!tripId || !selectedBusId) return;
+        const selectedBus = buses.find(b => b._id === selectedBusId);
+        if (!selectedBus) return;
+
+        const interval = setInterval(() => {
+            if (currentCoords) {
+                checkProximity({
+                    busId: selectedBus._id,
+                    location: currentCoords,
+                    tripId: tripId,
+                    routeId: selectedBus.assignedRouteId
+                }).catch((err: any) => console.error('Proximity check failed', err));
+            }
+        }, 60000); // Check every minute
+
+        return () => clearInterval(interval);
+    }, [tripId, selectedBusId, buses, currentCoords]);
+
+
+
+    // Fetch Stops when Bus is Selected
+    useEffect(() => {
+        const fetchStops = async () => {
+            const selectedBus = buses.find(b => b._id === selectedBusId);
+            if (!selectedBus || !selectedBus.assignedRouteId) {
+                setStops([]);
+                return;
+            }
+
+            try {
+                const q = query(collection(db, 'stops'), where('routeId', '==', selectedBus.assignedRouteId));
+                const snapshot = await getDocs(q);
+                const fetchedStops = snapshot.docs.map(doc => ({ _id: doc.id, ...doc.data() }));
+                // Sort by order/sequence if available, assuming order field exists
+                fetchedStops.sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+                setStops(fetchedStops);
+            } catch (err) {
+                console.error("Failed to fetch stops:", err);
+            }
+        };
+
+        if (selectedBusId) {
+            fetchStops();
+        }
+    }, [selectedBusId, buses]);
+
+    // Check Stop Proximity
+    const checkStopCompletion = async (lat: number, lng: number) => {
+        if (!tripId || stops.length === 0) return;
+
+        stops.forEach(async (stop) => {
+            if (completedStops.has(stop.stopId || stop._id)) return; // Already completed locally
+
+            if (stop.latitude && stop.longitude) {
+                const dist = getDistanceFromLatLonInKm(lat, lng, stop.latitude, stop.longitude);
+                // Threshold: 0.1km = 100m
+                if (dist < 0.1) {
+                    console.log(`Arrived at stop: ${stop.stopName}`);
+
+                    // Update local state to avoid repeated writes
+                    setCompletedStops(prev => new Set(prev).add(stop.stopId || stop._id));
+
+                    // Write completion to Firestore
+                    try {
+                        const stopRef = doc(db, 'trips', tripId, 'stops', stop.stopId || stop._id);
+                        await setDoc(stopRef, {
+                            stopId: stop.stopId || stop._id,
+                            stopName: stop.stopName,
+                            arrivedAt: serverTimestamp(),
+                            status: 'COMPLETED'
+                        });
+                    } catch (err) {
+                        console.error("Failed to mark stop as completed:", err);
+                    }
+                }
+            }
+        });
+    };
 
     // 1. Check Location Permissions & Fetch Buses
     useEffect(() => {
@@ -134,48 +235,97 @@ const DriverDashboard = () => {
                 setCurrentCoords({ lat: latitude, lng: longitude });
                 setLocationError(null);
 
-                // Update real-time location every 3 seconds (was 5)
-                if (now - lastUpdateRef.current > 3000) {
-                    try {
-                        console.log(`--- SENDING LOCATION FOR BUS ${busId} ---`);
-                        console.log('Coords:', { latitude, longitude, speed: Math.round((speed || 0) * 3.6), heading: heading || 0 });
+                // Update reverse geocoded street name (throttled to avoid API spam)
+                if (now - lastUpdateRef.current > 4000) {
+                    getStreetName(latitude, longitude).then(street => setCurrentStreetName(street));
+                }
 
-                        await updateBusLocation(busId, {
-                            latitude,
-                            longitude,
-                            speed: Math.round((speed || 0) * 3.6),
-                            heading: heading || 0,
-                            status: 'ON_ROUTE'
+                // Write live location directly to Firestore every 5 seconds
+                if (now - lastUpdateRef.current > 5000) {
+                    try {
+                        console.log(`--- WRITING LOCATION TO FIRESTORE FOR BUS ${busId} ---`);
+                        const speedKmh = Math.round((speed || 0) * 3.6);
+                        const headingVal = heading || 0;
+
+                        // Direct Firestore write for real-time updates
+                        const busRef = doc(db, 'buses', busId);
+                        await updateDoc(busRef, {
+                            location: { latitude, longitude },
+                            currentLocation: { lat: latitude, lng: longitude },
+                            currentHeading: headingVal,
+                            currentSpeed: speedKmh,
+                            speed: speedKmh,
+                            heading: headingVal,
+                            lastLocationUpdate: serverTimestamp(),
+                            lastUpdated: new Date().toISOString(),
+                            currentTripId: currentTripId || null,
+                            status: currentTripId ? 'ON_ROUTE' : 'ACTIVE'
                         });
+
+                        // Check Stop Completion (Phase 5.1)
+                        if (currentTripId) {
+                            checkStopCompletion(latitude, longitude);
+                        }
+
                         lastUpdateRef.current = now;
                         setLastSentTime(new Date().toLocaleTimeString());
-                        console.log('Location update sent successfully');
+                        console.log('Firestore location update written successfully');
                     } catch (err: any) {
-                        console.error("Failed to send location update", err);
-
-                        if (err.response?.status === 401) {
-                            setError('Session expired. Please log in again.');
-                            endTrip();
+                        console.error("Failed to write location to Firestore", err);
+                        // Fallback to API call
+                        try {
+                            await updateBusLocation(busId, {
+                                latitude,
+                                longitude,
+                                speed: Math.round((speed || 0) * 3.6),
+                                heading: heading || 0,
+                                status: currentTripId ? 'ON_ROUTE' : 'ACTIVE'
+                            });
+                            lastUpdateRef.current = now;
+                            setLastSentTime(new Date().toLocaleTimeString());
+                        } catch (apiErr: any) {
+                            if (apiErr.response?.status === 401) {
+                                setError('Session expired. Please log in again.');
+                                endTrip();
+                            }
                         }
                     }
                 }
 
-                // Save to trip history every 60 seconds (1 minute)
-                if (currentTripId && now - lastHistorySaveRef.current > 60000) {
+                // Save to trip path history every 2 minutes (120 seconds)
+                if (currentTripId && now - lastHistorySaveRef.current > 120000) {
+                    console.log('--- SAVING TRIP PATH POINT ---', currentTripId);
+
+                    // 1. Try Direct Firestore write (Real-time subcollection)
                     try {
-                        console.log('Saving trip history snapshot...');
-                        await saveTripHistory(busId, currentTripId, {
+                        const pathRef = collection(db, 'trips', currentTripId, 'path');
+                        await addDoc(pathRef, {
+                            lat: latitude,
+                            lng: longitude,
+                            heading: heading || 0,
+                            speed: Math.round((speed || 0) * 3.6),
+                            recordedAt: serverTimestamp()
+                        });
+                        console.log('Direct Firestore path write successful');
+                    } catch (err) {
+                        console.warn('Direct Firestore path write failed (likely permissions):', err);
+                    }
+
+                    // 2. Try API save (Legacy/Fallback)
+                    try {
+                        const result = await saveTripHistory(busId, currentTripId, {
                             latitude,
                             longitude,
                             speed: Math.round((speed || 0) * 3.6),
                             heading: heading || 0,
                             timestamp: new Date().toISOString()
                         });
-                        lastHistorySaveRef.current = now;
-                        console.log('Trip history saved');
+                        console.log('API trip history save result:', result);
                     } catch (err) {
-                        console.error('Failed to save trip history', err);
+                        console.error('API trip history save failed:', err);
                     }
+
+                    lastHistorySaveRef.current = now;
                 }
             },
             (error) => {
@@ -513,9 +663,10 @@ const DriverDashboard = () => {
                                         <p className="font-mono font-bold text-slate-700 text-sm">{lastSentTime || '--:--:--'}</p>
                                     </div>
                                     <div className="p-2 bg-slate-50 rounded-lg">
-                                        <p className="text-[10px] uppercase text-slate-400 font-bold">Coords</p>
-                                        <p className="font-mono font-bold text-slate-700 text-xs mt-0.5">
-                                            {currentCoords ? `${currentCoords.lat.toFixed(4)}, ${currentCoords.lng.toFixed(4)}` : 'Waiting...'}
+                                        <p className="text-[10px] uppercase text-slate-400 font-bold">Location</p>
+                                        <p className="font-bold text-slate-700 text-xs mt-0.5 flex items-center gap-1">
+                                            <MapPin size={10} className="text-green-500 shrink-0" />
+                                            <span className="truncate">{currentStreetName || (currentCoords ? `${currentCoords.lat.toFixed(4)}, ${currentCoords.lng.toFixed(4)}` : 'Waiting...')}</span>
                                         </p>
                                     </div>
                                 </div>

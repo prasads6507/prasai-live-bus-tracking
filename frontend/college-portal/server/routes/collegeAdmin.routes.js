@@ -4,7 +4,7 @@ const {
     createBus, getBuses, updateBus, deleteBus,
     createRoute, getRoutes, updateRoute, deleteRoute,
     createUser, getUsersByRole, updateUser, deleteUser, createBulkUsers,
-    assignDriver, getAssignments, getTripHistory, updateTrip, deleteTrip, adminEndTrip,
+    assignDriver, getAssignments, getTripHistory, updateTrip, deleteTrip, adminEndTrip, getTripPath,
     getCollegeAdmins, createCollegeAdmin, updateCollegeAdmin, deleteCollegeAdmin
 } = require('../controllers/collegeAdminController');
 const {
@@ -56,10 +56,10 @@ router.route('/assignments')
 
 // Trip History
 router.get('/trips', getTripHistory);
-router.route('/trips/:tripId')
-    .put(updateTrip)
-    .delete(deleteTrip);
-router.post('/trips/:tripId/end', adminEndTrip);
+router.put('/trips/:tripId', protect, authorize('COLLEGE_ADMIN', 'SUPER_ADMIN'), tenantIsolation, updateTrip);
+router.delete('/trips/:tripId', protect, authorize('COLLEGE_ADMIN', 'SUPER_ADMIN'), tenantIsolation, deleteTrip);
+router.post('/trips/:tripId/end', protect, authorize('COLLEGE_ADMIN', 'SUPER_ADMIN'), tenantIsolation, adminEndTrip);
+router.get('/trips/:tripId/path', protect, authorize('COLLEGE_ADMIN', 'SUPER_ADMIN'), tenantIsolation, getTripPath);
 
 // Student Routes
 const {

@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Bus, MapPin, Navigation, Settings, User, RotateCw } from 'lucide-react';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { Bus, MapPin, Navigation, Settings, User, Bell } from 'lucide-react';
+import { collection, query, where, onSnapshot, orderBy, limit } from 'firebase/firestore';
 import { db } from '../config/firebase'; // Import Firestore instance
 import { getBuses, getRoutes, validateSlug } from '../services/api';
+import { getStreetName } from '../services/geocoding';
 import Layout from '../components/Layout';
 import MapComponent from '../components/MapComponent';
 
@@ -15,7 +16,8 @@ const Dashboard = () => {
     const [loading, setLoading] = useState(true);
     const [currentCollegeId, setCurrentCollegeId] = useState<string | null>(localStorage.getItem('current_college_id'));
     const [focusedBusLocation, setFocusedBusLocation] = useState<{ lat: number, lng: number } | null>(null);
-    const [refreshing, setRefreshing] = useState(false);
+    const [busAddresses, setBusAddresses] = useState<{ [key: string]: string }>({});
+    const [notifications, setNotifications] = useState<any[]>([]);
 
     // Initial Data Fetch & Validation
     useEffect(() => {
@@ -85,12 +87,52 @@ const Dashboard = () => {
             setRoutes(updatedRoutes);
         });
 
+        // Listen for real-time notifications (Phase 4.4)
+        const qNotifications = query(
+            collection(db, 'notifications'),
+            where('collegeId', '==', currentCollegeId),
+            orderBy('createdAt', 'desc'),
+            limit(5)
+        );
+        const unsubscribeNotifications = onSnapshot(qNotifications, (snapshot) => {
+            const notes = snapshot.docs.map(doc => ({
+                _id: doc.id,
+                ...doc.data()
+            }));
+            setNotifications(notes);
+        });
+
+        return () => {
+            console.log('Cleaning up real-time subscriptions for college:', currentCollegeId);
+            unsubscribeBuses();
+            unsubscribeRoutes();
+            unsubscribeNotifications();
+        };
+
         return () => {
             console.log('Cleaning up real-time subscriptions for college:', currentCollegeId);
             unsubscribeBuses();
             unsubscribeRoutes();
         };
     }, [currentCollegeId]); // Depend on currentCollegeId state
+
+    // Resolve addresses for active buses
+    useEffect(() => {
+        const resolveAddresses = async () => {
+            const newAddresses: { [key: string]: string } = {};
+            for (const bus of buses) {
+                if (bus.status === 'ON_ROUTE' && bus.location?.latitude && bus.location?.longitude) {
+                    // Only fetch if we don't have it or it moved significantly (optional optimization, but simple call is fine due to caching)
+                    const address = await getStreetName(bus.location.latitude, bus.location.longitude);
+                    newAddresses[bus._id] = address;
+                }
+            }
+            if (Object.keys(newAddresses).length > 0) {
+                setBusAddresses(prev => ({ ...prev, ...newAddresses }));
+            }
+        };
+        resolveAddresses();
+    }, [buses]);
 
     const handleBusClick = (bus: any) => {
         if (bus.location?.latitude && bus.location?.longitude) {
@@ -100,22 +142,7 @@ const Dashboard = () => {
         }
     };
 
-    const handleRefresh = async () => {
-        setRefreshing(true); // Use refreshing state
-        try {
-            const [busData, routeData] = await Promise.all([
-                getBuses(),
-                getRoutes()
-            ]);
-            setBuses(Array.isArray(busData) ? busData : busData.data || []);
-            setRoutes(Array.isArray(routeData) ? routeData : routeData.data || []);
-            // Also reset focus to allow map to re-center if desired, or keep it. Let's keep it.
-        } catch (err) {
-            console.error("Manual Refresh Error:", err);
-        } finally {
-            setRefreshing(false); // Use refreshing state
-        }
-    };
+
 
     if (loading) {
         return (
@@ -130,8 +157,26 @@ const Dashboard = () => {
             <div className="p-6">
                 <div className="max-w-7xl mx-auto space-y-6">
 
+
                     {/* Stats Grid */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+                        {/* Notification Banner (Phase 4.4) */}
+                        {notifications.length > 0 && (
+                            <div className="col-span-full bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+                                <Bell className="text-blue-600 shrink-0 mt-0.5" size={20} />
+                                <div className="flex-1">
+                                    <h4 className="font-bold text-blue-800">Recent Alerts</h4>
+                                    <div className="space-y-1 mt-1">
+                                        {notifications.map(note => (
+                                            <p key={note._id} className="text-sm text-blue-700">
+                                                {note.message} <span className="text-xs text-blue-500 opacity-70">({getRelativeTime(note.createdAt?.toDate ? note.createdAt.toDate().toISOString() : new Date().toISOString())})</span>
+                                            </p>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                         <StatCard
                             title="Total Routes"
                             value={routes.length.toString()}
@@ -148,7 +193,15 @@ const Dashboard = () => {
                         />
                         <StatCard
                             title="On Route"
-                            value={buses.filter(b => b.status === 'ON_ROUTE').length.toString()}
+                            value={buses.filter(b => {
+                                if (b.status !== 'ON_ROUTE') return false;
+                                if (!b.lastLocationUpdate) return false;
+                                try {
+                                    const lastUpdate = b.lastLocationUpdate.toDate ? b.lastLocationUpdate.toDate() : new Date(b.lastLocationUpdate);
+                                    const diffMinutes = (new Date().getTime() - lastUpdate.getTime()) / 60000;
+                                    return diffMinutes < 15;
+                                } catch (e) { return false; }
+                            }).length.toString()}
                             total={buses.length.toString()}
                             icon={<Navigation className="text-green-600" size={24} />}
                             color="bg-green-50"
@@ -162,6 +215,8 @@ const Dashboard = () => {
                         />
                     </div>
 
+
+
                     {/* Map Section */}
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden h-[500px] flex flex-col">
                         <div className="p-4 border-b border-slate-100 flex justify-between items-center">
@@ -170,21 +225,24 @@ const Dashboard = () => {
                                 Live Fleet Tracking
                             </h3>
                             <div className="flex items-center gap-2">
-                                <button
-                                    onClick={handleRefresh}
-                                    className={`p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded-lg transition-all ${refreshing ? 'animate-spin text-blue-600' : ''}`}
-                                    title="Refresh Map Data"
-                                    disabled={refreshing}
-                                >
-                                    <RotateCw size={18} />
-                                </button>
                                 <div className="px-3 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full flex items-center gap-1">
                                     <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
                                     LIVE
                                 </div>
                             </div>
                         </div>
-                        <MapComponent buses={buses} focusedLocation={focusedBusLocation} />
+                        <MapComponent buses={buses.map(b => {
+                            // Apply staleness check logic to status for visualization
+                            if (b.status !== 'ON_ROUTE') return b;
+                            if (!b.lastLocationUpdate) return { ...b, status: 'Active (No GPS)' };
+                            try {
+                                const lastUpdate = b.lastLocationUpdate.toDate ? b.lastLocationUpdate.toDate() : new Date(b.lastLocationUpdate);
+                                const now = new Date();
+                                const diffMinutes = (now.getTime() - lastUpdate.getTime()) / 60000;
+                                if (diffMinutes >= 15) return { ...b, status: 'Active (Offline)' }; // Downgrade status
+                            } catch (e) { }
+                            return b;
+                        })} focusedLocation={focusedBusLocation} />
                     </div>
 
                     {/* Bus List */}
@@ -197,7 +255,7 @@ const Dashboard = () => {
                             {buses.length > 0 ? (
                                 buses.map((bus) => (
                                     <div key={bus._id} onClick={() => handleBusClick(bus)} className="cursor-pointer">
-                                        <BusCard bus={bus} />
+                                        <BusCard bus={bus} address={busAddresses[bus._id]} />
                                     </div>
                                 ))
                             ) : (
@@ -210,7 +268,7 @@ const Dashboard = () => {
                     </div>
                 </div>
             </div>
-        </Layout>
+        </Layout >
     );
 };
 
@@ -242,7 +300,7 @@ const getRelativeTime = (isoString: string) => {
     return date.toLocaleDateString();
 };
 
-const BusCard = ({ bus }: { bus: any }) => (
+const BusCard = ({ bus, address }: { bus: any, address?: string }) => (
     <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition-shadow group">
         <div className="flex items-start justify-between mb-3">
             <div className="flex items-center gap-3">
@@ -272,9 +330,9 @@ const BusCard = ({ bus }: { bus: any }) => (
                     <Navigation size={14} className="text-green-500" />
                     <div className="flex-1">
                         <span className="font-semibold text-green-700">{bus.speed || 0} km/h</span>
-                        <span className="text-green-600 ml-2 text-xs font-mono">
-                            ({bus.location.latitude.toFixed(4)}, {bus.location.longitude.toFixed(4)})
-                        </span>
+                        <div className="text-green-600 ml-2 text-xs font-medium truncate max-w-[200px]" title={address}>
+                            {address || `${bus.location.latitude.toFixed(4)}, ${bus.location.longitude.toFixed(4)}`}
+                        </div>
                     </div>
                 </div>
             ) : (

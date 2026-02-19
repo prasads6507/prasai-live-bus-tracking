@@ -486,6 +486,7 @@ const getAssignments = async (req, res) => {
 const getTripHistory = async (req, res) => {
     try {
         console.log('--- GET TRIP HISTORY ---');
+        console.log('User Role:', req.user ? req.user.role : 'N/A');
         console.log('CollegeId:', req.collegeId);
 
         let trips = [];
@@ -746,6 +747,86 @@ const adminEndTrip = async (req, res) => {
     }
 };
 
+// @desc    Get trip path for visualization
+// @route   GET /api/admin/trips/:tripId/path
+// @access  Private (College Admin)
+const getTripPath = async (req, res) => {
+    try {
+        const { tripId } = req.params;
+        console.log('--- GET TRIP PATH ---', tripId);
+
+        // Try ROOT collection first (Phase 1 implementation writes here)
+        let tripRef = db.collection('trips').doc(tripId);
+        let tripDoc = await tripRef.get();
+
+        // If not found in root, search subcollections (legacy support)
+        if (!tripDoc.exists) {
+            const busesSnapshot = await db.collection('buses')
+                .where('collegeId', '==', req.collegeId)
+                .get();
+
+            for (const busDoc of busesSnapshot.docs) {
+                const subTripRef = busDoc.ref.collection('trips').doc(tripId);
+                const subTripDoc = await subTripRef.get();
+                if (subTripDoc.exists) {
+                    tripRef = subTripRef;
+                    tripDoc = subTripDoc;
+                    break;
+                }
+            }
+        }
+
+        if (!tripDoc.exists) {
+            return res.status(404).json({ success: false, message: 'Trip not found' });
+        }
+
+        // Fetch path subcollection (Phase 1/3 implementation)
+        let pathSnapshot = await tripRef.collection('path')
+            .orderBy('recordedAt', 'asc')
+            .get();
+
+        console.log(`Path snapshot for ${tripId}: empty=${pathSnapshot.empty}, size=${pathSnapshot.size}`);
+
+        // If path is empty, try 'history' subcollection (Legacy API implementation)
+        if (pathSnapshot.empty) {
+            console.log(`Checking 'history' subcollection for trip ${tripId}...`);
+            pathSnapshot = await tripRef.collection('history')
+                .orderBy('recordedAt', 'asc')
+                .get();
+
+            if (pathSnapshot.empty) {
+                console.log(`Checking 'history' ordered by 'timestamp' for trip ${tripId}...`);
+                pathSnapshot = await tripRef.collection('history')
+                    .orderBy('timestamp', 'asc')
+                    .get();
+            }
+        }
+
+        if (pathSnapshot.empty) {
+            console.log(`No path or history data found for trip ${tripId}`);
+            return res.json({ success: true, data: [] });
+        }
+
+        const path = pathSnapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                lat: data.lat || data.latitude || 0,
+                lng: data.lng || data.longitude || 0,
+                speed: data.speed || 0,
+                timestamp: data.recordedAt ?
+                    (data.recordedAt.toDate ? data.recordedAt.toDate().toISOString() : data.recordedAt) :
+                    data.timestamp
+            };
+        });
+
+        console.log(`Returning ${path.length} path points for trip ${tripId}`);
+        res.json({ success: true, data: path });
+    } catch (error) {
+        console.error('Error fetching trip path:', error);
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+    }
+};
+
 // --- COLLEGE ADMINS MANAGEMENT (SUPER_ADMIN/OWNER only) ---
 
 // @desc    Get all admins for this college
@@ -938,6 +1019,7 @@ module.exports = {
     updateTrip,
     deleteTrip,
     adminEndTrip,
+    getTripPath,
     createBulkUsers,
     getCollegeAdmins,
     createCollegeAdmin,
