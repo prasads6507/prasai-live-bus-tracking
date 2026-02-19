@@ -478,12 +478,83 @@ const StudentDashboard = () => {
                         </div>
                     </div>
                     {/* Map Section */}
-                    <div className="flex-1 relative pointer-events-none">
-                        {/* Pointer events none to encourage clicking the card to enter "Tracking Mode" if we improved interaction, 
-                           but for now just visual overview. */}
+                    <div className="flex-1 relative">
                         <MapComponent
                             buses={buses}
+                            // Show stops for assigned bus on map
+                            stopMarkers={(() => {
+                                const targetBus = assignedBus || buses.find(b => b.status === 'ON_ROUTE');
+                                if (!targetBus || !targetBus.assignedRouteId) return [];
+
+                                const route = routes.find(r => r._id === targetBus.assignedRouteId);
+                                if (!route || !route.stops) return [];
+
+                                return route.stops.map((s: any) => ({
+                                    lat: s.latitude,
+                                    lng: s.longitude,
+                                    name: s.stopName,
+                                    id: s.stopId || s._id,
+                                    isCompleted: (targetBus.completedStops || []).includes(s.stopId || s._id)
+                                }));
+                            })()}
                         />
+
+                        {/* Desktop-Only Stop List Overlay */}
+                        {(() => {
+                            const targetBus = assignedBus || buses.find(b => b.status === 'ON_ROUTE');
+                            if (!targetBus || !targetBus.assignedRouteId) return null;
+
+                            const route = routes.find(r => r._id === targetBus.assignedRouteId);
+                            if (!route || !route.stops) return null;
+
+                            const completedStops = targetBus.completedStops || [];
+                            const nextStopIndex = route.stops.findIndex((s: any) => !completedStops.includes(s.stopId || s._id));
+
+                            return (
+                                <div className="hidden md:flex absolute top-4 right-4 z-[400] w-72 bg-white/95 backdrop-blur-sm rounded-xl shadow-xl border border-slate-200 flex-col max-h-[260px] overflow-hidden">
+                                    <div className="p-3 border-b border-slate-100 bg-slate-50/50">
+                                        <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm">
+                                            <MapPin className="text-blue-600" size={16} />
+                                            Route Stops (Quick View)
+                                        </h3>
+                                        <p className="text-[10px] text-slate-500 mt-0.5">{route.routeName}</p>
+                                    </div>
+                                    <div className="overflow-y-auto flex-1 p-2">
+                                        <div className="relative pl-3 space-y-0">
+                                            {/* Vertical Line */}
+                                            <div className="absolute left-[8px] top-3 bottom-3 w-0.5 bg-slate-200"></div>
+
+                                            {route.stops.map((stop: any, idx: number) => {
+                                                const isCompleted = completedStops.includes(stop.stopId || stop._id);
+                                                const isNext = idx === nextStopIndex;
+
+                                                return (
+                                                    <div key={idx} className={`relative flex gap-2 p-2 rounded-lg transition-colors ${isNext ? 'bg-blue-50 border border-blue-100' : 'hover:bg-slate-50'}`}>
+                                                        {/* Dot */}
+                                                        <div className={`relative z-10 flex-shrink-0 w-4 h-4 rounded-full border-2 flex items-center justify-center bg-white ${isCompleted ? 'border-green-500' :
+                                                                isNext ? 'border-blue-600 ring-2 ring-blue-50' :
+                                                                    'border-slate-300'
+                                                            }`}>
+                                                            {isCompleted && <div className="w-1.5 h-1.5 rounded-full bg-green-500" />}
+                                                            {isNext && <div className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" />}
+                                                        </div>
+
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="flex justify-between items-center">
+                                                                <p className={`text-xs font-semibold truncate ${isCompleted ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
+                                                                    {stop.stopName}
+                                                                </p>
+                                                                {isNext && <span className="text-[10px] font-bold text-blue-600 bg-blue-100 px-1 rounded">Next</span>}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })()}
                     </div>
                 </motion.div>
 
