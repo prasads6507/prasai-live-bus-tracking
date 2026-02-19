@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bus, LogOut, User, MapPin, Search, Star, X, Crosshair, History, ChevronRight, AlertCircle, ArrowLeft, Clock, Info } from 'lucide-react';
+import { Bus, LogOut, User, MapPin, Search, Star, X, Crosshair, AlertCircle, ArrowLeft, Clock } from 'lucide-react';
 import { validateSlug, getStudentBuses, getStudentRoutes } from '../services/api';
 import { getStreetName } from '../services/geocoding';
 import { collection, query, where, onSnapshot, doc, updateDoc, serverTimestamp } from 'firebase/firestore';

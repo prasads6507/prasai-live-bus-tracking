@@ -132,7 +132,7 @@ const UserLocationMarker = ({ onLocationFound, shouldCenterOnUser }: { onLocatio
 const AnimatedBusMarker = ({ bus, icon }: { bus: any, icon: any }) => {
     const [position, setPosition] = useState<[number, number]>([bus.location.latitude, bus.location.longitude]);
     const trailRef = useRef<any[]>([]);
-    const animationRef = useRef<number>();
+    const animationRef = useRef<number | undefined>(undefined);
 
     // Update position when bus updates
     useEffect(() => {
