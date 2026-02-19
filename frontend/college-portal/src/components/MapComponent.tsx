@@ -134,7 +134,7 @@ import { interpolatePosition, calculateBearing } from '../utils/mapUtils';
 const AnimatedBusMarker = ({ bus, icon }: { bus: any, icon: any }) => {
     const [position, setPosition] = useState<[number, number]>([bus.location.latitude, bus.location.longitude]);
     const [bearing, setBearing] = useState<number>(bus.location.heading || 0);
-    const animationFrameRef = useRef<number>();
+    const animationFrameRef = useRef<number | null>(null);
     const startTimeRef = useRef<number>(0);
 
     // Store latest buffer for animation loop access
@@ -212,7 +212,7 @@ const AnimatedBusMarker = ({ bus, icon }: { bus: any, icon: any }) => {
             }
         };
 
-        cancelAnimationFrame(animationFrameRef.current!);
+        if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = requestAnimationFrame(animate);
 
         return () => {
