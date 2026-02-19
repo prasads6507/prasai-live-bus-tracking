@@ -49,6 +49,7 @@ const DriverDashboard = () => {
     const lastUpdateRef = useRef<number>(0);
     const lastHistorySaveRef = useRef<number>(0); // Track when we last saved to history
     const currentPositionRef = useRef<{ latitude: number, longitude: number, speed: number, heading: number } | null>(null);
+    const liveTrailBufferRef = useRef<{ lat: number; lng: number; timestamp: string }[]>([]); // Buffer for 1s interval points
 
     // Proximity Check Interval (Phase 4.3)
     useEffect(() => {
@@ -198,23 +199,33 @@ const DriverDashboard = () => {
         setTripId(newTripId);
 
         try {
-            await startNewTrip(selectedBusId, newTripId);
-            console.log('Trip started:', newTripId);
+            // Attempt to start trip on backend, but don't block tracking if it fails (e.g. network timeout)
+            try {
+                await startNewTrip(selectedBusId, newTripId);
+                console.log('Trip started:', newTripId);
+            } catch (apiErr) {
+                console.warn('Backend startTrip failed, proceeding with offline/local trip ID:', apiErr);
+                // Optional: Show a "Sync warning" instead of blocking
+            }
 
             // Persist to localStorage
             localStorage.setItem('driver_active_trip', JSON.stringify({ tripId: newTripId, busId: selectedBusId }));
 
-            // Reset completed stops on the bus document for the new trip
+            // Reset completed stops and live trail
             const busRef = doc(db, 'buses', selectedBusId);
             await updateDoc(busRef, {
-                completedStops: []
+                completedStops: [],
+                liveTrail: []
             });
 
             // Start Tracking
             startTrackingLoop(selectedBusId, newTripId);
         } catch (err) {
-            console.error('Failed to start trip on backend', err);
-            setError("Failed to start trip. Please check network.");
+            console.error('Critical failure starting trip:', err);
+            // Only show error if we couldn't even set up the local state or Firestore buffer
+            setError("Issue starting trip. Tracking attempted anyway.");
+            // Try starting loop as fail-safe
+            startTrackingLoop(selectedBusId, newTripId);
         }
     };
 
@@ -243,6 +254,16 @@ const DriverDashboard = () => {
                     speed: Math.round((speed || 0) * 3.6),
                     heading: heading || 0
                 };
+
+                // Add to live trail buffer (limit to last ~20 points to be safe, though we clear every 5s)
+                liveTrailBufferRef.current.push({
+                    lat: latitude,
+                    lng: longitude,
+                    timestamp: new Date().toISOString()
+                });
+                if (liveTrailBufferRef.current.length > 20) {
+                    liveTrailBufferRef.current.shift();
+                }
 
                 // Update UI state
                 setCurrentSpeed((speed || 0) * 3.6);
@@ -273,8 +294,12 @@ const DriverDashboard = () => {
                             lastLocationUpdate: serverTimestamp(),
                             lastUpdated: new Date().toISOString(),
                             currentTripId: currentTripId || null,
-                            status: currentTripId ? 'ON_ROUTE' : 'ACTIVE'
+                            status: currentTripId ? 'ON_ROUTE' : 'ACTIVE',
+                            liveTrail: liveTrailBufferRef.current // Upload the buffered points
                         });
+
+                        // Clear buffer after upload
+                        liveTrailBufferRef.current = [];
 
                         // Check Stop Completion (Phase 5.1)
                         if (currentTripId) {
@@ -387,7 +412,11 @@ const DriverDashboard = () => {
         currentPositionRef.current = null;
 
         // Reset bus status
+        const busRef = doc(db, 'buses', selectedBusId);
         await updateBusStatus('ACTIVE', selectedBusId);
+        await updateDoc(busRef, {
+            liveTrail: []
+        });
 
         // Reset Selection to "Redirect" to Dashboard Home
         setSelectedBusId('');

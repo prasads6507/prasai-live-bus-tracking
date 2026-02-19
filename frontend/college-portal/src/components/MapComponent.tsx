@@ -128,6 +128,102 @@ const UserLocationMarker = ({ onLocationFound, shouldCenterOnUser }: { onLocatio
     );
 };
 
+// Bus Marker Component with Animation
+const AnimatedBusMarker = ({ bus, icon }: { bus: any, icon: any }) => {
+    const [position, setPosition] = useState<[number, number]>([bus.location.latitude, bus.location.longitude]);
+    const trailRef = useRef<any[]>([]);
+    const animationRef = useRef<number>();
+
+    // Update position when bus updates
+    useEffect(() => {
+        if (bus.liveTrail && Array.isArray(bus.liveTrail) && bus.liveTrail.length > 0) {
+            // Sort trail by timestamp
+            const sortedTrail = [...bus.liveTrail].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+            // Add current location as final point
+            sortedTrail.push({
+                lat: bus.location.latitude,
+                lng: bus.location.longitude,
+                timestamp: bus.lastUpdated
+            });
+
+            trailRef.current = sortedTrail;
+
+            // Start animation
+            let startTime = performance.now();
+            const durationPerSegment = 1000; // 1s per segment since we capture at 1s intervals
+
+            const animate = (time: number) => {
+                const elapsed = time - startTime;
+                const totalDuration = (trailRef.current.length - 1) * durationPerSegment;
+
+                if (elapsed < totalDuration) {
+                    const segmentIndex = Math.floor(elapsed / durationPerSegment);
+                    const segmentProgress = (elapsed % durationPerSegment) / durationPerSegment;
+
+                    const startPoint = trailRef.current[segmentIndex];
+                    const endPoint = trailRef.current[segmentIndex + 1];
+
+                    if (startPoint && endPoint) {
+                        const lat = startPoint.lat + (endPoint.lat - startPoint.lat) * segmentProgress;
+                        const lng = startPoint.lng + (endPoint.lng - startPoint.lng) * segmentProgress;
+                        setPosition([lat, lng]);
+                    }
+
+                    animationRef.current = requestAnimationFrame(animate);
+                } else {
+                    setPosition([bus.location.latitude, bus.location.longitude]);
+                }
+            };
+
+            cancelAnimationFrame(animationRef.current!);
+            animationRef.current = requestAnimationFrame(animate);
+
+        } else {
+            setPosition([bus.location.latitude, bus.location.longitude]);
+        }
+
+        return () => cancelAnimationFrame(animationRef.current!);
+    }, [bus.lastUpdated, bus.liveTrail, bus.location]);
+
+    return (
+        <Marker position={position} icon={icon}>
+            <Popup>
+                <div className="p-2 min-w-[150px]">
+                    <h3 className="font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-2 mb-2 text-sm">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="3" width="22" height="18" rx="2" ry="2"></rect><line x1="5" y1="21" x2="5" y2="3"></line><line x1="19" y1="21" x2="19" y2="3"></line></svg>
+                        {bus.busNumber}
+                    </h3>
+                    <div className="space-y-2 text-xs">
+                        <div className="flex justify-between items-center">
+                            <span className="text-slate-500">Status:</span>
+                            <span className="font-bold px-2 py-0.5 rounded-full text-[10px]"
+                                style={{
+                                    backgroundColor: bus.status === 'ON_ROUTE' ? '#dcfce7' : '#eff6ff',
+                                    color: bus.status === 'ON_ROUTE' ? '#16a34a' : '#3b82f6'
+                                }}>
+                                {bus.status === 'ON_ROUTE' ? 'MOVING' : 'IDLE'}
+                            </span>
+                        </div>
+                        {bus.speed != null && (
+                            <div className="flex justify-between items-center bg-slate-50 p-1 rounded">
+                                <span className="text-slate-500">Speed:</span>
+                                <span className="font-mono font-bold text-slate-700">{bus.speed} km/h</span>
+                            </div>
+                        )}
+                        <div className="flex justify-between items-center bg-blue-50 p-1 rounded border border-blue-100">
+                            <span className="text-blue-500 font-medium">Updated:</span>
+                            <span className="font-mono font-bold text-blue-700">
+                                {bus.lastUpdated ? new Date(bus.lastUpdated).toLocaleTimeString() : 'N/A'}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </Popup>
+        </Marker>
+    );
+};
+
 const MapComponent = ({ buses, focusedLocation, stopMarkers = [], followBus: externalFollowBus, path }: MapComponentProps) => { // Destructure path
     const props = { path }; // Keep props ref for use in logic above if needed
 
@@ -304,46 +400,11 @@ const MapComponent = ({ buses, focusedLocation, stopMarkers = [], followBus: ext
                     const heading = bus.heading || bus.currentHeading || 0;
 
                     return (
-                        <Marker
+                        <AnimatedBusMarker
                             key={bus._id}
-                            position={[bus.location.latitude, bus.location.longitude]}
+                            bus={bus}
                             icon={createBusIcon(bus.status, heading)}
-                        >
-                            <Popup>
-                                <div className="p-2 min-w-[150px]">
-                                    <h3 className="font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-2 mb-2 text-sm">
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="3" width="22" height="18" rx="2" ry="2"></rect><line x1="5" y1="21" x2="5" y2="3"></line><line x1="19" y1="21" x2="19" y2="3"></line></svg>
-                                        {bus.busNumber}
-                                    </h3>
-                                    <div className="space-y-2 text-xs">
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-slate-500">Status:</span>
-                                            <span className="font-bold px-2 py-0.5 rounded-full text-[10px]"
-                                                style={{
-                                                    backgroundColor: bus.status === 'ON_ROUTE' ? '#dcfce7' : '#eff6ff',
-                                                    color: bus.status === 'ON_ROUTE' ? '#16a34a' : '#3b82f6'
-                                                }}>
-                                                {bus.status === 'ON_ROUTE' ? 'MOVING' : 'IDLE'}
-                                            </span>
-                                        </div>
-
-                                        {bus.speed != null && (
-                                            <div className="flex justify-between items-center bg-slate-50 p-1 rounded">
-                                                <span className="text-slate-500">Speed:</span>
-                                                <span className="font-mono font-bold text-slate-700">{bus.speed} km/h</span>
-                                            </div>
-                                        )}
-
-                                        <div className="flex justify-between items-center bg-blue-50 p-1 rounded border border-blue-100">
-                                            <span className="text-blue-500 font-medium">Updated:</span>
-                                            <span className="font-mono font-bold text-blue-700">
-                                                {bus.lastUpdated ? new Date(bus.lastUpdated).toLocaleTimeString() : 'N/A'}
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </Popup>
-                        </Marker>
+                        />
                     );
                 })}
 

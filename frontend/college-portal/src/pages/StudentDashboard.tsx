@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bus, LogOut, User, MapPin, Search, Star, X, Crosshair, History, ChevronRight, AlertCircle } from 'lucide-react';
+import { Bus, LogOut, User, MapPin, Search, Star, X, Crosshair, History, ChevronRight, AlertCircle, ArrowLeft, Clock, Info } from 'lucide-react';
 import { validateSlug, getStudentBuses, getStudentRoutes } from '../services/api';
 import { getStreetName } from '../services/geocoding';
 import { collection, query, where, onSnapshot, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
@@ -23,6 +23,7 @@ const StudentDashboard = () => {
     const [substituteBus, setSubstituteBus] = useState<any>(null);
     const [busLocations, setBusLocations] = useState<{ [id: string]: string }>({});
     const [favorites, setFavorites] = useState<string[]>([]);
+    const [trackedBus, setTrackedBus] = useState<any>(null); // New state for tracking view
 
 
     const user = JSON.parse(localStorage.getItem('student_user') || '{}');
@@ -192,6 +193,7 @@ const StudentDashboard = () => {
     const handleTrackBus = (bus: any) => {
         if (bus.status === 'ON_ROUTE' && bus.location?.latitude && bus.location?.longitude) {
             setFocusedBusLocation({ lat: bus.location.latitude, lng: bus.location.longitude });
+            setTrackedBus(bus); // Switch to tracking view
             setSelectedBus(null);
         }
     };
@@ -234,61 +236,174 @@ const StudentDashboard = () => {
 
     return (
         <div className="min-h-screen bg-slate-900 text-slate-100 font-sans selection:bg-blue-500/30">
-            {/* Navbar */}
-            <nav className="sticky top-0 z-30 bg-slate-900/80 backdrop-blur-xl border-b border-white/10">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="flex justify-between items-center h-16">
-                        <div className="flex items-center gap-3">
-                            <div className="bg-gradient-to-tr from-blue-600 to-indigo-600 p-2 rounded-xl shadow-lg shadow-blue-500/20">
-                                <Bus size={20} className="text-white" />
-                            </div>
-                            <div>
-                                <h1 className="font-bold text-lg tracking-tight">Student Portal</h1>
-                                <p className="text-xs text-slate-400 font-medium">{college?.collegeName}</p>
-                            </div>
-                        </div>
-                        <button
-                            onClick={handleLogout}
-                            className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-sm font-medium transition-all hover:scale-105 active:scale-95"
-                        >
-                            <LogOut size={16} />
-                            <span>Sign Out</span>
-                        </button>
-                    </div>
-                </div>
-            </nav>
 
-            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-                {/* Hero Section */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-900 via-blue-900 to-slate-900 border border-white/10 shadow-2xl"
-                >
-                    <div className="absolute top-0 right-0 -mt-20 -mr-20 w-80 h-80 bg-blue-500/20 rounded-full blur-[100px]" />
-                    <div className="relative z-10 p-8 sm:p-10 flex flex-col md:flex-row items-start md:items-center gap-6">
-                        <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 p-[2px] shadow-xl">
-                            <div className="w-full h-full rounded-full bg-slate-900 flex items-center justify-center text-3xl font-bold text-blue-400">
-                                {user?.name?.charAt(0) || <User size={40} />}
-                            </div>
-                        </div>
-                        <div className="flex-1">
-                            <h2 className="text-3xl font-bold text-white mb-2">Hello, {user?.name?.split(' ')[0] || 'Student'}!</h2>
-                            <div className="flex flex-wrap gap-4 text-sm text-blue-200/80 mb-4">
-                                <span className="bg-white/10 px-3 py-1 rounded-full border border-white/10 tracking-wide">{user?.email}</span>
-                                <span className="bg-white/10 px-3 py-1 rounded-full border border-white/10 tracking-wide">Reg No: {user?.registerNumber || user?.email?.split('@')[0] || 'N/A'}</span>
+            {/* Navbar - Hide in tracking mode on mobile, maybe show simplified header */}
+            {!trackedBus && (
+                <nav className="sticky top-0 z-30 bg-slate-900/80 backdrop-blur-xl border-b border-white/10">
+                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                        <div className="flex justify-between items-center h-16">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-gradient-to-tr from-blue-600 to-indigo-600 p-2 rounded-xl shadow-lg shadow-blue-500/20">
+                                    <Bus size={20} className="text-white" />
+                                </div>
+                                <div>
+                                    <h1 className="font-bold text-lg tracking-tight">Student Portal</h1>
+                                    <p className="text-xs text-slate-400 font-medium">{college?.collegeName}</p>
+                                </div>
                             </div>
                             <button
-                                onClick={() => navigate(`/${orgSlug}/student/trip-history`)}
-                                className="flex items-center gap-2 px-6 py-2.5 bg-white/10 hover:bg-white/20 border border-white/10 rounded-xl text-sm font-bold transition-all hover:scale-105 active:scale-95 group"
+                                onClick={handleLogout}
+                                className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-sm font-medium transition-all hover:scale-105 active:scale-95"
                             >
-                                <History size={16} className="text-blue-400 group-hover:rotate-[-45deg] transition-transform" />
-                                <span>Recent Trip History</span>
-                                <ChevronRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity ml-1" />
+                                <LogOut size={16} />
+                                <span>Sign Out</span>
                             </button>
                         </div>
                     </div>
-                </motion.div>
+                </nav>
+            )}
+
+            {/* Tracking View */}
+            {trackedBus && (
+                <div className="fixed inset-0 z-40 bg-slate-900 flex flex-col md:flex-row">
+                    {/* Header / Back Button for Mobile */}
+                    <div className="absolute top-4 left-4 z-50 md:hidden">
+                        <button
+                            onClick={() => setTrackedBus(null)}
+                            className="p-2 bg-white/90 backdrop-blur text-slate-800 rounded-full shadow-lg"
+                        >
+                            <ArrowLeft size={20} />
+                        </button>
+                    </div>
+
+                    {/* Left/Top: Map (40% Mobile, 60% Desktop) */}
+                    <div className="h-[45vh] md:h-full md:w-3/5 w-full relative">
+                        <MapComponent
+                            buses={buses}
+                            focusedLocation={focusedBusLocation}
+                            // Stop List handled in sidebar now, but markers still useful
+                            stopMarkers={(() => {
+                                const route = routes.find(r => r._id === trackedBus.assignedRouteId);
+                                if (!route || !route.stops) return [];
+                                return route.stops.map((s: any) => ({
+                                    lat: s.latitude,
+                                    lng: s.longitude,
+                                    name: s.stopName,
+                                    id: s.stopId || s._id,
+                                    isCompleted: (trackedBus.completedStops || []).includes(s.stopId || s._id)
+                                }));
+                            })()}
+                        />
+                        {/* Desktop Back Button */}
+                        <div className="absolute top-4 left-4 z-[1000] hidden md:block">
+                            <button
+                                onClick={() => setTrackedBus(null)}
+                                className="flex items-center gap-2 px-4 py-2 bg-white text-slate-800 rounded-xl shadow-lg font-bold hover:bg-slate-50 transition-colors"
+                            >
+                                <ArrowLeft size={18} />
+                                Back to Dashboard
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Right/Bottom: Bottom Sheet (55% Mobile, 40% Desktop) */}
+                    <div className="flex-1 bg-white md:bg-white md:border-l border-slate-200 rounded-t-[2rem] md:rounded-none shadow-[0_-10px_40px_rgba(0,0,0,0.2)] md:shadow-none flex flex-col overflow-hidden -mt-6 md:mt-0 relative z-10">
+                        {/* Drag Handle (Mobile Visual) */}
+                        <div className="w-full flex justify-center pt-3 pb-1 md:hidden">
+                            <div className="w-12 h-1.5 bg-slate-300 rounded-full"></div>
+                        </div>
+
+                        {/* Bus Info Header */}
+                        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-start">
+                            <div>
+                                <h2 className="text-xl font-bold text-slate-800">{trackedBus.busNumber}</h2>
+                                <p className="text-sm text-slate-500">{trackedBus.currentStreetName || 'On Route'}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full animate-pulse">
+                                    LIVE
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Tabs */}
+                        <div className="flex border-b border-slate-100">
+                            <button className="flex-1 py-3 text-sm font-bold text-blue-600 border-b-2 border-blue-600">Status</button>
+                            <button className="flex-1 py-3 text-sm font-medium text-slate-500 hover:text-slate-700">History</button>
+                            <button className="flex-1 py-3 text-sm font-medium text-slate-500 hover:text-slate-700">Bus Info</button>
+                        </div>
+
+                        {/* Timeline Content */}
+                        <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50">
+                            {(() => {
+                                const route = routes.find(r => r._id === trackedBus.assignedRouteId);
+                                if (!route || !route.stops) return <p className="text-center text-slate-400 mt-10">No route information available.</p>;
+
+                                const completedStops: string[] = trackedBus.completedStops || [];
+                                const nextStopIndex = route.stops.findIndex((s: any) => !completedStops.includes(s.stopId || s._id));
+
+                                return (
+                                    <div className="relative pl-6 space-y-8">
+                                        {/* Vertical Timeline Line */}
+                                        <div className="absolute left-[34px] top-4 bottom-4 w-0.5 bg-slate-300"></div>
+
+                                        {route.stops.map((stop: any, idx: number) => {
+                                            const isCompleted = completedStops.includes(stop.stopId || stop._id);
+                                            const isNext = idx === nextStopIndex;
+
+                                            // Determine Icon
+                                            let Icon = MapPin;
+                                            if (idx === 0) Icon = Clock; // Start
+                                            if (idx === route.stops.length - 1) Icon = Bus; // Destination
+
+                                            return (
+                                                <div key={idx} className={`relative flex items-start gap-4 ${isCompleted ? 'opacity-60' : 'opacity-100'}`}>
+                                                    {/* Timeline Dot/Icon */}
+                                                    <div className={`relative z-10 w-10 h-10 rounded-full border-4 flex items-center justify-center bg-white flex-shrink-0 transition-all ${isCompleted ? 'border-green-500 text-green-500' :
+                                                        isNext ? 'border-blue-500 text-blue-500 ring-4 ring-blue-100' :
+                                                            'border-slate-300 text-slate-400'
+                                                        }`}>
+                                                        <Icon size={16} fill={isCompleted ? "currentColor" : "none"} />
+                                                    </div>
+
+                                                    <div className="flex-1 bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                                                        <div className="flex justify-between items-start mb-1">
+                                                            <h4 className={`font-bold text-base ${isCompleted ? 'text-slate-500 line-through' : 'text-slate-800'}`}>
+                                                                {stop.stopName}
+                                                            </h4>
+                                                            <span className="text-xs font-mono text-slate-400">
+                                                                {/* Time placeholder */}
+                                                                Stop {idx + 1}
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-xs text-slate-500 mb-2 truncate max-w-[200px]">
+                                                            {stop.latitude.toFixed(4)}, {stop.longitude.toFixed(4)}
+                                                        </p>
+
+                                                        {isNext && (
+                                                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold">
+                                                                <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse"></span>
+                                                                Arriving Next
+                                                            </div>
+                                                        )}
+                                                        {isCompleted && (
+                                                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-green-50 text-green-600 rounded-lg text-xs font-bold">
+                                                                Reached
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                );
+                            })()}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <main className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 ${trackedBus ? 'hidden' : ''}`}>
 
                 {/* Substitute Bus Warning (Phase 5.3) */}
                 {substituteBus && assignedBus && (
@@ -339,17 +454,19 @@ const StudentDashboard = () => {
                     </motion.div>
                 )}
 
-                {/* Live Map Section */}
+                {/* Live Map Section - REMOVE since we have tracking view now, or keep as summary? 
+                    Actually, let's keep it as "Active Buses" overview map but remove the stop list overlay from here.
+                */}
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.1 }}
-                    className="bg-slate-800/50 backdrop-blur-md border border-white/5 rounded-3xl overflow-hidden h-[400px] flex flex-col"
+                    className="bg-slate-800/50 backdrop-blur-md border border-white/5 rounded-3xl overflow-hidden h-[300px] flex flex-col cursor-pointer hover:border-blue-500/30 transition-colors"
                 >
                     <div className="p-4 border-b border-white/10 flex justify-between items-center shrink-0">
                         <h3 className="font-semibold text-white flex items-center gap-2">
                             <MapPin size={20} className="text-blue-400" />
-                            Live Bus Tracking
+                            Live Fleet Overview
                         </h3>
                         <div className="flex items-center gap-2">
                             {activeBuses.length > 0 && (
@@ -360,29 +477,12 @@ const StudentDashboard = () => {
                             )}
                         </div>
                     </div>
-                    <div className="flex-1 relative">
+                    {/* Map Section */}
+                    <div className="flex-1 relative pointer-events-none">
+                        {/* Pointer events none to encourage clicking the card to enter "Tracking Mode" if we improved interaction, 
+                           but for now just visual overview. */}
                         <MapComponent
                             buses={buses}
-                            focusedLocation={focusedBusLocation}
-                            stopMarkers={(() => {
-                                // Find stops for the bus the user is currently focused on or their assigned bus
-                                const targetBus = focusedBusLocation
-                                    ? buses.find(b => b.location?.latitude === focusedBusLocation.lat && b.location?.longitude === focusedBusLocation.lng)
-                                    : assignedBus || buses.find(b => b.status === 'ON_ROUTE');
-
-                                if (!targetBus || !targetBus.assignedRouteId) return [];
-
-                                const route = routes.find(r => r._id === targetBus.assignedRouteId);
-                                if (!route || !route.stops) return [];
-
-                                return route.stops.map((s: any) => ({
-                                    lat: s.latitude,
-                                    lng: s.longitude,
-                                    name: s.stopName,
-                                    id: s.stopId || s._id,
-                                    isCompleted: (targetBus.completedStops || []).includes(s.stopId || s._id)
-                                }));
-                            })()}
                         />
                     </div>
                 </motion.div>
