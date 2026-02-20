@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart' as geo;
 import 'package:go_router/go_router.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/typography.dart';
@@ -406,7 +407,7 @@ class _DriverContent extends ConsumerStatefulWidget {
 }
 
 class _DriverContentState extends ConsumerState<_DriverContent> {
-  StreamSubscription<Position>? _positionStreamSubscription;
+  StreamSubscription<Map<String, dynamic>?>? _locationUpdateSubscription;
   Timer? _pathHistoryTimer;
   bool _isLoading = false;
   double _currentSpeed = 0.0;
@@ -432,7 +433,7 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
   
   @override
   void dispose() {
-    _positionStreamSubscription?.cancel();
+    _locationUpdateSubscription?.cancel();
     _pathHistoryTimer?.cancel();
     super.dispose();
   }
@@ -453,28 +454,40 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
   }
 
   Future<void> _startTracking() async {
-    _positionStreamSubscription = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 5,
-      ),
-    ).listen((pos) {
+    // Ensure permission before starting background service
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    
+    if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
       if (mounted) {
-        final point = LocationPoint(
-          latitude: pos.latitude,
-          longitude: pos.longitude,
-          timestamp: DateTime.now(),
-          speed: pos.speed,
-          heading: pos.heading,
-        );
+         ScaffoldMessenger.of(context).showSnackBar(
+           const SnackBar(content: Text("Location permission is required to track trips")),
+         );
+      }
+      return;
+    }
+
+    final service = FlutterBackgroundService();
+    await service.startService();
+    service.invoke('setup', {
+      'collegeId': widget.collegeId,
+      'busId': widget.busId,
+    });
+
+    _locationUpdateSubscription = service.on('locationUpdate').listen((event) {
+      if (mounted && event != null) {
+        final map = Map<String, dynamic>.from(event);
+        final point = LocationPoint.fromMap(map);
         
         setState(() {
-          _currentSpeed = pos.speed * 2.23694; // mph
+          _currentSpeed = (point.speed ?? 0.0) * 2.23694; // mph
           _lastUpdate = TimeOfDay.now().format(context);
           _lastRecordedPoint = point;
         });
-        _updateRoadName(pos.latitude, pos.longitude);
-        _sendUpdate(point);
+        _updateRoadName(point.latitude, point.longitude);
+        // Note: We don't need _sendUpdate(point) because the background isolate does it globally!
       }
     });
 
@@ -494,25 +507,12 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
     });
   }
 
-  Future<void> _sendUpdate(LocationPoint point) async {
-    final speedMph = (point.speed ?? 0.0) * 2.23694;
-    
-    try {
-      await ref.read(firestoreDataSourceProvider).updateBusLiveBuffer(
-        widget.collegeId,
-        widget.busId,
-        [point],
-        roadName: _currentRoad,
-        speed: speedMph,
-      );
-    } catch (e) {
-      debugPrint("Update error: $e");
-    }
-  }
-
   void _stopTracking() {
-    _positionStreamSubscription?.cancel();
-    _positionStreamSubscription = null;
+    final service = FlutterBackgroundService();
+    service.invoke('stopService');
+    
+    _locationUpdateSubscription?.cancel();
+    _locationUpdateSubscription = null;
     _pathHistoryTimer?.cancel();
     _pathHistoryTimer = null;
     if (mounted) {
@@ -539,14 +539,14 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
         final routeName = _currentRoute?.routeName ?? "Loading Route...";
 
         // Auto-resume logic
-        if (isTripActive && _positionStreamSubscription == null && !_isLoading) {
+        if (isTripActive && _locationUpdateSubscription == null && !_isLoading) {
           WidgetsBinding.instance.addPostFrameCallback((_) => _startTracking());
         }
 
         // Auto-stop logic if ended externally
-        if (!isTripActive && _positionStreamSubscription != null) {
+        if (!isTripActive && _locationUpdateSubscription != null) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (_positionStreamSubscription != null) {
+            if (_locationUpdateSubscription != null) {
                debugPrint("Ending trip externally initiated (Admin/System)");
                _stopTracking();
                if (mounted) {

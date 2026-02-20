@@ -1,16 +1,30 @@
 import 'dart:async';
 import 'dart:ui';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../../data/models/location_point.dart';
-import 'tracking_batcher.dart';
-// Note: We need a way to pass repository instances to the background isolate.
-// Usually, we initialize dependencies inside the background service.
+import 'dart:io';
 
 class DriverLocationService {
   static Future<void> initialize() async {
     final service = FlutterBackgroundService();
+
+    // Setup local notifications for Android foreground service
+    if (Platform.isAndroid) {
+        FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+        const AndroidNotificationChannel channel = AndroidNotificationChannel(
+          'my_foreground', 
+          'MY FOREGROUND SERVICE', 
+          description: 'This channel is used for important notifications.', 
+          importance: Importance.high,
+        );
+        await flutterLocalNotificationsPlugin
+            .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+            ?.createNotificationChannel(channel);
+    }
 
     await service.configure(
       androidConfiguration: AndroidConfiguration(
@@ -18,8 +32,8 @@ class DriverLocationService {
         autoStart: false,
         isForegroundMode: true,
         notificationChannelId: 'my_foreground',
-        initialNotificationTitle: 'Bannu Bus Driver',
-        initialNotificationContent: 'Initializing...',
+        initialNotificationTitle: 'Transit Hub Bus Driver',
+        initialNotificationContent: 'Initializing Tracking...',
         foregroundServiceNotificationId: 888,
       ),
       iosConfiguration: IosConfiguration(
@@ -38,64 +52,79 @@ class DriverLocationService {
   @pragma('vm:entry-point')
   static void onStart(ServiceInstance service) async {
     DartPluginRegistrant.ensureInitialized();
+    await Firebase.initializeApp();
     
-    // Initialize dependencies here (e.g. Dio, Repos)
-    // Since we can't easily pass the repositories, we might need to recreate them
-    // or use a Service Locator that works across isolates (unlikely).
-    // For now, I'll assume we can pass data via 'service.on' events.
-
-    // Correction: Valid approach is to re-create the repository stack here.
-    // Or we handle logic via listening to events.
-    
-    // But for simplicity in this generated code, we will mock the "re-creation" or Setup.
-    
-    // Listen for data sent from UI
     String? collegeId;
     String? busId;
-    
+    StreamSubscription<Position>? positionStream;
+
     service.on('setup').listen((event) {
       collegeId = event?['collegeId'];
       busId = event?['busId'];
     });
 
-    service.on('stopService').listen((event) {
+    service.on('stopService').listen((event) async {
+      await positionStream?.cancel();
       service.stopSelf();
     });
-    
-    // We need to wait for setup
-    // For simplicity, let's assume we get setup immediately or we store in shared prefs.
 
-    // 1Hz location updates
-    Geolocator.getPositionStream(
+    // 1Hz location updates with high precision (< 5m)
+    positionStream = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
+        accuracy: LocationAccuracy.bestForNavigation,
         distanceFilter: 0,
       ),
-    ).listen((Position position) {
+    ).listen((Position position) async {
       if (service is AndroidServiceInstance) {
-        if (service.isForegroundService()) {
+        if (await service.isForegroundService()) {
            service.setForegroundNotificationInfo(
             title: "Trip Active",
-            content: "Tracking location: ${position.latitude}, ${position.longitude}",
+            content: "Speed: ${(position.speed * 2.23694).toStringAsFixed(1)} mph",
           );
         }
       }
       
-      // Send location to UI or Batcher
-      // Ideally here we use the Batcher directly if we can initialize it.
-      // If we can't inject Repo, we can't use Batcher easily.
-      // Alternative: Send to UI isolate via invoke.
-      
-      service.invoke(
-        'locationUpdate',
-        {
-          'lat': position.latitude,
-          'lng': position.longitude,
-          'speed': position.speed,
-          'heading': position.heading,
-          'timestamp': DateTime.now().toIso8601String(),
-        },
+      final point = LocationPoint(
+        latitude: position.latitude,
+        longitude: position.longitude,
+        timestamp: DateTime.now(),
+        speed: position.speed,
+        heading: position.heading,
       );
+      final pointMap = point.toMap();
+
+      // Send to UI for dashboard updates
+      service.invoke('locationUpdate', pointMap);
+
+      // Direct Firestore push from isolated background thread
+      if (collegeId != null && busId != null) {
+          try {
+             final db = FirebaseFirestore.instance;
+             final busRef = db.collection('buses').doc(busId);
+             
+             final latlng = {'lat': position.latitude, 'lng': position.longitude};
+             final trailPoint = {
+               'lat': position.latitude,
+               'lng': position.longitude,
+               'timestamp': DateTime.now().toIso8601String()
+             };
+
+             await busRef.update({
+                'location': {'latitude': position.latitude, 'longitude': position.longitude},
+                'currentLocation': latlng,
+                'speed': position.speed * 2.23694,
+                'currentSpeed': position.speed * 2.23694,
+                'heading': position.heading,
+                'currentHeading': position.heading,
+                'lastLocationUpdate': FieldValue.serverTimestamp(),
+                'lastUpdated': DateTime.now().toIso8601String(),
+                'liveTrail': FieldValue.arrayUnion([trailPoint]),
+                'liveTrackBuffer': FieldValue.arrayUnion([trailPoint]),
+             });
+          } catch (e) {
+             print("Background Tracking Error: $e");
+          }
+      }
     });
   }
 }

@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Lock, Mail, ArrowRight, ShieldCheck, AlertCircle, School, Bus } from 'lucide-react';
-import { login, validateSlug } from '../services/api';
+import { validateSlug } from '../services/api';
 import { motion, AnimatePresence } from 'framer-motion';
+import { auth, db } from '../config/firebase';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
 
 const Login = () => {
     const { orgSlug } = useParams<{ orgSlug: string }>();
@@ -41,86 +44,110 @@ const Login = () => {
         setError('');
 
         try {
-            const data = await login({ email, password, orgSlug }); // Pass orgSlug for unified login scoping
+            // 1. Direct Firebase Auth (Serverless)
+            // This ensures login works globally on any network
+            const userCredential = await signInWithEmailAndPassword(auth, email, password);
+            const firebaseUser = userCredential.user;
 
-            // Redirect DRIVERS to Driver Dashboard
-            if (data.role === 'DRIVER') {
-                // Store user info specifically for driver portal
-                localStorage.setItem('driver_token', data.token);
+            // 2. Fetch User Data from Firestore
+            let userData: any = null;
+            let role: string = '';
+
+            // Try 'users' collection first (Owner, Admin, Driver)
+            const userDocRef = doc(db, 'users', firebaseUser.uid);
+            const userDocSnap = await getDoc(userDocRef);
+
+            if (userDocSnap.exists()) {
+                userData = userDocSnap.data();
+                role = userData.role;
+            } else {
+                // Try 'students' collection
+                const studentDocRef = doc(db, 'students', firebaseUser.uid);
+                const studentDocSnap = await getDoc(studentDocRef);
+                if (studentDocSnap.exists()) {
+                    userData = studentDocSnap.data();
+                    role = 'STUDENT';
+                }
+            }
+
+            if (!userData) {
+                throw new Error('User profile not found in database.');
+            }
+
+            // Security Check: Organization matching (if not owner)
+            if (role !== 'OWNER' && role !== 'SUPER_ADMIN' && userData.collegeId !== orgDetails.collegeId) {
+                // Special check: sometimes owners use slugs as collegeId
+                if (userData.collegeId !== orgSlug) {
+                    throw new Error('You do not have access to this organization.');
+                }
+            }
+
+            // 3. Handle Redirects based on Role
+            if (role === 'DRIVER') {
                 const userToStore = {
-                    _id: data._id,
-                    name: data.name,
-                    email: data.email,
-                    role: data.role,
-                    collegeId: data.collegeId
+                    _id: firebaseUser.uid,
+                    name: userData.name,
+                    email: userData.email,
+                    role: role,
+                    collegeId: userData.collegeId
                 };
                 localStorage.setItem('driver_user', JSON.stringify(userToStore));
                 localStorage.setItem('current_college_id', orgDetails.collegeId);
                 localStorage.setItem('orgName', orgDetails.collegeName);
-
-                // Redirect to driver dashboard
                 navigate(`/${orgSlug}/driver-dashboard`);
                 return;
             }
 
-            // Redirect STUDENTS
-            if (data.role === 'STUDENT') {
-                // Store student-specific tokens ONLY (no 'token' key to avoid conflicts)
-                localStorage.setItem('student_token', data.token);
-
+            if (role === 'STUDENT') {
                 const userToStore = {
-                    _id: data._id,
-                    name: data.name,
-                    email: data.email,
-                    role: data.role,
-                    collegeId: data.collegeId,
-                    registerNumber: data.registerNumber,
-                    isFirstLogin: data.isFirstLogin
+                    _id: firebaseUser.uid,
+                    name: userData.name,
+                    email: userData.email,
+                    role: role,
+                    collegeId: userData.collegeId,
+                    registerNumber: userData.registerNumber,
+                    isFirstLogin: userData.isFirstLogin || false
                 };
                 localStorage.setItem('student_user', JSON.stringify(userToStore));
                 localStorage.setItem('current_college_id', orgDetails.collegeId);
 
-                if (data.isFirstLogin) {
-                    navigate(`/${orgSlug}/student/login`, { state: { ...data, preAuthenticated: true } });
+                if (userData.isFirstLogin) {
+                    navigate(`/${orgSlug}/student/login`, { state: { ...userToStore, preAuthenticated: true } });
                     return;
                 }
-
                 navigate(`/${orgSlug}/student/dashboard`);
                 return;
             }
 
-            // Only allow COLLEGE_ADMIN role or OWNER
-            // We check specifically for OWNER or COLLEGE_ADMIN
-            if (data.role !== 'COLLEGE_ADMIN' && data.role !== 'OWNER' && data.role !== 'SUPER_ADMIN') {
-                throw new Error(`Access Denied. Your role '${data.role}' is not authorized.`);
+            // Admin / Owner roles
+            if (role !== 'COLLEGE_ADMIN' && role !== 'OWNER' && role !== 'SUPER_ADMIN') {
+                throw new Error(`Access Denied. Your role '${role}' is not authorized.`);
             }
 
-            if (data.role !== 'OWNER' && data.role !== 'SUPER_ADMIN' && data.collegeId !== orgDetails.collegeId) {
-                throw new Error('You do not have access to this organization.');
-            }
-
-            // Store user info and org name
-            localStorage.setItem('token', data.token);
-            // Backend returns flat user object, not nested 'user' key
             const userToStore = {
-                _id: data._id,
-                name: data.name,
-                email: data.email,
-                role: data.role,
-                collegeId: data.collegeId
+                _id: firebaseUser.uid,
+                name: userData.name,
+                email: userData.email,
+                role: role,
+                collegeId: userData.collegeId
             };
             localStorage.setItem('user', JSON.stringify(userToStore));
             localStorage.setItem('current_college_id', orgDetails.collegeId);
-            localStorage.setItem('orgName', orgDetails.collegeName); // Save College Name for Settings
-
-            // Set default headers for subsequent requests
-            // (Verify if api has setHeader method or if we reload)
+            localStorage.setItem('orgName', orgDetails.collegeName);
 
             navigate(`/${orgSlug}/dashboard`);
 
         } catch (err: any) {
             console.error("Login Failed:", err);
-            setError(err.response?.data?.message || err.message || 'Login failed');
+            let message = 'Login failed';
+            if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+                message = 'Invalid email or password';
+            } else if (err.code === 'auth/network-request-failed') {
+                message = 'Network error. Please check your internet connection.';
+            } else {
+                message = err.message || message;
+            }
+            setError(message);
         } finally {
             setLoading(false);
         }

@@ -12,25 +12,7 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
   final Ref _ref;
   static const String _collegeIdKey = 'selected_college_id';
 
-  AuthController(this._authRepository, this._ref) : super(const AsyncValue.data(null)) {
-    _recoverSession();
-  }
-
-  Future<void> _recoverSession() async {
-    final prefs = await SharedPreferences.getInstance();
-    final collegeId = prefs.getString(_collegeIdKey);
-    final collegeSlug = prefs.getString('college_slug');
-    final collegeName = prefs.getString('college_name');
-
-    if (collegeId != null && collegeSlug != null && collegeName != null) {
-      _ref.read(selectedCollegeIdProvider.notifier).state = collegeId;
-      _ref.read(selectedCollegeProvider.notifier).state = {
-        'collegeId': collegeId,
-        'slug': collegeSlug,
-        'collegeName': collegeName,
-      };
-    }
-  }
+  AuthController(this._authRepository, this._ref) : super(const AsyncValue.data(null));
 
   Future<void> signIn({
     required String email,

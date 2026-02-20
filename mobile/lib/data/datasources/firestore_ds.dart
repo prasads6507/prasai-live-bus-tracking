@@ -9,6 +9,47 @@ class FirestoreDataSource {
 
   FirestoreDataSource(this._firestore);
 
+  Future<void> updateDriverLocation(
+      String collegeId, String busId, List<LocationPoint> points) async {
+    if (points.isEmpty) return;
+    
+    final lastPoint = points.last;
+    final updateData = {
+      'lastUpdated': DateTime.now().toIso8601String(),
+      'lastLocationUpdate': FieldValue.serverTimestamp(),
+      'location': {
+        'latitude': lastPoint.latitude,
+        'longitude': lastPoint.longitude,
+        'heading': lastPoint.heading ?? 0,
+      },
+      'currentLocation': {
+        'lat': lastPoint.latitude,
+        'lng': lastPoint.longitude,
+      },
+      'speed': lastPoint.speed ?? 0,
+      'heading': lastPoint.heading ?? 0,
+    };
+
+    // Replicate backend buffer logic (arrayUnion points)
+    final docRef = _firestore.collection('buses').doc(busId);
+    
+    // We add all new points to the buffer
+    await docRef.update({
+      ...updateData,
+      'liveTrackBuffer': FieldValue.arrayUnion(points.map((p) => {
+        'latitude': p.latitude,
+        'longitude': p.longitude,
+        'speed': p.speed ?? 0,
+        'heading': p.heading ?? 0,
+        'timestamp': p.timestamp?.toIso8601String() ?? DateTime.now().toIso8601String(),
+      }).toList()),
+    });
+
+    // Optional: maintenance of buffer size could be done here or left to grow slightly
+    // The backend keeps 5, but Firestore arrayUnion is cumulative. 
+    // For now, let's keep it simple.
+  }
+
   /// Finds the canonical collegeId using its slug.
   /// Backend stores colleges in top-level 'colleges' collection.
   Future<String?> findCollegeIdBySlug(String slug) async {

@@ -30,6 +30,8 @@ const Dashboard = () => {
     const [focusedBusLocation, setFocusedBusLocation] = useState<{ lat: number, lng: number } | null>(null);
     const [busAddresses, setBusAddresses] = useState<{ [key: string]: string }>({});
     const [notifications, setNotifications] = useState<any[]>([]);
+    const [selectedBusId, setSelectedBusId] = useState<string | null>(null);
+    const [followSelectedBus, setFollowSelectedBus] = useState(true);
 
     // Initial Data Fetch & Validation
     useEffect(() => {
@@ -147,6 +149,8 @@ const Dashboard = () => {
     }, [buses]);
 
     const handleBusClick = (bus: any) => {
+        setSelectedBusId(bus._id);
+        setFollowSelectedBus(true);
         if (bus.location?.latitude && bus.location?.longitude) {
             setFocusedBusLocation({ lat: bus.location.latitude, lng: bus.location.longitude });
             // Scroll to map
@@ -166,29 +170,14 @@ const Dashboard = () => {
 
     return (
         <Layout activeItem="dashboard">
-            <div className="p-6">
-                <div className="max-w-7xl mx-auto space-y-6">
+            <div className="p-4 md:p-6 lg:p-8 bg-slate-50/50 min-h-full">
+                <div className="max-w-[1600px] mx-auto space-y-4 md:space-y-6">
 
 
                     {/* Stats Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 
-                        {/* Notification Banner (Phase 4.4) */}
-                        {notifications.length > 0 && (
-                            <div className="col-span-full bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
-                                <Bell className="text-blue-600 shrink-0 mt-0.5" size={20} />
-                                <div className="flex-1">
-                                    <h4 className="font-bold text-blue-800">Recent Alerts</h4>
-                                    <div className="space-y-1 mt-1">
-                                        {notifications.map(note => (
-                                            <p key={note._id} className="text-sm text-blue-700">
-                                                {note.message} <span className="text-xs text-blue-500 opacity-70">({getRelativeTime(note.createdAt?.toDate ? note.createdAt.toDate().toISOString() : new Date().toISOString())})</span>
-                                            </p>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
+
                         <StatCard
                             title="Total Routes"
                             value={routes.length.toString()}
@@ -221,41 +210,79 @@ const Dashboard = () => {
 
 
 
-                    {/* Map Section */}
-                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden h-[500px] flex flex-col">
-                        <div className="p-4 border-b border-slate-100 flex justify-between items-center">
-                            <h3 className="font-semibold text-slate-800 flex items-center gap-2">
-                                <MapPin size={20} className="text-blue-600" />
-                                Live Fleet Tracking
-                            </h3>
-                            <div className="flex items-center gap-2">
-                                {buses.some(isLiveBus) && (
-                                    <div className="px-3 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full flex items-center gap-1">
-                                        <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                                        LIVE
-                                    </div>
-                                )}
+                    {/* Main Content Area: Map & Alerts Side-by-Side on Desktop */}
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                        {/* Map Section */}
+                        <div className="lg:col-span-8 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden h-[380px] md:h-[420px] lg:h-[450px] flex flex-col">
+                            <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+                                <h3 className="font-semibold text-slate-800 flex items-center gap-2">
+                                    <MapPin size={20} className="text-blue-600" />
+                                    Live Fleet Tracking
+                                </h3>
+                                <div className="flex items-center gap-2">
+                                    {buses.some(isLiveBus) && (
+                                        <div className="px-3 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full flex items-center gap-1">
+                                            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                                            LIVE
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            <MapComponent
+                                buses={buses.map(b => {
+                                    if (isLiveBus(b)) return b;
+                                    if (b.status === 'ON_ROUTE') return { ...b, status: 'Active (Offline)' };
+                                    return b;
+                                })}
+                                focusedLocation={focusedBusLocation}
+                                selectedBusId={selectedBusId}
+                                followBus={followSelectedBus}
+                            />
+                        </div>
+
+                        {/* Recent Alerts / Quick Notifications */}
+                        <div className="lg:col-span-4 flex flex-col space-y-4">
+                            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex-1 overflow-y-auto max-h-[450px]">
+                                <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-50">
+                                    <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm uppercase tracking-wider">
+                                        <Bell size={16} className="text-blue-600" />
+                                        Live Alerts
+                                    </h3>
+                                    <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">LIVE</span>
+                                </div>
+                                <div className="space-y-3">
+                                    {notifications.length > 0 ? (
+                                        notifications.map(note => (
+                                            <div key={note._id} className="p-3 rounded-xl bg-slate-50 border border-slate-100 group hover:border-blue-100 hover:bg-blue-50/30 transition-all cursor-default text-[13px]">
+                                                <p className="text-slate-700 leading-snug mb-1">{note.message}</p>
+                                                <span className="text-[10px] text-slate-400 font-medium">
+                                                    {getRelativeTime(note.createdAt?.toDate ? note.createdAt.toDate().toISOString() : new Date().toISOString())}
+                                                </span>
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <div className="py-12 text-center opacity-40">
+                                            <Bell className="mx-auto mb-2 text-slate-300" size={24} />
+                                            <p className="text-xs">No recent alerts</p>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
-                        <MapComponent buses={buses.map(b => {
-                            // Apply strict staleness check logic to status for visualization
-                            if (isLiveBus(b)) return b; // It is truly active
-
-                            // If it claims to be ON_ROUTE but fails strict check, downgrade it for map
-                            if (b.status === 'ON_ROUTE') {
-                                return { ...b, status: 'Active (Offline)' };
-                            }
-                            return b;
-                        })} focusedLocation={focusedBusLocation} />
                     </div>
 
-                    {/* Bus List */}
-                    <div>
+                    {/* Bus List - Optimized Grid */}
+                    <div className="pt-2">
                         <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-lg font-bold text-slate-800">Bus Status</h2>
-                            <button className="text-sm font-semibold text-blue-600 hover:text-blue-700">View All</button>
+                            <h2 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                                <Bus size={20} className="text-blue-600" />
+                                Fleet Monitor
+                            </h2>
+                            <button className="text-[11px] font-bold text-blue-600 hover:text-blue-700 bg-white border border-slate-200 px-4 py-2 rounded-xl shadow-sm transition-all hover:shadow-md">
+                                VIEW DETAILED FLEET
+                            </button>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                             {buses.length > 0 ? (
                                 buses.map((bus) => (
                                     <div key={bus._id} onClick={() => handleBusClick(bus)} className="cursor-pointer">
@@ -272,21 +299,23 @@ const Dashboard = () => {
                     </div>
                 </div>
             </div>
-        </Layout >
+        </Layout>
     );
 };
 
 const StatCard = ({ title, value, total, icon, color }: any) => (
-    <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex items-start justify-between">
-        <div>
-            <p className="text-sm font-medium text-slate-500 mb-1">{title}</p>
-            <div className="flex items-baseline gap-2">
-                <h3 className="text-2xl font-bold text-slate-800">{value}</h3>
-                <span className="text-sm text-slate-400 font-medium">/ {total}</span>
+    <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between group hover:shadow-md transition-all">
+        <div className="flex items-center gap-4">
+            <div className={`p-2.5 rounded-xl ${color} group-hover:scale-110 transition-transform`}>
+                {icon}
             </div>
-        </div>
-        <div className={`p-3 rounded-xl ${color}`}>
-            {icon}
+            <div>
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{title}</p>
+                <div className="flex items-baseline gap-1.5">
+                    <h3 className="text-xl font-black text-slate-800 leading-none">{value}</h3>
+                    <span className="text-[10px] text-slate-400 font-bold">/ {total}</span>
+                </div>
+            </div>
         </div>
     </div>
 );

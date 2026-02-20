@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "34427841688-slkmnef4mq707905j1557k5gl2rkn3dn.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.bannu.mobile.mobile",
+            "certificate_hash": "6edb0ec8854b67e028c4ebb66bc016b185844b34"
+          }
+        },
+        {
           "client_id": "34427841688-421vlt8kpostsigspqutqk3e71ejb947.apps.googleusercontent.com",
           "client_type": 3
         }
@@ -29,6 +37,13 @@
             {
               "client_id": "34427841688-421vlt8kpostsigspqutqk3e71ejb947.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "34427841688-168b1q650fjt5j11mbri0i28o0lqpodl.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.bannu.mobile.mobile"
+              }
             }
           ]
         }

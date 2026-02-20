@@ -10,7 +10,8 @@ class TrackingRepository {
 
   Future<void> updateDriverLocation(
       String collegeId, String busId, List<LocationPoint> points) {
-    return _apiDataSource.updateDriverLocation(collegeId, busId, points);
+    // We use firestore for real-time tracking to ensure global connectivity
+    return _firestoreDataSource.updateDriverLocation(collegeId, busId, points);
   }
 
   Future<void> updateBusLiveBuffer(
@@ -20,10 +21,15 @@ class TrackingRepository {
 
   Future<void> startTrip(
       String collegeId, String busId, String driverId, String routeId) {
-    return _apiDataSource.startTrip(collegeId, busId, driverId, routeId);
+    return _firestoreDataSource.startTrip(
+      collegeId: collegeId,
+      busId: busId,
+      driverId: driverId,
+      routeId: routeId,
+    );
   }
 
-  Future<void> endTrip(String collegeId, String tripId) {
-    return _apiDataSource.endTrip(collegeId, tripId);
+  Future<void> endTrip(String collegeId, String tripId, String busId) {
+    return _firestoreDataSource.endTrip(tripId, busId);
   }
 }

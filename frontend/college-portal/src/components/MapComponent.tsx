@@ -4,6 +4,7 @@ import 'leaflet/dist/leaflet.css';
 import { divIcon } from 'leaflet';
 import { MapPin, Crosshair } from 'lucide-react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { FaBusAlt } from 'react-icons/fa';
 
 interface MapComponentProps {
     buses: any[];
@@ -11,6 +12,7 @@ interface MapComponentProps {
     stopMarkers?: { lat: number, lng: number, name: string, isCompleted?: boolean }[];
     followBus?: boolean;
     path?: [number, number][]; // Array of [lat, lng] for drawing trip history
+    selectedBusId?: string | null;
 }
 
 // Component to handle map re-centering with smooth animation
@@ -131,7 +133,7 @@ const UserLocationMarker = ({ onLocationFound, shouldCenterOnUser }: { onLocatio
 // Bus Marker Component with Animation (5-Point Buffer Interpolation)
 import { interpolatePosition, calculateBearing } from '../utils/mapUtils';
 
-const AnimatedBusMarker = ({ bus, icon }: { bus: any, icon: any }) => {
+const AnimatedBusMarker = ({ bus, icon, onPositionUpdate }: { bus: any, icon: (bearing: number) => any, onPositionUpdate?: (busId: string, pos: [number, number], bearing: number) => void }) => {
     const [position, setPosition] = useState<[number, number]>([bus.location.latitude, bus.location.longitude]);
     const [bearing, setBearing] = useState<number>(bus.location.heading || 0);
     const animationFrameRef = useRef<number | null>(null);
@@ -197,12 +199,14 @@ const AnimatedBusMarker = ({ bus, icon }: { bus: any, icon: any }) => {
                 setPosition([interpolated.lat, interpolated.lng]);
 
                 // Update Bearing
-                // Use actual heading if available, else calculate
                 const newBearing = targetPoint.heading || calculateBearing(
                     { lat: prevPoint.latitude, lng: prevPoint.longitude },
                     { lat: targetPoint.latitude, lng: targetPoint.longitude }
                 );
                 setBearing(newBearing);
+
+                // Notify parent for GPS pointer sync
+                onPositionUpdate?.(bus._id, [interpolated.lat, interpolated.lng], newBearing);
 
                 animationFrameRef.current = requestAnimationFrame(animate);
             } else {
@@ -221,8 +225,8 @@ const AnimatedBusMarker = ({ bus, icon }: { bus: any, icon: any }) => {
     }, [bus.lastUpdated, bus.liveTrackBuffer, bus.location]);
 
     return (
-        // @ts-ignore - rotationAngle is supported by some Leaflet plugins or custom implementations
-        <Marker position={position} icon={icon} rotationAngle={bearing} rotationOrigin="center">
+        // @ts-ignore
+        <Marker position={position} icon={icon(bearing)}>
             <Popup>
                 <div className="p-2 min-w-[150px]">
                     <h3 className="font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-2 mb-2 text-sm">
@@ -257,7 +261,8 @@ const AnimatedBusMarker = ({ bus, icon }: { bus: any, icon: any }) => {
     );
 };
 
-const MapComponent = ({ buses, focusedLocation, stopMarkers = [], followBus: externalFollowBus, path }: MapComponentProps) => { // Destructure path
+const MapComponent = ({ buses, focusedLocation, stopMarkers = [], followBus: externalFollowBus, path, selectedBusId }: MapComponentProps) => { // Destructure path
+    const [animatedPositions, setAnimatedPositions] = useState<{ [key: string]: { pos: [number, number], bearing: number } }>({});
     const props = { path }; // Keep props ref for use in logic above if needed
 
     const defaultCenter: [number, number] = [17.3850, 78.4867];
@@ -265,11 +270,16 @@ const MapComponent = ({ buses, focusedLocation, stopMarkers = [], followBus: ext
     const [followBusEnabled, setFollowBusEnabled] = useState(externalFollowBus ?? true);
 
     // Track the active bus position for follow mode
-    const activeBusWithLocation = buses.find(b => b.status === 'ON_ROUTE' && b.location?.latitude && b.location?.longitude);
+    const selectedBus = selectedBusId ? buses.find(b => b._id === selectedBusId) : null;
+    const activeBusWithLocation = selectedBus?.location?.latitude
+        ? selectedBus
+        : buses.find(b => b.status === 'ON_ROUTE' && b.location?.latitude && b.location?.longitude);
+
     const anyBusWithLocation = buses.find(b => b.location?.latitude && b.location?.longitude);
 
+    // Use animated position if available, otherwise fallback to DB position
     const activeBusPosition: [number, number] | null = activeBusWithLocation
-        ? [activeBusWithLocation.location.latitude, activeBusWithLocation.location.longitude]
+        ? (animatedPositions[activeBusWithLocation._id]?.pos ?? [activeBusWithLocation.location.latitude, activeBusWithLocation.location.longitude])
         : null;
 
     // Priority: Focused Location > Active bus > Any bus with location > Path start > User location > Default
@@ -296,40 +306,56 @@ const MapComponent = ({ buses, focusedLocation, stopMarkers = [], followBus: ext
     }
 
     // Custom Bus Icon with heading rotation
+    // Custom Bus Icon using FaBusAlt
     const createBusIcon = useCallback((status: string, heading?: number) => {
-        const color = status === 'ON_ROUTE' ? '#16a34a' : (status === 'MAINTENANCE' ? '#ea580c' : '#3b82f6');
         const rotation = heading && !isNaN(heading) ? heading : 0;
+        const color = status === 'ON_ROUTE' ? '#16a34a' : (status === 'MAINTENANCE' ? '#ea580c' : '#3b82f6');
 
         const iconMarkup = renderToStaticMarkup(
             <div className="relative flex items-center justify-center">
-                <div className={`absolute -inset-1 rounded-full opacity-50 ${status === 'ON_ROUTE' ? 'animate-pulse' : ''}`} style={{ backgroundColor: color }}></div>
-                <div
-                    className="relative z-10 p-1.5 rounded-full shadow-lg border-2 border-white text-white"
+                {/* Ping animation for live buses */}
+                {status === 'ON_ROUTE' && (
+                    <div className="absolute -inset-2 bg-green-500/30 rounded-full animate-ping"></div>
+                )}
+
+                <div className="relative z-10 filter drop-shadow-md text-3xl transition-all duration-500"
                     style={{
-                        backgroundColor: color,
                         transform: `rotate(${rotation}deg)`,
-                        transition: 'transform 0.5s ease'
-                    }}
-                >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="2" y="6" width="20" height="12" rx="2" />
-                        <path d="M6 18h0" />
-                        <path d="M18 18h0" />
-                        <path d="M4 6h16" />
-                        <path d="M7 10h2" />
-                        <path d="M15 10h2" />
-                    </svg>
+                        color: color
+                    }}>
+                    <FaBusAlt />
                 </div>
-                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 translate-y-full w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px]" style={{ borderTopColor: color }}></div>
             </div>
         );
 
         return divIcon({
             html: iconMarkup,
             className: 'custom-bus-icon',
-            iconSize: [32, 32],
-            iconAnchor: [16, 40],
-            popupAnchor: [0, -40]
+            iconSize: [40, 40],
+            iconAnchor: [20, 20],
+            popupAnchor: [0, -20]
+        });
+    }, []);
+
+    // Create Pointer Icon (Selected Bus Highlights)
+    const createPointerIcon = useCallback((bearing: number = 0) => {
+        const iconMarkup = renderToStaticMarkup(
+            <div className="relative flex items-center justify-center">
+                <div className="absolute w-14 h-14 bg-blue-500/20 rounded-full animate-ping"></div>
+                <div
+                    className="relative z-10 text-blue-600 drop-shadow-xl text-4xl cursor-pointer"
+                    style={{ transform: `rotate(${bearing}deg)` }}
+                >
+                    <FaBusAlt />
+                </div>
+            </div>
+        );
+
+        return divIcon({
+            html: iconMarkup,
+            className: 'gps-pointer-icon',
+            iconSize: [56, 56],
+            iconAnchor: [28, 28]
         });
     }, []);
 
@@ -434,16 +460,32 @@ const MapComponent = ({ buses, focusedLocation, stopMarkers = [], followBus: ext
                 {buses.map((bus) => {
                     if (bus.status !== 'ON_ROUTE' || bus.location?.latitude == null || bus.location?.longitude == null) return null;
 
-                    const heading = bus.heading || bus.currentHeading || 0;
-
                     return (
                         <AnimatedBusMarker
                             key={bus._id}
                             bus={bus}
-                            icon={createBusIcon(bus.status, heading)}
+                            icon={(bearing: number) => createBusIcon(bus.status, bearing)}
+                            onPositionUpdate={(id, pos, bearing) => {
+                                setAnimatedPositions(prev => ({
+                                    ...prev,
+                                    [id]: { pos, bearing }
+                                }));
+                            }}
                         />
                     );
                 })}
+
+                {/* GPS Pointer for Selected Bus */}
+                {selectedBusId && buses.find(b => b._id === selectedBusId)?.location?.latitude && (
+                    <Marker
+                        position={animatedPositions[selectedBusId]?.pos ?? [
+                            buses.find(b => b._id === selectedBusId)!.location.latitude,
+                            buses.find(b => b._id === selectedBusId)!.location.longitude
+                        ]}
+                        icon={createPointerIcon(animatedPositions[selectedBusId]?.bearing ?? 0)}
+                        zIndexOffset={1000}
+                    />
+                )}
 
                 {/* Stop point markers */}
                 {stopMarkers.map((stop, idx) => (

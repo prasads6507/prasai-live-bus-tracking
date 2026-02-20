@@ -297,19 +297,36 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
                             child: Stack(
                               alignment: Alignment.center,
                               children: [
+                                // Ping animation using a large container
                                 Container(
-                                  width: 44, 
-                                  height: 44,
+                                  width: 80,
+                                  height: 80,
                                   decoration: BoxDecoration(
-                                    color: AppColors.primary,
+                                    color: AppColors.primary.withOpacity(0.1),
                                     shape: BoxShape.circle,
-                                    border: Border.all(color: Colors.white, width: 2.5),
-                                    boxShadow: [
-                                      BoxShadow(color: AppColors.primary.withOpacity(0.5), blurRadius: 15)
-                                    ]
                                   ),
-                                  child: const Center(
-                                    child: Icon(Icons.directions_bus_rounded, color: Colors.white, size: 24),
+                                ),
+                                // The Pin Image
+                                Image.asset(
+                                  'assets/bus_pin.png',
+                                  width: 60,
+                                  height: 60,
+                                ),
+                                // Directional arrow on top
+                                Positioned(
+                                  top: 0,
+                                  right: 0,
+                                  child: Transform.rotate(
+                                    angle: 0, // Heading already applied to parent
+                                    child: Container(
+                                      padding: const EdgeInsets.all(2),
+                                      decoration: const BoxDecoration(
+                                        color: Colors.white,
+                                        shape: BoxShape.circle,
+                                        boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4)],
+                                      ),
+                                      child: Icon(Icons.navigation, color: AppColors.primary, size: 14),
+                                    ),
                                   ),
                                 ),
                               ],

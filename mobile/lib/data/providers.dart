@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dio/dio.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'datasources/api_ds.dart';
 import 'datasources/auth_ds.dart';
@@ -18,6 +19,7 @@ import 'models/user_profile.dart';
 final firebaseAuthProvider = Provider<FirebaseAuth>((ref) => FirebaseAuth.instance);
 final firestoreProvider = Provider<FirebaseFirestore>((ref) => FirebaseFirestore.instance);
 final dioProvider = Provider<Dio>((ref) => Dio());
+final sharedPreferencesProvider = Provider<SharedPreferences>((ref) => throw UnimplementedError());
 
 // Authentication state stream
 final authStateProvider = StreamProvider<User?>((ref) {
@@ -42,7 +44,10 @@ final firestoreDataSourceProvider = Provider<FirestoreDataSource>((ref) {
 });
 
 final apiDataSourceProvider = Provider<ApiDataSource>((ref) {
-  return ApiDataSource(ref.read(dioProvider));
+  return ApiDataSource(
+    ref.read(dioProvider),
+    ref.read(firestoreProvider),
+  );
 });
 
 // Repositories

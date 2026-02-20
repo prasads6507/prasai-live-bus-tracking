@@ -45,4 +45,8 @@ class LocationPoint {
       'speed': speed,
     };
   }
+
+  factory LocationPoint.fromMap(Map<String, dynamic> map) => LocationPoint.fromJson(map);
+
+  Map<String, dynamic> toMap() => toJson();
 }

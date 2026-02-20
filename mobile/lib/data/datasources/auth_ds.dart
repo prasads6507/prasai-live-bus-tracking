@@ -24,6 +24,10 @@ class AuthDataSource {
     return _firebaseAuth.signInWithCustomToken(customToken);
   }
 
+  Future<UserCredential> signInDirect(String email, String password) async {
+    return _firebaseAuth.signInWithEmailAndPassword(email: email, password: password);
+  }
+
   Future<void> signOut() {
     return _firebaseAuth.signOut();
   }

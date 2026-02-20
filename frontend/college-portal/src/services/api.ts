@@ -1,4 +1,6 @@
 import axios from 'axios';
+import { db } from '../config/firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 
 const getBaseUrl = () => {
     const url = import.meta.env.VITE_API_URL || 'http://127.0.0.1:3001/api';
@@ -45,8 +47,30 @@ api.interceptors.request.use(
 );
 
 export const validateSlug = async (slug: string) => {
-    const response = await api.get(`/auth/college/${slug}`);
-    return response.data;
+    try {
+        const response = await api.get(`/auth/college/${slug}`);
+        return response.data;
+    } catch (error) {
+        console.warn('API Slug Validation Failed, falling back to Firestore:', error);
+
+        // Direct Firestore fallback for global connectivity
+        const collegesRef = collection(db, 'colleges');
+        const q = query(collegesRef, where('slug', '==', slug));
+        const querySnapshot = await getDocs(q);
+
+        if (querySnapshot.empty) {
+            throw new Error('Organization not found');
+        }
+
+        const doc = querySnapshot.docs[0];
+        const data = doc.data();
+        return {
+            collegeId: doc.id,
+            collegeName: data.collegeName || data.name,
+            status: data.status || 'ACTIVE',
+            logo: data.logo
+        };
+    }
 };
 
 export const login = async (credentials: any) => {
