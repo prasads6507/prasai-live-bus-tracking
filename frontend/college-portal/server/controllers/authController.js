@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const { db, admin } = require('../config/firebase');
+const { db, admin, auth } = require('../config/firebase');
 
 // Helper to validate password since Mongoose method is gone
 const matchPassword = async (enteredPassword, passwordHash) => {
@@ -42,6 +42,12 @@ const loginUser = async (req, res) => {
             }
 
             if (await matchPassword(password, userData.passwordHash)) {
+                // Generate Firebase Custom Token for Mobile/Direct Auth
+                const firebaseCustomToken = await auth.createCustomToken(userData.userId, {
+                    role: userData.role,
+                    collegeId: userData.collegeId
+                });
+
                 return res.json({
                     _id: userData.userId,
                     name: userData.name,
@@ -49,6 +55,7 @@ const loginUser = async (req, res) => {
                     role: userData.role,
                     collegeId: userData.collegeId,
                     token: generateToken(userData.userId, userData.role, userData.collegeId),
+                    firebaseCustomToken
                 });
             } else {
                 return res.status(401).json({ message: 'Invalid email or password' });
@@ -107,6 +114,10 @@ const loginUser = async (req, res) => {
             }
 
             if (isValid) {
+                const firebaseCustomToken = await auth.createCustomToken(student.studentId, {
+                    role: 'STUDENT',
+                    collegeId: student.collegeId
+                });
                 return res.json({
                     _id: student.studentId,
                     name: student.name,
@@ -115,7 +126,8 @@ const loginUser = async (req, res) => {
                     collegeId: student.collegeId,
                     role: 'STUDENT',
                     isFirstLogin, // Frontend needs this to trigger password change modal
-                    token: generateToken(student.studentId, 'STUDENT', student.collegeId)
+                    token: generateToken(student.studentId, 'STUDENT', student.collegeId),
+                    firebaseCustomToken
                 });
             }
             else {
@@ -381,6 +393,7 @@ const studentLogin = async (req, res) => {
                 return res.status(401).json({ message: 'Invalid credentials. Use your Register Number as your initial password.' });
             }
             // Return token + flag for first login
+            const firebaseCustomToken = await auth.createCustomToken(student.studentId);
             return res.json({
                 _id: student.studentId,
                 name: student.name,
@@ -388,13 +401,15 @@ const studentLogin = async (req, res) => {
                 collegeId: student.collegeId,
                 role: 'STUDENT',
                 isFirstLogin: true,
-                token: generateToken(student.studentId, 'STUDENT', student.collegeId)
+                token: generateToken(student.studentId, 'STUDENT', student.collegeId),
+                firebaseCustomToken
             });
         } else {
             // Subsequent login: compare hashed password
             if (!(await matchPassword(password, student.passwordHash))) {
                 return res.status(401).json({ message: 'Invalid email or password' });
             }
+            const firebaseCustomToken = await auth.createCustomToken(student.studentId);
             return res.json({
                 _id: student.studentId,
                 name: student.name,
@@ -402,7 +417,8 @@ const studentLogin = async (req, res) => {
                 collegeId: student.collegeId,
                 role: 'STUDENT',
                 isFirstLogin: false,
-                token: generateToken(student.studentId, 'STUDENT', student.collegeId)
+                token: generateToken(student.studentId, 'STUDENT', student.collegeId),
+                firebaseCustomToken
             });
         }
     } catch (error) {

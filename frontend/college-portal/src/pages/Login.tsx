@@ -7,8 +7,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 const Login = () => {
     const { orgSlug } = useParams<{ orgSlug: string }>();
     const navigate = useNavigate();
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
+    const [email, setEmail] = useState('james@sist.ac.in');
+    const [password, setPassword] = useState('7896541236');
     const [loading, setLoading] = useState(false);
     const [validating, setValidating] = useState(true);
     const [orgDetails, setOrgDetails] = useState<any>(null);

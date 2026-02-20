@@ -237,13 +237,19 @@ const AnimatedBusMarker = ({ bus, icon }: { bus: any, icon: any }) => {
                                     backgroundColor: bus.status === 'ON_ROUTE' ? '#dcfce7' : '#f1f5f9',
                                     color: bus.status === 'ON_ROUTE' ? '#166534' : '#64748b'
                                 }}>
-                                {bus.status?.replace('_', ' ') || 'IDLE'}
+                                {bus.status?.replace('_', ' ') || 'ACTIVE'}
                             </span>
                         </div>
                         <div className="flex justify-between items-center">
                             <span className="text-slate-500">Speed:</span>
-                            <span className="font-mono text-slate-700">{Math.round(bus.speed || 0)} km/h</span>
+                            <span className="font-mono text-slate-700">{Math.round(bus.speed || 0)} mph</span>
                         </div>
+                        {bus.currentRoadName && (
+                            <div className="pt-1 border-t border-slate-50 mt-1">
+                                <span className="text-[10px] text-slate-400 block uppercase font-bold mb-0.5">Current Road</span>
+                                <span className="text-slate-700 font-medium leading-tight">{bus.currentRoadName}</span>
+                            </div>
+                        )}
                     </div>
                 </div>
             </Popup>
@@ -305,9 +311,13 @@ const MapComponent = ({ buses, focusedLocation, stopMarkers = [], followBus: ext
                         transition: 'transform 0.5s ease'
                     }}
                 >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M12 2L4 22l8-6 8 6z" fill="currentColor" opacity="0.3" />
-                        <path d="M12 2L4 22l8-6 8 6z" />
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="2" y="6" width="20" height="12" rx="2" />
+                        <path d="M6 18h0" />
+                        <path d="M18 18h0" />
+                        <path d="M4 6h16" />
+                        <path d="M7 10h2" />
+                        <path d="M15 10h2" />
                     </svg>
                 </div>
                 <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 translate-y-full w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px]" style={{ borderTopColor: color }}></div>

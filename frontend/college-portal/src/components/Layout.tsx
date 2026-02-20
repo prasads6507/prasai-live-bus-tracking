@@ -171,7 +171,9 @@ const Layout = ({ children, activeItem = 'dashboard' }: LayoutProps) => {
                         >
                             <Menu size={24} />
                         </button>
-                        <h1 className="text-lg sm:text-xl font-bold text-slate-800">College Portal</h1>
+                        <h1 className="text-lg sm:text-xl font-bold text-slate-800">
+                            {localStorage.getItem('orgName') || 'College Portal'}
+                        </h1>
                     </div>
                     <div className="flex items-center gap-2 sm:gap-4">
                         {/* Search and Notifications removed as per request */}

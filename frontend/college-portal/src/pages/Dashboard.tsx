@@ -333,7 +333,7 @@ const BusCard = ({ bus, address }: { bus: any, address?: string }) => (
                 <div className="flex items-center gap-2 text-sm bg-green-50 p-2 rounded-lg">
                     <Navigation size={14} className="text-green-500" />
                     <div className="flex-1">
-                        <span className="font-semibold text-green-700">{bus.speed || 0} km/h</span>
+                        <span className="font-semibold text-green-700">{bus.speed || 0} mph</span>
                         <div className="text-green-600 ml-2 text-xs font-medium truncate max-w-[200px]" title={address}>
                             {address || `${bus.location.latitude.toFixed(4)}, ${bus.location.longitude.toFixed(4)}`}
                         </div>

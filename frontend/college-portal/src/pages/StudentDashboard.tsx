@@ -734,7 +734,7 @@ const StudentDashboard = () => {
                                 {selectedBus.speed != null && isLiveBus(selectedBus) && (
                                     <div className="flex items-center justify-between p-3 bg-slate-700/50 rounded-xl">
                                         <span className="text-slate-400">Speed</span>
-                                        <span className="font-bold text-white">{selectedBus.speed} km/h</span>
+                                        <span className="font-bold text-white">{selectedBus.speed} mph</span>
                                     </div>
                                 )}
                             </div>

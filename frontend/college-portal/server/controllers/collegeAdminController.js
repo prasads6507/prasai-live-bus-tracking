@@ -731,10 +731,16 @@ const adminEndTrip = async (req, res) => {
         if (busId) {
             const busRef = db.collection('buses').doc(busId);
             const busDoc = await busRef.get();
-            if (busDoc.exists && busDoc.data().currentTripId === tripId) {
+            if (busDoc.exists && (busDoc.data().currentTripId === tripId || busDoc.data().activeTripId === tripId)) {
                 await busRef.update({
                     currentTripId: null,
-                    status: 'ACTIVE'
+                    activeTripId: null,
+                    status: 'ACTIVE',
+                    liveTrail: [],
+                    liveTrackBuffer: [],
+                    currentRoadName: '',
+                    currentSpeed: 0,
+                    lastUpdated: new Date().toISOString()
                 });
             }
         }

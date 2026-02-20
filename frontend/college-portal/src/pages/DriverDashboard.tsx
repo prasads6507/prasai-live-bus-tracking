@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Navigation, LogOut, AlertCircle, User, Bus, Settings, Phone, Search, X, MapPin } from 'lucide-react';
+import { Navigation, LogOut, AlertCircle, Bus, Settings, Search, X, MapPin } from 'lucide-react';
 import { getDriverBuses, updateBusLocation, saveTripHistory, startNewTrip, searchDriverBuses, checkProximity, api } from '../services/api';
 import { doc, updateDoc, collection, addDoc, serverTimestamp, getDocs, query, where, setDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -251,7 +251,7 @@ const DriverDashboard = () => {
                 currentPositionRef.current = {
                     latitude,
                     longitude,
-                    speed: Math.round((speed || 0) * 3.6),
+                    speed: Math.round((speed || 0) * 2.23694),
                     heading: heading || 0
                 };
 
@@ -266,7 +266,7 @@ const DriverDashboard = () => {
                 }
 
                 // Update UI state
-                setCurrentSpeed((speed || 0) * 3.6);
+                setCurrentSpeed((speed || 0) * 2.23694);
                 setCurrentCoords({ lat: latitude, lng: longitude });
                 setLocationError(null);
 
@@ -279,7 +279,7 @@ const DriverDashboard = () => {
                 if (now - lastUpdateRef.current > 5000) {
                     try {
                         console.log(`--- WRITING LOCATION TO FIRESTORE FOR BUS ${busId} ---`);
-                        const speedKmh = Math.round((speed || 0) * 3.6);
+                        const speedMph = Math.round((speed || 0) * 2.23694);
                         const headingVal = heading || 0;
 
                         // Direct Firestore write for real-time updates
@@ -288,9 +288,11 @@ const DriverDashboard = () => {
                             location: { latitude, longitude },
                             currentLocation: { lat: latitude, lng: longitude },
                             currentHeading: headingVal,
-                            currentSpeed: speedKmh,
-                            speed: speedKmh,
+                            currentSpeed: speedMph,
+                            speed: speedMph,
                             heading: headingVal,
+                            currentStreetName: currentStreetName || 'Identifying road...',
+                            currentRoadName: currentStreetName || 'Identifying road...',
                             lastLocationUpdate: serverTimestamp(),
                             lastUpdated: new Date().toISOString(),
                             currentTripId: currentTripId || null,
@@ -316,7 +318,7 @@ const DriverDashboard = () => {
                             await updateBusLocation(busId, {
                                 latitude,
                                 longitude,
-                                speed: Math.round((speed || 0) * 3.6),
+                                speed: Math.round((speed || 0) * 2.23694),
                                 heading: heading || 0,
                                 status: currentTripId ? 'ON_ROUTE' : 'ACTIVE'
                             });
@@ -361,7 +363,7 @@ const DriverDashboard = () => {
                         const result = await saveTripHistory(busId, currentTripId, {
                             latitude,
                             longitude,
-                            speed: Math.round((speed || 0) * 3.6),
+                            speed: Math.round((speed || 0) * 2.23694),
                             heading: heading || 0,
                             timestamp: new Date().toISOString()
                         });
@@ -547,7 +549,7 @@ const DriverDashboard = () => {
                                 <div className="text-7xl font-black tabular-nums leading-none tracking-tighter">
                                     {Math.round(currentSpeed)}
                                 </div>
-                                <div className="text-lg font-medium opacity-80 mt-1">km/h</div>
+                                <div className="text-lg font-medium opacity-80 mt-1">mph</div>
                             </div>
                         ) : (
                             <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mb-2 shadow-inner">
@@ -567,10 +569,10 @@ const DriverDashboard = () => {
                     {!isTracking ? (
                         <>
                             {!selectedBusId ? (
-                                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-                                    <div className="p-4 border-b border-slate-50 bg-slate-50/50 flex justify-between items-center">
-                                        <h3 className="font-bold text-slate-700 flex items-center gap-2">
-                                            <Bus size={18} className="text-blue-500" />
+                                <div className="bg-white rounded-3xl shadow-xl shadow-slate-200 border border-slate-100 overflow-hidden">
+                                    <div className="p-5 border-b border-slate-50 bg-slate-50/50 flex justify-between items-center">
+                                        <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                                            <Bus size={18} className="text-blue-600" />
                                             {manualEntryMode ? 'Search Bus' : 'Select Your Bus'}
                                         </h3>
                                         {manualEntryMode && (
@@ -602,36 +604,45 @@ const DriverDashboard = () => {
                                         </div>
                                     )}
 
-                                    <div className="p-4 grid grid-cols-1 gap-3 max-h-[400px] overflow-y-auto">
+                                    <div className="p-4 space-y-3 max-h-[400px] overflow-y-auto">
                                         {buses.length > 0 ? (
                                             buses.map(bus => (
                                                 <button
                                                     key={bus._id}
                                                     onClick={() => setSelectedBusId(bus._id)}
-                                                    className="flex items-center justify-between p-4 rounded-xl border border-slate-100 hover:border-blue-500 hover:bg-blue-50 transition-all group text-left"
+                                                    className="w-full flex items-center justify-between p-5 rounded-2xl border border-slate-100 hover:border-blue-500 hover:bg-blue-50 transition-all group text-left bg-white shadow-sm"
                                                 >
-                                                    <div>
-                                                        <div className="font-bold text-slate-800 text-lg group-hover:text-blue-700">{bus.busNumber}</div>
-                                                        <div className="text-xs text-slate-400 font-medium flex items-center gap-1 mt-1">
-                                                            <div className="w-1.5 h-1.5 rounded-full bg-slate-300"></div>
-                                                            {bus.routeName || bus.route?.routeName || bus.assignedRoute?.routeName || bus.route?.name || 'No Route Assigned'}
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="p-3 bg-slate-50 rounded-xl group-hover:bg-blue-100 transition-colors">
+                                                            <Bus size={24} className="text-slate-400 group-hover:text-blue-600" />
+                                                        </div>
+                                                        <div>
+                                                            <div className="font-black text-slate-800 text-xl group-hover:text-blue-800 leading-none mb-1">{bus.busNumber}</div>
+                                                            <div className="text-sm text-slate-400 font-medium flex items-center gap-1.5">
+                                                                <div className="w-1.5 h-1.5 rounded-full bg-slate-300"></div>
+                                                                {bus.routeName || bus.route?.routeName || bus.assignedRoute?.routeName || bus.route?.name || 'No Route Assigned'}
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                    <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-blue-200 group-hover:text-blue-700 transition-colors">
-                                                        <Navigation size={16} />
+                                                    <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-300 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm">
+                                                        <Navigation size={18} />
                                                     </div>
                                                 </button>
                                             ))
                                         ) : (
-                                            <div className="text-center py-8 text-slate-400">
-                                                {manualEntryMode ? 'No buses found with that number.' : 'No buses found assigned to you.'}
+                                            <div className="text-center py-12 text-slate-400">
+                                                <Bus size={40} className="mx-auto mb-3 opacity-20" />
+                                                <p className="font-medium">
+                                                    {manualEntryMode ? 'No buses found with that number.' : 'No buses currently assigned to you.'}
+                                                </p>
+                                                <p className="text-xs mt-1">Please contact your administrator if this is an error.</p>
                                             </div>
                                         )}
 
                                         {!manualEntryMode && (
                                             <button
                                                 onClick={() => setManualEntryMode(true)}
-                                                className="mt-2 w-full py-3 text-sm text-blue-600 font-medium bg-blue-50 rounded-xl hover:bg-blue-100 transition-colors"
+                                                className="mt-4 w-full py-4 text-sm text-blue-600 font-bold bg-blue-50/50 rounded-2xl hover:bg-blue-100 transition-all border border-blue-100"
                                             >
                                                 Bus not listed? Search Manually
                                             </button>
@@ -641,92 +652,99 @@ const DriverDashboard = () => {
                             ) : (
                                 <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
                                     {/* Selected Bus Card */}
-                                    <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
-                                        <div className="flex justify-between items-start mb-4">
+                                    <div className="bg-white rounded-3xl p-6 shadow-xl shadow-slate-200 border border-slate-100 relative overflow-hidden">
+                                        <div className="relative z-10 flex justify-between items-start">
                                             <div>
-                                                <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">Selected Vehicle</p>
-                                                <h3 className="text-2xl font-black text-slate-800">
+                                                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mb-2 px-1">Selected Vehicle</p>
+                                                <h3 className="text-4xl font-black text-slate-900 leading-none">
                                                     {buses.find(b => b._id === selectedBusId)?.busNumber}
                                                 </h3>
-                                                <p className="text-sm text-slate-500 font-medium mt-1">
-                                                    {buses.find(b => b._id === selectedBusId)?.routeName || buses.find(b => b._id === selectedBusId)?.route?.routeName || buses.find(b => b._id === selectedBusId)?.assignedRoute?.routeName || 'General Route'}
-                                                </p>
+                                                <div className="flex items-center gap-2 mt-3 bg-blue-50 text-blue-700 px-3 py-1.5 rounded-full w-fit">
+                                                    <MapPin size={14} />
+                                                    <span className="text-sm font-bold truncate max-w-[200px]">
+                                                        {buses.find(b => b._id === selectedBusId)?.routeName || buses.find(b => b._id === selectedBusId)?.route?.routeName || buses.find(b => b._id === selectedBusId)?.assignedRoute?.routeName || 'General Route'}
+                                                    </span>
+                                                </div>
                                             </div>
-                                            <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600">
-                                                <Bus size={24} />
+                                            <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-blue-200">
+                                                <Bus size={32} />
                                             </div>
                                         </div>
-
-                                        {/* Switch Bus Button Removed */}
+                                        <div className="absolute -right-6 -bottom-6 opacity-5 rotate-12 bg-blue-600 w-32 h-32 rounded-full"></div>
                                     </div>
 
-                                    {/* Driver Info Card */}
-                                    <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex items-center gap-4">
-                                        <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
-                                            <User size={20} />
-                                        </div>
-                                        <div className="flex-1">
-                                            <p className="text-xs text-slate-400 font-bold uppercase">Driver</p>
-                                            <p className="font-bold text-slate-800">{driverDetails?.name || 'Unknown Driver'}</p>
-                                        </div>
-                                        {driverDetails?.phone && (
-                                            <div className="w-8 h-8 rounded-full bg-green-50 text-green-600 flex items-center justify-center">
-                                                <Phone size={14} />
-                                            </div>
-                                        )}
+                                    {/* Action Buttons */}
+                                    <div className="flex gap-3">
+                                        <button
+                                            onClick={() => setSelectedBusId('')}
+                                            className="flex-1 py-4 rounded-2xl font-bold bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 transition-all"
+                                        >
+                                            Change Bus
+                                        </button>
+                                        <button
+                                            onClick={startTrip}
+                                            className="flex-[2] py-4 rounded-2xl font-black text-xl bg-blue-600 text-white shadow-xl shadow-blue-200 hover:bg-blue-700 hover:scale-[1.02] transition-all flex items-center justify-center gap-2"
+                                        >
+                                            <Navigation size={24} />
+                                            START TRIP
+                                        </button>
                                     </div>
-
-                                    <button
-                                        onClick={startTrip}
-                                        className="w-full py-4 rounded-xl font-bold text-lg bg-blue-600 text-white shadow-lg shadow-blue-200 hover:bg-blue-700 hover:shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2"
-                                    >
-                                        <Navigation size={22} />
-                                        Start Trip
-                                    </button>
                                 </div>
                             )}
                         </>
                     ) : (
-                        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4">
-                            <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
-                                <div className="flex items-center gap-4 mb-4">
-                                    <div className="w-12 h-12 bg-green-50 rounded-full flex items-center justify-center text-green-600 animate-pulse">
-                                        <Navigation size={24} />
+                        <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4">
+                            <div className="bg-white rounded-3xl p-6 shadow-xl shadow-slate-200 border border-slate-100">
+                                <div className="flex items-center gap-5 mb-6">
+                                    <div className="w-16 h-16 bg-green-500 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-green-100 animate-pulse">
+                                        <Bus size={32} />
                                     </div>
                                     <div>
-                                        <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Currently Driving</p>
-                                        <h3 className="text-xl font-black text-slate-800">
+                                        <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">On Trip</p>
+                                        <h3 className="text-3xl font-black text-slate-900 leading-none">
                                             {buses.find(b => b._id === selectedBusId)?.busNumber}
                                         </h3>
                                     </div>
                                 </div>
-                                <div className="h-1 w-full bg-slate-100 rounded-full overflow-hidden">
-                                    <div className="h-full bg-green-500 w-full animate-[progress_2s_ease-in-out_infinite] origin-left"></div>
-                                </div>
-                                <p className="text-center text-xs text-slate-400 mt-3 font-medium">
-                                    Sharing live location with college portal...
-                                </p>
-                                <div className="grid grid-cols-2 gap-2 mt-4 text-center">
-                                    <div className="p-2 bg-slate-50 rounded-lg">
-                                        <p className="text-[10px] uppercase text-slate-400 font-bold">Last Update</p>
-                                        <p className="font-mono font-bold text-slate-700 text-sm">{lastSentTime || '--:--:--'}</p>
+
+                                <div className="space-y-4">
+                                    <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                                        <div className="h-full bg-green-500 w-full animate-[progress_2s_ease-in-out_infinite] origin-left"></div>
                                     </div>
-                                    <div className="p-2 bg-slate-50 rounded-lg">
-                                        <p className="text-[10px] uppercase text-slate-400 font-bold">Location</p>
-                                        <p className="font-bold text-slate-700 text-xs mt-0.5 flex items-center gap-1">
-                                            <MapPin size={10} className="text-green-500 shrink-0" />
-                                            <span className="truncate">{currentStreetName || (currentCoords ? `${currentCoords.lat.toFixed(4)}, ${currentCoords.lng.toFixed(4)}` : 'Waiting...')}</span>
-                                        </p>
+
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                            <p className="text-[10px] uppercase text-slate-400 font-black tracking-widest mb-1">Speed</p>
+                                            <p className="text-xl font-black text-slate-800 tabular-nums">
+                                                {Math.round(currentSpeed)} <span className="text-xs font-medium text-slate-500">mph</span>
+                                            </p>
+                                        </div>
+                                        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                            <p className="text-[10px] uppercase text-slate-400 font-black tracking-widest mb-1">Pulse</p>
+                                            <p className="text-xl font-black text-slate-800 tabular-nums">
+                                                {lastSentTime ? lastSentTime.split(' ')[0] : '--:--:--'}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="p-4 bg-blue-50/50 rounded-2xl border border-blue-100 flex items-start gap-3">
+                                        <MapPin size={18} className="text-blue-600 mt-0.5 shrink-0" />
+                                        <div>
+                                            <p className="text-[10px] uppercase text-blue-600 font-black tracking-widest mb-0.5">Current Location</p>
+                                            <p className="font-bold text-slate-800 text-sm line-clamp-2 leading-tight">
+                                                {currentStreetName || (currentCoords ? `${currentCoords.lat.toFixed(4)}, ${currentCoords.lng.toFixed(4)}` : 'Detecting...')}
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
 
                             <button
                                 onClick={endTrip}
-                                className="w-full py-4 rounded-xl font-bold text-lg bg-white text-red-600 border-2 border-red-100 hover:bg-red-50 hover:border-red-200 shadow-sm transition-all flex items-center justify-center gap-2"
+                                className="w-full py-5 rounded-2xl font-black text-xl bg-red-50 text-red-600 border-2 border-red-100 hover:bg-red-600 hover:text-white hover:border-red-600 transition-all shadow-lg shadow-red-50 flex items-center justify-center gap-3 group"
                             >
-                                <LogOut size={22} />
-                                End Trip
+                                <X size={24} className="group-hover:rotate-90 transition-transform" />
+                                END SHIFT
                             </button>
                         </div>
                     )}

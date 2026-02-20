@@ -131,7 +131,7 @@ const updateBusLocation = async (req, res) => {
         // Actually, if tracking is sending updates, we might want to allow MAINTENCE updates?
         // But for "Live" status, we strictly check activeTripId.
         const isActiveTrip = !!busData.activeTripId;
-        const newStatus = isActiveTrip ? 'ON_ROUTE' : 'IDLE';
+        const newStatus = isActiveTrip ? 'ON_ROUTE' : 'ACTIVE';
 
         const updateData = {
             lastUpdated: new Date().toISOString(),
@@ -210,9 +210,12 @@ const endTrip = async (req, res) => {
 
         // 2. Update Bus Status (Canonical State)
         batch.update(busRef, {
-            status: 'IDLE',
+            status: 'ACTIVE',
             activeTripId: null,
-            currentRouteId: null,
+            currentTripId: null,
+            currentRoadName: '',
+            currentSpeed: 0,
+            speed: 0,
             liveTrail: [], // Clear legacy trail
             liveTrackBuffer: [], // Clear new buffer
             lastUpdated: new Date().toISOString()
@@ -234,9 +237,9 @@ const endTrip = async (req, res) => {
 const startTrip = async (req, res) => {
     try {
         const { busId } = req.params;
-        const { tripId } = req.body;
+        const { tripId, routeId } = req.body;
 
-        console.log(`--- START TRIP: ${tripId} for Bus ${busId} ---`);
+        console.log(`--- START TRIP: ${tripId} for Bus ${busId} (Route: ${routeId || 'Default'}) ---`);
 
         // Verify bus exists and belongs to college
         const busRef = db.collection('buses').doc(busId);
@@ -263,6 +266,7 @@ const startTrip = async (req, res) => {
         batch.set(tripRef, {
             tripId,
             busId,
+            routeId: routeId || busData.assignedRouteId || null,
             busNumber: busData.busNumber || busData.number || 'Unknown',
             driverId: req.user.id,
             driverName: driverName,
@@ -277,9 +281,11 @@ const startTrip = async (req, res) => {
         batch.update(busRef, {
             activeTripId: tripId, // Canonically set active trip
             currentTripId: tripId, // Keep for legacy compatibility if needed
+            routeId: routeId || busData.assignedRouteId || null, // Persist current routeId
             status: 'ON_ROUTE',
             driverName: driverName,
             currentDriverId: req.user.id,
+            currentRoadName: 'Ready to start...',
             lastUpdated: new Date().toISOString()
         });
 
@@ -289,7 +295,7 @@ const startTrip = async (req, res) => {
 
         // Send 'Bus Started' Notification (Phase 4.2)
         // Fire and forget - don't await/block response
-        sendBusStartedNotification(tripId, busId, req.collegeId, busData.assignedRouteId)
+        sendBusStartedNotification(tripId, busId, req.collegeId, routeId || busData.assignedRouteId)
             .catch(err => console.error('Failed to send bus start notification:', err));
 
         res.status(201).json({ success: true, message: 'Trip started', tripId });

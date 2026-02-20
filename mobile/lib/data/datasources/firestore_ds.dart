@@ -1,0 +1,372 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../models/bus.dart';
+import '../models/trip.dart';
+import '../models/location_point.dart';
+import '../models/route.dart';
+
+class FirestoreDataSource {
+  final FirebaseFirestore _firestore;
+
+  FirestoreDataSource(this._firestore);
+
+  /// Finds the canonical collegeId using its slug.
+  /// Backend stores colleges in top-level 'colleges' collection.
+  Future<String?> findCollegeIdBySlug(String slug) async {
+    try {
+      // 1. Try slug as Document ID
+      final doc = await _firestore.collection('colleges').doc(slug).get();
+      if (doc.exists) {
+        final data = doc.data() as Map<String, dynamic>?;
+        return data?['collegeId'] as String?;
+      }
+
+      // 2. Try slug field query
+      final snapshot = await _firestore
+          .collection('colleges')
+          .where('slug', isEqualTo: slug)
+          .limit(1)
+          .get();
+
+      if (snapshot.docs.isEmpty) return null;
+      final data = snapshot.docs.first.data() as Map<String, dynamic>;
+      return data['collegeId'] as String?;
+    } catch (e) {
+      throw 'Error finding organization "$slug": $e';
+    }
+  }
+
+  /// Fetches buses for a college from the top-level 'buses' collection.
+  Stream<List<Bus>> getBuses(String collegeId) {
+    return _firestore
+        .collection('buses')
+        .where('collegeId', isEqualTo: collegeId)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map((doc) => Bus.fromFirestore(doc)).toList());
+  }
+
+  /// Fetches buses assigned to a specific driver.
+  Stream<List<Bus>> getDriverBuses(String collegeId, String driverId) {
+    return _firestore
+        .collection('buses')
+        .where('collegeId', isEqualTo: collegeId)
+        .where('assignedDriverId', isEqualTo: driverId)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map((doc) => Bus.fromFirestore(doc)).toList());
+  }
+
+  /// Updates the live buffer in the top-level 'buses' collection.
+  /// Modified to match Web Portal field names for parity.
+  Future<void> updateBusLiveBuffer(
+    String collegeId,
+    String busId,
+    List<LocationPoint> points, {
+    String? roadName,
+    double? speed,
+  }) async {
+    final lastPoint = points.last;
+    await _firestore.collection('buses').doc(busId).update({
+      'liveTrail': points.map((p) => {
+        'lat': p.latitude,
+        'lng': p.longitude,
+        'timestamp': p.timestamp?.toIso8601String() ?? DateTime.now().toIso8601String(),
+      }).toList(),
+      'location': {
+        'latitude': lastPoint.latitude,
+        'longitude': lastPoint.longitude,
+      },
+      'currentLocation': {
+        'lat': lastPoint.latitude,
+        'lng': lastPoint.longitude,
+      },
+      'lastLocationUpdate': FieldValue.serverTimestamp(),
+      'currentRoadName': roadName,
+      'currentStreetName': roadName,
+      'currentSpeed': speed,
+      'speed': speed,
+      'heading': lastPoint.heading ?? 0.0,
+      'currentHeading': lastPoint.heading ?? 0.0,
+      'lastUpdated': DateTime.now().toIso8601String(),
+      'status': 'ON_ROUTE', // Ensure it stays ON_ROUTE while tracking
+    });
+  }
+
+  /// Saves a single point to the trip path history.
+  Future<void> saveTripPathPoint(String tripId, LocationPoint point) async {
+    try {
+      final tripRef = _firestore.collection('trips').doc(tripId);
+      await tripRef.collection('history').add({
+        'latitude': point.latitude,
+        'longitude': point.longitude,
+        'heading': point.heading ?? 0.0,
+        'speed': point.speed ?? 0.0,
+        'timestamp': DateTime.now().toIso8601String(),
+        'recordedAt': FieldValue.serverTimestamp(),
+      });
+      // Increment total points
+      await tripRef.update({
+        'totalPoints': FieldValue.increment(1),
+      });
+    } catch (e) {
+      print('Error saving trip history point: $e');
+    }
+  }
+
+  /// Searches for buses by bus number within a college.
+  Future<List<Bus>> searchBusesByNumber(String collegeId, String query) async {
+    // Search by busNumber
+    final numSnapshot = await _firestore
+        .collection('buses')
+        .where('collegeId', isEqualTo: collegeId)
+        .where('busNumber', isGreaterThanOrEqualTo: query)
+        .where('busNumber', isLessThanOrEqualTo: query + '\uf8ff')
+        .get();
+    
+    // Search by plateNumber
+    final plateSnapshot = await _firestore
+        .collection('buses')
+        .where('collegeId', isEqualTo: collegeId)
+        .where('plateNumber', isGreaterThanOrEqualTo: query.toUpperCase())
+        .where('plateNumber', isLessThanOrEqualTo: query.toUpperCase() + '\uf8ff')
+        .get();
+
+    final busses = <String, Bus>{};
+    for (var doc in numSnapshot.docs) {
+      busses[doc.id] = Bus.fromFirestore(doc);
+    }
+    for (var doc in plateSnapshot.docs) {
+      busses[doc.id] = Bus.fromFirestore(doc);
+    }
+
+    return busses.values.toList();
+  }
+
+  /// Stream of a specific bus from the top-level 'buses' collection.
+  Stream<Bus> getBus(String collegeId, String busId) {
+    return _firestore
+        .collection('buses')
+        .doc(busId)
+        .snapshots()
+        .map((doc) => Bus.fromFirestore(doc));
+  }
+
+  /// Checks if a user exists in either 'users' or 'students' top-level collections.
+  Future<DocumentSnapshot> getUserInCollege(String collegeId, String uid) async {
+    // 1. Try 'users' collection (Admins, Drivers)
+    DocumentSnapshot? doc;
+    try {
+      doc = await _firestore.collection('users').doc(uid).get();
+      if (doc.exists) {
+        final data = doc.data() as Map<String, dynamic>?;
+        if (data != null && data['collegeId'] == collegeId) return doc;
+      }
+    } catch (e) {
+      print('Error checking users collection: $e');
+    }
+    
+    // 2. Try 'students' collection (Direct ID lookup)
+    try {
+      doc = await _firestore.collection('students').doc(uid).get();
+      if (doc.exists) {
+        final data = doc.data() as Map<String, dynamic>?;
+        if (data != null && data['collegeId'] == collegeId) return doc;
+      }
+    } catch (e) {
+      print('Error checking students collection: $e');
+    }
+    
+    // 3. Final fallback: search by field
+    try {
+      final snap = await _firestore.collection('students')
+          .where('collegeId', isEqualTo: collegeId)
+          .where('studentId', isEqualTo: uid)
+          .limit(1).get();
+          
+      if (snap.docs.isNotEmpty) return snap.docs.first;
+    } catch (e) {
+      print('Error in final student fallback: $e');
+    }
+
+    throw 'User record not found for UID: $uid in college: $collegeId. Please check registration status.';
+  }
+
+  Stream<Trip?> getActiveTrip(String collegeId, String busId) {
+    return _firestore
+        .collection('trips')
+        .where('collegeId', isEqualTo: collegeId)
+        .where('busId', isEqualTo: busId)
+        .snapshots()
+        .map((snapshot) {
+      if (snapshot.docs.isEmpty) return null;
+      // Find the first document with status 'active' or 'ACTIVE'
+      final activeDoc = snapshot.docs.where((doc) {
+        final status = (doc.data()['status'] ?? '').toString().toLowerCase();
+        return status == 'active' || status == 'on_route';
+      }).firstOrNull;
+      
+      if (activeDoc == null) return null;
+      return Trip.fromFirestore(activeDoc);
+    });
+  }
+
+  /// Fetches a route by ID from top-level 'routes' collection.
+  Future<BusRoute?> getRoute(String routeId) async {
+    try {
+      final doc = await _firestore.collection('routes').doc(routeId).get();
+      if (doc.exists) {
+        return BusRoute.fromFirestore(doc);
+      }
+      return null;
+    } catch (e) {
+      print('Error fetching route $routeId: $e');
+      return null;
+    }
+  }
+
+  /// Fetches all routes for a specific college
+  Future<List<BusRoute>> getCollegeRoutes(String collegeId) async {
+    final snapshot = await _firestore.collection('routes')
+        .where('collegeId', isEqualTo: collegeId)
+        .get();
+    return snapshot.docs.map((doc) => BusRoute.fromFirestore(doc)).toList();
+  }
+
+  /// Starts a new trip and updates the bus status.
+  Future<String> startTrip({
+    required String collegeId,
+    required String busId,
+    required String driverId,
+    required String routeId,
+    String? busNumber,
+    String? driverName,
+  }) async {
+    final batch = _firestore.batch();
+    
+    // 1. Create Trip Document
+    final tripRef = _firestore.collection('trips').doc();
+    final tripData = {
+      'tripId': tripRef.id,
+      'collegeId': collegeId,
+      'busId': busId,
+      'busNumber': busNumber ?? 'Unknown',
+      'driverId': driverId,
+      'driverName': driverName ?? 'Unknown Driver',
+      'routeId': routeId,
+      'status': 'ACTIVE',
+      'isActive': true,
+      'startedAt': FieldValue.serverTimestamp(),
+      'startTime': DateTime.now().toIso8601String(),
+      'createdAt': FieldValue.serverTimestamp(),
+      'totalPoints': 0,
+    };
+    batch.set(tripRef, tripData);
+    
+    // 2. Update Bus Status
+    final busRef = _firestore.collection('buses').doc(busId);
+    batch.update(busRef, {
+      'status': 'ON_ROUTE',
+      'activeTripId': tripRef.id,
+      'currentTripId': tripRef.id,
+      'routeId': routeId, // Persist current routeId
+      'driverName': driverName ?? 'Unknown Driver',
+      'currentDriverId': driverId,
+      'currentRoadName': 'Ready to start...',
+      'completedStops': [],
+      'liveTrackBuffer': [], // Clear old buffer
+      'lastUpdated': DateTime.now().toIso8601String(),
+      'lastLocationUpdate': FieldValue.serverTimestamp(),
+    });
+    
+    await batch.commit();
+    return tripRef.id;
+  }
+
+  /// Ends an active trip and resets the bus status.
+  /// If tripId is null, it still resets the bus status to recover from "stuck" states.
+  Future<void> endTrip(String? tripId, String busId) async {
+    try {
+      final batch = _firestore.batch();
+      
+      // 1. Update Trip Status (if ID provided)
+    if (tripId != null && tripId.isNotEmpty) {
+      final tripRef = _firestore.collection('trips').doc(tripId);
+      final tripDoc = await tripRef.get();
+      
+      int? durationMinutes;
+      if (tripDoc.exists) {
+        final data = tripDoc.data();
+        final startTimeStr = data?['startTime'] as String?;
+        if (startTimeStr != null) {
+          try {
+            final start = DateTime.parse(startTimeStr);
+            final end = DateTime.now();
+            durationMinutes = end.difference(start).inMinutes;
+          } catch (e) {
+            print('Error parsing startTime: $e');
+          }
+        }
+      }
+
+      batch.update(tripRef, {
+        'status': 'COMPLETED',
+        'endedAt': FieldValue.serverTimestamp(),
+        'endTime': DateTime.now().toIso8601String(),
+        'isActive': false,
+        'durationMinutes': durationMinutes,
+      });
+    }
+      
+      // 2. Reset Bus Status
+      final busRef = _firestore.collection('buses').doc(busId);
+      final busDoc = await busRef.get();
+      if (busDoc.exists) {
+        batch.update(busRef, {
+          'status': 'ACTIVE',
+          'activeTripId': null,
+          'currentTripId': null,
+          'currentRoadName': '',
+          'currentStreetName': '',
+          'currentSpeed': 0,
+          'speed': 0,
+          'completedStops': [],
+          'liveTrackBuffer': [],
+          'liveTrail': [],
+          'lastUpdated': DateTime.now().toIso8601String(),
+        });
+      }
+      
+      await batch.commit();
+    } catch (e) {
+      print('Error ending trip: $e');
+      // If batch fails, try a direct update on the bus to at least unlock it
+      try {
+        await _firestore.collection('buses').doc(busId).update({
+          'status': 'ACTIVE',
+          'activeTripId': null,
+          'currentTripId': null,
+        });
+      } catch (e2) {
+        print('Fallback reset failed: $e2');
+      }
+      rethrow;
+    }
+  }
+
+  /// Toggles a bus as favorite for a student/user
+  Future<void> toggleFavoriteBus(String uid, String busId, bool isFavorite) async {
+    final studentRef = _firestore.collection('students').doc(uid);
+    final userRef = _firestore.collection('users').doc(uid);
+    
+    final studentDoc = await studentRef.get();
+    final docRef = studentDoc.exists ? studentRef : userRef;
+
+    if (isFavorite) {
+      await docRef.update({
+        'favoriteBusIds': FieldValue.arrayUnion([busId])
+      });
+    } else {
+      await docRef.update({
+        'favoriteBusIds': FieldValue.arrayRemove([busId])
+      });
+    }
+  }
+}
