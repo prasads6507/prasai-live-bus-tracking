@@ -130,23 +130,22 @@ const Dashboard = () => {
         };
     }, [currentCollegeId]); // Depend on currentCollegeId state
 
-    // Resolve addresses for active buses
+    // Resolve addresses for active buses - Optimized to focus on selected bus
     useEffect(() => {
         const resolveAddresses = async () => {
-            const newAddresses: { [key: string]: string } = {};
-            for (const bus of buses) {
-                if (bus.status === 'ON_ROUTE' && bus.location?.latitude && bus.location?.longitude) {
-                    // Only fetch if we don't have it or it moved significantly (optional optimization, but simple call is fine due to caching)
-                    const address = await getStreetName(bus.location.latitude, bus.location.longitude);
-                    newAddresses[bus._id] = address;
-                }
-            }
-            if (Object.keys(newAddresses).length > 0) {
-                setBusAddresses(prev => ({ ...prev, ...newAddresses }));
+            if (!selectedBusId) return;
+
+            const selectedBus = buses.find(b => b._id === selectedBusId);
+            if (selectedBus?.status === 'ON_ROUTE' && selectedBus.location?.latitude && selectedBus.location?.longitude) {
+                const address = await getStreetName(selectedBus.location.latitude, selectedBus.location.longitude);
+                setBusAddresses(prev => ({
+                    ...prev,
+                    [selectedBusId]: address
+                }));
             }
         };
         resolveAddresses();
-    }, [buses]);
+    }, [selectedBusId, buses.find(b => b._id === selectedBusId)?.location?.latitude, buses.find(b => b._id === selectedBusId)?.location?.longitude]);
 
     const handleBusClick = (bus: any) => {
         setSelectedBusId(bus._id);

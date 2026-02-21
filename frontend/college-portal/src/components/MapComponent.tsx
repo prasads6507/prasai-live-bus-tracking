@@ -167,7 +167,9 @@ const AnimatedBusMarker = ({ bus, icon, onPositionUpdate }: { bus: any, icon: (b
         const animate = (time: number) => {
             if (bufferRef.current.length < 2) {
                 // Not enough history to interpolate, snap to latest
-                setPosition([bus.location.latitude, bus.location.longitude]);
+                const latestPos: [number, number] = [bus.location.latitude, bus.location.longitude];
+                setPosition(latestPos);
+                onPositionUpdate?.(bus._id, latestPos, bus.location.heading || 0);
                 return;
             }
 
