@@ -1,6 +1,6 @@
-const jwt = require('jsonwebtoken');
+const { auth, db } = require('../config/firebase');
 
-const protect = (req, res, next) => {
+const protect = async (req, res, next) => {
     let token;
 
     if (
@@ -9,17 +9,44 @@ const protect = (req, res, next) => {
     ) {
         try {
             token = req.headers.authorization.split(' ')[1];
-            const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+            // 1. Verify Firebase ID Token
+            const decodedToken = await auth.verifyIdToken(token);
+            const uid = decodedToken.uid;
+
+            // 2. Fetch User Profile from Firestore to get role and collegeId
+            // We search in both 'users' and 'students' collections for robustness
+            let userDoc = await db.collection('users').doc(uid).get();
+            let userData = userDoc.exists ? userDoc.data() : null;
+
+            if (!userData) {
+                userDoc = await db.collection('students').doc(uid).get();
+                userData = userDoc.exists ? userDoc.data() : null;
+                if (userData) userData.role = 'STUDENT';
+            }
+
+            if (!userData) {
+                console.error(`[AuthMiddleware] User profile not found for UID: ${uid}`);
+                return res.status(401).json({
+                    message: 'User profile not found. Please log in again.',
+                    code: 'USER_NOT_FOUND'
+                });
+            }
 
             // Attach user info to request
-            req.user = decoded;
+            req.user = {
+                id: uid,
+                _id: uid,
+                email: userData.email,
+                role: userData.role,
+                collegeId: userData.collegeId
+            };
 
             next();
         } catch (error) {
-            console.error('Token verification failed:', error.message);
+            console.error('Firebase token verification failed:', error.message);
 
-            // Provide specific error message for token expiry
-            if (error.name === 'TokenExpiredError') {
+            if (error.code === 'auth/id-token-expired') {
                 return res.status(401).json({
                     message: 'Session expired. Please log in again.',
                     code: 'TOKEN_EXPIRED'
@@ -28,7 +55,8 @@ const protect = (req, res, next) => {
 
             return res.status(401).json({
                 message: 'Not authorized, token failed',
-                code: 'TOKEN_INVALID'
+                code: 'TOKEN_INVALID',
+                error: error.message
             });
         }
     } else {
