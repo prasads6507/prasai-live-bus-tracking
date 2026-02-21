@@ -16,6 +16,8 @@ import TripHistory from './pages/TripHistory';
 import StudentTripHistory from './pages/StudentTripHistory';
 import CollegeAdmins from './pages/CollegeAdmins';
 
+import ProtectedRoute from './components/ProtectedRoute';
+
 function App() {
   return (
     <BrowserRouter>
@@ -28,7 +30,16 @@ function App() {
 
         {/* Dynamic Organization Login */}
         <Route path="/:orgSlug/login" element={<Login />} />
-        <Route path="/:orgSlug/dashboard" element={<Dashboard />} />
+
+        {/* Protected Admin Routes */}
+        <Route path="/:orgSlug/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route path="/:orgSlug/drivers" element={<ProtectedRoute><Drivers /></ProtectedRoute>} />
+        <Route path="/:orgSlug/students" element={<ProtectedRoute><Students /></ProtectedRoute>} />
+        <Route path="/:orgSlug/buses" element={<ProtectedRoute><Buses /></ProtectedRoute>} />
+        <Route path="/:orgSlug/routes" element={<ProtectedRoute><RoutesPage /></ProtectedRoute>} />
+        <Route path="/:orgSlug/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+        <Route path="/:orgSlug/trip-history" element={<ProtectedRoute><TripHistory /></ProtectedRoute>} />
+        <Route path="/:orgSlug/admins" element={<ProtectedRoute><CollegeAdmins /></ProtectedRoute>} />
 
         {/* Driver Portal */}
         <Route path="/:orgSlug/driver" element={<DriverLogin />} />
@@ -38,15 +49,6 @@ function App() {
         <Route path="/:orgSlug/student/login" element={<StudentLogin />} />
         <Route path="/:orgSlug/student/dashboard" element={<StudentDashboard />} />
         <Route path="/:orgSlug/student/trip-history" element={<StudentTripHistory />} />
-
-        {/* Admin Features */}
-        <Route path="/:orgSlug/drivers" element={<Drivers />} />
-        <Route path="/:orgSlug/students" element={<Students />} />
-        <Route path="/:orgSlug/buses" element={<Buses />} />
-        <Route path="/:orgSlug/routes" element={<RoutesPage />} />
-        <Route path="/:orgSlug/settings" element={<Settings />} />
-        <Route path="/:orgSlug/trip-history" element={<TripHistory />} />
-        <Route path="/:orgSlug/admins" element={<CollegeAdmins />} />
 
         {/* Protected Routes placeholder */}
         <Route path="/:orgSlug/*" element={<Navigate to={`login`} replace />} />
