@@ -257,8 +257,7 @@ const StudentTripHistory = () => {
 
                             {/* Modal Footer (Stats) */}
                             {selectedTrip && tripPath.length > 0 && (
-                                <div className="p-6 bg-slate-900/50 border-t border-white/5 grid grid-cols-2 sm:grid-cols-4 gap-4 px-8">
-                                    <StatItem icon={<ArrowLeft size={16} />} label="Points" value={tripPath.length} />
+                                <div className="p-6 bg-slate-900/50 border-t border-white/5 grid grid-cols-1 sm:grid-cols-3 gap-4 px-8">
                                     <StatItem icon={<User size={16} />} label="Driver" value={selectedTrip.driverName || 'N/A'} />
                                     <StatItem icon={<Clock size={16} />} label="Started" value={formatTime(selectedTrip.startTime)} />
                                     <StatItem icon={<ChevronRight size={16} />} label="Duration" value={`${selectedTrip.durationMinutes || '--'}m`} />

@@ -138,14 +138,14 @@ const updateBusLocation = async (req, res) => {
                 lastLocationUpdate: admin.firestore.FieldValue.serverTimestamp()
             };
 
-            if (speed !== undefined) updateData.speed = speed;
+            if (speed !== undefined) updateData.speed = Math.round(speed);
 
             if (latitude !== undefined && longitude !== undefined) {
                 const newPoint = {
                     latitude,
                     longitude,
                     heading: heading || 0,
-                    speed: speed || 0,
+                    speed: Math.round(speed || 0),
                     timestamp: new Date().toISOString()
                 };
 
@@ -333,34 +333,50 @@ const saveTripHistory = async (req, res) => {
             return res.status(403).json({ success: false, message: 'Unauthorized college access' });
         }
 
-        // Save to trip history in ROOT trips collection
         const tripRef = db.collection('trips').doc(tripId);
-        const historyRef = tripRef.collection('history');
 
-        // Robustly ensure the trip document exists in root and contains metadata
-        // This prevents update() failures if the trip doc was never created
-        await tripRef.set({
-            tripId,
-            busId,
-            collegeId: req.collegeId,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
+        // Transaction to append to path array (keeps correct order and fits single-doc requirement)
+        await db.runTransaction(async (transaction) => {
+            const tDoc = await transaction.get(tripRef);
 
-        await historyRef.add({
-            latitude,
-            longitude,
-            speed: Math.round(speed || 0), // Round to avoid long decimals
-            heading: heading || 0,
-            timestamp: timestamp || new Date().toISOString(),
-            recordedAt: admin.firestore.FieldValue.serverTimestamp()
+            const newPoint = {
+                lat: latitude,
+                lng: longitude,
+                latitude, // Keep for backward visibility
+                longitude, // Keep for backward visibility
+                speed: Math.round(speed || 0),
+                heading: heading || 0,
+                timestamp: timestamp || new Date().toISOString(),
+                recordedAt: new Date().toISOString()
+            };
+
+            if (!tDoc.exists) {
+                // Initialize trip doc if it doesn't exist (safety)
+                transaction.set(tripRef, {
+                    tripId,
+                    busId,
+                    collegeId: req.collegeId,
+                    path: [newPoint],
+                    totalPoints: 1,
+                    status: 'ACTIVE',
+                    startTime: new Date().toISOString(),
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+            } else {
+                const data = tDoc.data();
+                const existingPath = data.path || [];
+
+                // Firestore limit check (1MB) - roughly ~5000-8000 points. 
+                // A typical trip of 500 points is very safe (~50KB).
+                transaction.update(tripRef, {
+                    path: [...existingPath, newPoint],
+                    totalPoints: (existingPath.length + 1),
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+            }
         });
 
-        // Increment total points counter on the root trip doc
-        await tripRef.update({
-            totalPoints: admin.firestore.FieldValue.increment(1)
-        });
-
-        console.log('History point saved to root trips collection');
+        console.log('History point appended to path array in root trip doc');
         res.status(201).json({ success: true, message: 'History saved' });
     } catch (error) {
         console.error('Error saving trip history:', error);

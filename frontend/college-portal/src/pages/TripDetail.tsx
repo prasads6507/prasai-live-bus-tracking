@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-    Clock, Bus, User, RefreshCw, Trash2,
+    Bus, User, RefreshCw, Trash2,
     ArrowLeft, Map as MapIcon, Navigation, Activity,
     AlertCircle, CheckCircle2, StopCircle
 } from 'lucide-react';
@@ -19,6 +19,7 @@ interface Trip {
     status: 'ACTIVE' | 'COMPLETED';
     durationMinutes: number | null;
     collegeId: string;
+    maxSpeed?: number;
 }
 
 const TripDetail = () => {
@@ -208,9 +209,9 @@ const TripDetail = () => {
                                 <p className="text-sm font-bold text-slate-800 truncate">{formatDuration(trip.durationMinutes)}</p>
                             </div>
                             <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                                <Clock size={18} className="text-orange-500 mb-2" />
-                                <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Points</p>
-                                <p className="text-sm font-bold text-slate-800">{path.length}</p>
+                                <Navigation size={18} className="text-orange-500 mb-2" />
+                                <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Max Speed</p>
+                                <p className="text-sm font-bold text-slate-800">{trip.maxSpeed ? Math.round(trip.maxSpeed) : '--'} mph</p>
                             </div>
                         </div>
 
