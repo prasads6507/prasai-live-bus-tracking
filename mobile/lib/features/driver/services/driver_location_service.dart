@@ -1,130 +1,136 @@
 import 'dart:async';
+import 'dart:isolate';
 import 'dart:ui';
+import 'package:background_locator_2/background_locator.dart';
+import 'package:background_locator_2/location_dto.dart';
+import 'package:background_locator_2/settings/android_settings.dart';
+import 'package:background_locator_2/settings/ios_settings.dart';
+import 'package:background_locator_2/settings/locator_settings.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:flutter_background_service/flutter_background_service.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:geolocator/geolocator.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
 import '../../../data/models/location_point.dart';
-import 'dart:io';
+import '../../../core/config/env.dart';
+
+class LocationCallbackHandler {
+  static const String isolateName = "LocatorIsolate";
+  static String? _collegeId;
+  static String? _busId;
+
+  @pragma('vm:entry-point')
+  static Future<void> initCallback(Map<dynamic, dynamic> params) async {
+    _collegeId = params['collegeId'];
+    _busId = params['busId'];
+    await Firebase.initializeApp();
+    
+    final SendPort? sendPort = IsolateNameServer.lookupPortByName(isolateName);
+    sendPort?.send(null);
+  }
+
+  @pragma('vm:entry-point')
+  static Future<void> disposeCallback() async {
+    final SendPort? sendPort = IsolateNameServer.lookupPortByName(isolateName);
+    sendPort?.send(null);
+  }
+
+  @pragma('vm:entry-point')
+  static Future<void> callback(LocationDto locationDto) async {
+    final SendPort? sendPort = IsolateNameServer.lookupPortByName(isolateName);
+    sendPort?.send(locationDto);
+
+    if (_collegeId != null && _busId != null) {
+      try {
+        // Authenticate request using Firebase Auth Token
+        final user = FirebaseAuth.instance.currentUser;
+        if (user == null) return;
+        
+        final token = await user.getIdToken();
+        if (token == null) return;
+
+        final speedMph = locationDto.speed * 2.23694;
+
+        final dio = Dio();
+        dio.options.headers['Authorization'] = 'Bearer $token';
+
+        // NOTE: The backend expects flat payload: latitude, longitude, speed, heading
+        await dio.post(
+          '${Env.apiUrl}/api/driver/tracking/$_busId',
+          data: {
+            'collegeId': _collegeId,
+            'latitude': locationDto.latitude,
+            'longitude': locationDto.longitude,
+            'speed': speedMph,
+            'heading': locationDto.heading,
+          },
+        );
+      } catch (e) {
+        // Silent fail in background allowed to keep isolate running on network drops
+      }
+    }
+  }
+
+  @pragma('vm:entry-point')
+  static Future<void> notificationCallback() async {}
+}
 
 class DriverLocationService {
-  static Future<void> initialize() async {
-    final service = FlutterBackgroundService();
+  static const String _isolateName = LocationCallbackHandler.isolateName;
+  static ReceivePort? _port;
 
-    // Setup local notifications for Android foreground service
-    if (Platform.isAndroid) {
-        FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
-        const AndroidNotificationChannel channel = AndroidNotificationChannel(
-          'my_foreground', 
-          'MY FOREGROUND SERVICE', 
-          description: 'This channel is used for important notifications.', 
-          importance: Importance.high,
-        );
-        await flutterLocalNotificationsPlugin
-            .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-            ?.createNotificationChannel(channel);
+  static Future<void> initialize() async {
+    await BackgroundLocator.initialize();
+  }
+
+  static Future<void> startTracking(String collegeId, String busId, Function(LocationDto) onLocationUpdate) async {
+    if (await BackgroundLocator.isServiceRunning()) {
+      await BackgroundLocator.unRegisterLocationUpdate();
     }
 
-    await service.configure(
-      androidConfiguration: AndroidConfiguration(
-        onStart: onStart,
-        autoStart: false,
-        isForegroundMode: true,
-        notificationChannelId: 'my_foreground',
-        initialNotificationTitle: 'Transit Hub Bus Driver',
-        initialNotificationContent: 'Initializing Tracking...',
-        foregroundServiceNotificationId: 888,
+    _port?.close();
+    _port = ReceivePort();
+    IsolateNameServer.registerPortWithName(_port!.sendPort, _isolateName);
+
+    _port!.listen((dynamic data) {
+      if (data != null && data is LocationDto) {
+        onLocationUpdate(data);
+      }
+    });
+
+    final data = {'collegeId': collegeId, 'busId': busId};
+
+    await BackgroundLocator.registerLocationUpdate(
+      LocationCallbackHandler.callback,
+      initCallback: LocationCallbackHandler.initCallback,
+      initDataCallback: data,
+      disposeCallback: LocationCallbackHandler.disposeCallback,
+      iosSettings: const IOSSettings(
+        accuracy: LocationAccuracy.NAVIGATION,
+        distanceFilter: 5,
+        showsBackgroundLocationIndicator: true,
       ),
-      iosConfiguration: IosConfiguration(
-        autoStart: false,
-        onForeground: onStart,
-        onBackground: onIosBackground,
+      androidSettings: const AndroidSettings(
+        accuracy: LocationAccuracy.NAVIGATION,
+        interval: 5,
+        distanceFilter: 5,
+        client: LocationClient.google,
+        androidNotificationSettings: AndroidNotificationSettings(
+          notificationChannelName: 'Location Tracking',
+          notificationTitle: 'Trip Active',
+          notificationMsg: 'Tracking your precise location',
+          notificationBigMsg: 'Background tracking running',
+          notificationIconColor: Colors.blue,
+          notificationTapCallback: LocationCallbackHandler.notificationCallback,
+        ),
       ),
     );
   }
 
-  @pragma('vm:entry-point')
-  static Future<bool> onIosBackground(ServiceInstance service) async {
-    return true;
-  }
-
-  @pragma('vm:entry-point')
-  static void onStart(ServiceInstance service) async {
-    DartPluginRegistrant.ensureInitialized();
-    await Firebase.initializeApp();
-    
-    String? collegeId;
-    String? busId;
-    StreamSubscription<Position>? positionStream;
-
-    service.on('setup').listen((event) {
-      collegeId = event?['collegeId'];
-      busId = event?['busId'];
-    });
-
-    service.on('stopService').listen((event) async {
-      await positionStream?.cancel();
-      service.stopSelf();
-    });
-
-    // 1Hz location updates with high precision (< 5m)
-    positionStream = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.bestForNavigation,
-        distanceFilter: 0,
-      ),
-    ).listen((Position position) async {
-      if (service is AndroidServiceInstance) {
-        if (await service.isForegroundService()) {
-           service.setForegroundNotificationInfo(
-            title: "Trip Active",
-            content: "Speed: ${(position.speed * 2.23694).toStringAsFixed(1)} mph",
-          );
-        }
-      }
-      
-      final point = LocationPoint(
-        latitude: position.latitude,
-        longitude: position.longitude,
-        timestamp: DateTime.now(),
-        speed: position.speed,
-        heading: position.heading,
-      );
-      final pointMap = point.toMap();
-
-      // Send to UI for dashboard updates
-      service.invoke('locationUpdate', pointMap);
-
-      // Direct Firestore push from isolated background thread
-      if (collegeId != null && busId != null) {
-          try {
-             final db = FirebaseFirestore.instance;
-             final busRef = db.collection('buses').doc(busId);
-             
-             final latlng = {'lat': position.latitude, 'lng': position.longitude};
-             final trailPoint = {
-               'lat': position.latitude,
-               'lng': position.longitude,
-               'timestamp': DateTime.now().toIso8601String()
-             };
-
-             await busRef.update({
-                'location': {'latitude': position.latitude, 'longitude': position.longitude},
-                'currentLocation': latlng,
-                'speed': position.speed * 2.23694,
-                'currentSpeed': position.speed * 2.23694,
-                'heading': position.heading,
-                'currentHeading': position.heading,
-                'lastLocationUpdate': FieldValue.serverTimestamp(),
-                'lastUpdated': DateTime.now().toIso8601String(),
-                'liveTrail': FieldValue.arrayUnion([trailPoint]),
-                'liveTrackBuffer': FieldValue.arrayUnion([trailPoint]),
-             });
-          } catch (e) {
-             print("Background Tracking Error: $e");
-          }
-      }
-    });
+  static Future<void> stopTracking() async {
+    IsolateNameServer.removePortNameMapping(_isolateName);
+    _port?.close();
+    _port = null;
+    await BackgroundLocator.unRegisterLocationUpdate();
   }
 }

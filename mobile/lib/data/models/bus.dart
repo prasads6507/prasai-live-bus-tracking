@@ -10,10 +10,12 @@ class Bus {
   final LocationPoint? location;
   final List<LocationPoint> liveTrackBuffer;
   final String? driverId;
+  final String? currentDriverId;
   final String? assignedRouteId;
   final List<String> completedStops;
   final String? currentRoadName;
   final double? currentSpeed;
+  final double? currentHeading;
 
   Bus({
     required this.id,
@@ -24,10 +26,12 @@ class Bus {
     this.location,
     this.liveTrackBuffer = const [],
     this.driverId,
+    this.currentDriverId,
     this.assignedRouteId,
     this.completedStops = const [],
     this.currentRoadName,
     this.currentSpeed,
+    this.currentHeading,
   });
 
   factory Bus.fromFirestore(DocumentSnapshot doc) {
@@ -55,10 +59,12 @@ class Bus {
               .toList() ??
           [],
       driverId: data['assignedDriverId'], // Matches backend field name
+      currentDriverId: data['currentDriverId'],
       assignedRouteId: data['assignedRouteId'],
       completedStops: (data['completedStops'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
       currentRoadName: data['currentRoadName'] ?? data['currentStreetName'],
       currentSpeed: (data['currentSpeed'] as num?)?.toDouble(),
+      currentHeading: (data['currentHeading'] as num?)?.toDouble(),
     );
   }
 }

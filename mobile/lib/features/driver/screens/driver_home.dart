@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart' as geo;
 import 'package:go_router/go_router.dart';
-import 'package:flutter_background_service/flutter_background_service.dart';
+import '../services/driver_location_service.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/typography.dart';
@@ -469,27 +469,28 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
       return;
     }
 
-    final service = FlutterBackgroundService();
-    await service.startService();
-    service.invoke('setup', {
-      'collegeId': widget.collegeId,
-      'busId': widget.busId,
-    });
-
-    _locationUpdateSubscription = service.on('locationUpdate').listen((event) {
-      if (mounted && event != null) {
-        final map = Map<String, dynamic>.from(event);
-        final point = LocationPoint.fromMap(map);
-        
-        setState(() {
-          _currentSpeed = (point.speed ?? 0.0) * 2.23694; // mph
-          _lastUpdate = TimeOfDay.now().format(context);
-          _lastRecordedPoint = point;
-        });
-        _updateRoadName(point.latitude, point.longitude);
-        // Note: We don't need _sendUpdate(point) because the background isolate does it globally!
+    // Initialize DriverLocationService with background_locator_2
+    await DriverLocationService.startTracking(
+      widget.collegeId, 
+      widget.busId, 
+      (locationDto) {
+        if (mounted) {
+          final point = LocationPoint(
+             latitude: locationDto.latitude,
+             longitude: locationDto.longitude,
+             timestamp: DateTime.now(),
+             speed: locationDto.speed,
+             heading: locationDto.heading,
+          );
+          setState(() {
+            _currentSpeed = (point.speed ?? 0.0) * 2.23694; // mph
+            _lastUpdate = TimeOfDay.now().format(context);
+            _lastRecordedPoint = point;
+          });
+          _updateRoadName(point.latitude, point.longitude);
+        }
       }
-    });
+    );
 
     // Start path history timer (every 15 seconds)
     _pathHistoryTimer?.cancel();
@@ -508,8 +509,7 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
   }
 
   void _stopTracking() {
-    final service = FlutterBackgroundService();
-    service.invoke('stopService');
+    DriverLocationService.stopTracking();
     
     _locationUpdateSubscription?.cancel();
     _locationUpdateSubscription = null;
@@ -605,7 +605,32 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
                 ),
               ],
               const SizedBox(height: 32),
-              TripControlPanel(
+              if (isTripActive && bus.currentDriverId != null && bus.currentDriverId != widget.driverId)
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.error.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.error.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.lock, color: AppColors.error),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          "Trip started by another driver. You cannot end this trip.",
+                          style: AppTypography.textTheme.bodyMedium?.copyWith(
+                            color: AppColors.error,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                TripControlPanel(
                 isTripActive: isTripActive,
                 isLoading: _isLoading,
                 onStartTrip: () async {

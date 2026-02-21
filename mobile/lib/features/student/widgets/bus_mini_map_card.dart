@@ -32,7 +32,7 @@ class BusMiniMapCard extends StatelessWidget {
             height: 150,
             color: AppColors.surfaceElevated,
             child: Center(
-              child: Icon(Icons.map, color: AppColors.textSecondary.withOpacity(0.5), size: 48),
+              child: Icon(Icons.map, color: AppColors.textSecondary.withValues(alpha: 0.5), size: 48),
             ),
           ),
           Padding(

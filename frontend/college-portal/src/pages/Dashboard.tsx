@@ -131,23 +131,35 @@ const Dashboard = () => {
         };
     }, [currentCollegeId]); // Depend on currentCollegeId state
 
-    // Resolve addresses for active buses - Optimized to focus on selected bus
+    // Resolve addresses for active buses - Smart bulk update
     useEffect(() => {
         const resolveAddresses = async () => {
-            if (!selectedBusId) return;
+            const newAddresses: { [key: string]: string } = {};
+            let hasUpdates = false;
 
-            const selectedBus = buses.find(b => b._id === selectedBusId);
-            const latLng = getBusLatLng(selectedBus);
-            if (latLng) {
-                const address = await getStreetName(latLng[1], latLng[0]);
-                setBusAddresses(prev => ({
-                    ...prev,
-                    [selectedBusId]: address
-                }));
+            for (const bus of buses) {
+                const latLng = getBusLatLng(bus);
+                if (!latLng) continue;
+
+                // Only resolve if it's the selected bus OR we don't have an address for it yet
+                // This prevents spamming the geocoder while ensuring every card has an initial address
+                if (bus._id === selectedBusId || !busAddresses[bus._id]) {
+                    const address = await getStreetName(latLng[1], latLng[0]);
+                    if (address && busAddresses[bus._id] !== address) {
+                        newAddresses[bus._id] = address;
+                        hasUpdates = true;
+                    }
+                }
+            }
+
+            if (hasUpdates) {
+                setBusAddresses(prev => ({ ...prev, ...newAddresses }));
             }
         };
-        resolveAddresses();
-    }, [selectedBusId, buses]);
+
+        const timeout = setTimeout(resolveAddresses, 1000);
+        return () => clearTimeout(timeout);
+    }, [buses, selectedBusId]);
 
     const handleBusClick = (bus: any) => {
         setSelectedBusId(bus._id);

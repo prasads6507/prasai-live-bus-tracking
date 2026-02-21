@@ -6,7 +6,7 @@ import { validateSlug, getStudentBuses, getStudentRoutes } from '../services/api
 import { getStreetName } from '../services/geocoding';
 import { collection, query, where, onSnapshot, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import MapComponent from '../components/MapComponent';
+import MapLibreMapComponent from '../components/MapLibreMapComponent';
 import useNotification from '../hooks/useNotification';
 
 const isLiveBus = (bus: any) => {
@@ -301,11 +301,11 @@ const StudentDashboard = () => {
 
                     {/* Left/Top: Map (40% Mobile, 60% Desktop) */}
                     <div className="h-[45vh] md:h-full md:w-3/5 w-full relative">
-                        <MapComponent
+                        <MapLibreMapComponent
                             buses={buses}
                             focusedLocation={focusedBusLocation}
                             // Stop List handled in sidebar now, but markers still useful
-                            stopMarkers={(() => {
+                            stops={(() => {
                                 const route = routes.find(r => r._id === trackedBus.assignedRouteId);
                                 if (!route || !route.stops) return [];
                                 return route.stops.map((s: any) => ({
@@ -502,10 +502,10 @@ const StudentDashboard = () => {
                     </div>
                     {/* Map Section */}
                     <div className="flex-1 relative">
-                        <MapComponent
+                        <MapLibreMapComponent
                             buses={buses}
                             // Show stops for assigned bus on map
-                            stopMarkers={(() => {
+                            stops={(() => {
                                 const targetBus = assignedBus || buses.find(b => b.status === 'ON_ROUTE');
                                 if (!targetBus || !targetBus.assignedRouteId) return [];
 

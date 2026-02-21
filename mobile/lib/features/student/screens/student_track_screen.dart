@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
@@ -11,13 +10,13 @@ import '../../../../core/widgets/app_scaffold.dart';
 import '../../../../data/providers.dart';
 import '../../../../data/models/bus.dart';
 import '../../../../data/models/route.dart';
-import '../../auth/controllers/auth_controller.dart';
+import '../../../../data/models/location_point.dart';
 import '../widgets/track_bottom_sheet.dart';
-import '../../map/logic/bus_animation_controller.dart';
+import '../../map/widgets/mobile_maplibre.dart';
 import 'package:geocoding/geocoding.dart' as geo;
 
 class StudentTrackScreen extends ConsumerStatefulWidget {
-  final String? busId; // If null, use a default or first available
+  final String? busId; 
 
   const StudentTrackScreen({super.key, this.busId});
 
@@ -26,12 +25,9 @@ class StudentTrackScreen extends ConsumerStatefulWidget {
 }
 
 class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
-  final MapController _mapController = MapController();
-  late final BusAnimationController _animationController;
   StreamSubscription? _busSubscription;
   StreamSubscription<Position>? _positionStream;
   
-  // Track if we are following the bus camera
   bool _isCameraLocked = true;
   
   // Real data state
@@ -40,7 +36,6 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
   String _currentRoadName = "Locating...";
   double _busSpeed = 0.0;
   int _stopsRemaining = 0;
-  bool _hasCenteredOnUser = false;
   Bus? _currentBus;
   BusRoute? _currentRoute;
   Position? _userPosition;
@@ -49,8 +44,6 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
   @override
   void initState() {
     super.initState();
-    _animationController = BusAnimationController();
-    _animationController.addListener(_onAnimationUpdate);
     _subscribeToBusUpdates();
     _startMetricsUpdates();
     _startLocationStreaming();
@@ -58,11 +51,8 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
 
   @override
   void dispose() {
-    _animationController.removeListener(_onAnimationUpdate);
-    _animationController.dispose();
     _busSubscription?.cancel();
     _positionStream?.cancel();
-    _mapController.dispose();
     _metricsTimer?.cancel();
     super.dispose();
   }
@@ -83,13 +73,6 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
          ).listen((pos) {
            if (mounted) {
              setState(() => _userPosition = pos);
-             
-             // Auto-locate user once at startup
-             if (!_hasCenteredOnUser) {
-               _hasCenteredOnUser = true;
-               _mapController.move(LatLng(pos.latitude, pos.longitude), 16.0);
-               setState(() => _isCameraLocked = false); // Let user take control after initial jump
-             }
            }
          });
        }
@@ -109,17 +92,7 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
         }
       }
     } catch (e) {
-      // Quiet fail for geocoding
-    }
-  }
-
-  void _onAnimationUpdate() {
-    final point = _animationController.currentPoint;
-    if (point != null && _isCameraLocked) {
-      _mapController.move(
-        LatLng(point.latitude, point.longitude), 
-        _mapController.camera.zoom
-      );
+      // Quiet fail
     }
   }
 
@@ -127,7 +100,6 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
     final collegeId = ref.read(selectedCollegeIdProvider);
     if (collegeId == null) return;
 
-    // Use a default busId for demo if none provided
     final busId = widget.busId ?? 'BUS_001';
 
     _busSubscription = ref.read(firestoreDataSourceProvider)
@@ -136,11 +108,9 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
           if (mounted) {
             setState(() {
               _currentBus = bus;
-              // Use the speed from Firestore (Mph)
               _busSpeed = bus.currentSpeed ?? (bus.location?.speed ?? 0.0) * 2.23694; 
             });
             
-            // Prefer road name from Firestore if available
             if (bus.currentRoadName != null && bus.currentRoadName!.isNotEmpty) {
                if (mounted) setState(() => _currentRoadName = bus.currentRoadName!);
             } else if (bus.location != null) {
@@ -148,13 +118,6 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
             }
           }
           
-          if (bus.liveTrackBuffer.isNotEmpty) {
-             _animationController.addPoints(bus.liveTrackBuffer);
-          } else if (bus.location != null) {
-             _animationController.addPoints([bus.location!]);
-          }
-          
-          // Fetch Route if we have a trip and haven't fetched route yet
           if (bus.activeTripId != null && (_currentRoute == null || _currentRoute!.id != bus.assignedRouteId)) {
             _fetchRouteForTrip(collegeId, bus.id);
           }
@@ -162,18 +125,13 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
   }
   
   Future<void> _fetchRouteForTrip(String collegeId, String busId) async {
-     // We need to fetch Trip first to get Route ID
-     // Using a one-time fetch for simplicity or stream it
-     // This is a bit disjointed, ideally backend sends routeId on Bus or we have a combined stream
-     
-     // Creating a temporary subscription to get trip info
      final tripStream = ref.read(firestoreDataSourceProvider).getActiveTrip(collegeId, busId);
      tripStream.first.then((trip) async {
        if (trip != null) {
          final route = await ref.read(firestoreDataSourceProvider).getRoute(trip.routeId);
          if (mounted) {
            setState(() => _currentRoute = route);
-           _updateMetrics(); // Force update once we have route
+           _updateMetrics();
          }
        }
      });
@@ -189,22 +147,16 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
     final busLoc = _currentBus!.location;
     if (busLoc == null) return;
     
-    // 1. Calculate Distance (Straight line for now)
     final distance = const Distance().as(LengthUnit.Kilometer, 
       LatLng(_userPosition!.latitude, _userPosition!.longitude), 
       LatLng(busLoc.latitude, busLoc.longitude)
     );
     
-    // 2. Estimate ETA (Assume 20mph avg speed in city)
-    // Time = Distance / Speed
     final speedMph = (_currentBus?.location?.speed ?? 0) > 2 ? (_currentBus!.location!.speed! * 2.23694) : 20.0; 
-    // If speed is 0 or low, assume 20mph default
     
-    // Distance/Speed results in hours, convert to minutes
-    final timeHours = (distance * 0.621371) / speedMph; // Convert distance km to miles
+    final timeHours = (distance * 0.621371) / speedMph; 
     final timeMinutes = (timeHours * 60).round();
     
-    // 3. Stops Remaining
     final totalStops = _currentRoute!.stops.length;
     final completed = _currentBus!.completedStops.length;
     final remaining = (totalStops - completed).clamp(0, totalStops);
@@ -220,127 +172,18 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Initial fallback position
-    final defaultPos = const LatLng(40.916765, -74.171811); // Dummy fallback
+    final collegeId = ref.watch(selectedCollegeIdProvider);
 
     return AppScaffold(
       body: Stack(
         children: [
-          ListenableBuilder(
-            listenable: _animationController,
-            builder: (context, child) {
-              final point = _animationController.currentPoint;
-              final currentPos = point != null ? LatLng(point.latitude, point.longitude) : defaultPos;
-              final rotation = point?.heading ?? 0.0;
+          if (collegeId != null)
+            MobileMapLibre(
+              collegeId: collegeId,
+              selectedBusId: widget.busId ?? 'BUS_001',
+              followBus: _isCameraLocked,
+            ),
 
-              return FlutterMap(
-                mapController: _mapController,
-                options: MapOptions(
-                  initialCenter: currentPos,
-                  initialZoom: 16.0,
-                  onPositionChanged: (pos, hasGesture) {
-                    if (hasGesture && _isCameraLocked) {
-                      setState(() => _isCameraLocked = false);
-                    }
-                  },
-                ),
-                children: [
-                   TileLayer(
-                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    userAgentPackageName: 'com.bannu.mobile.mobile',
-                  ),
-                  
-                  // User Location Marker
-                  if (_userPosition != null)
-                     MarkerLayer(
-                       markers: [
-                         Marker(
-                           point: LatLng(_userPosition!.latitude, _userPosition!.longitude),
-                           width: 40,
-                           height: 40,
-                           child: Stack(
-                             alignment: Alignment.center,
-                             children: [
-                               Container(
-                                 width: 20,
-                                 height: 20,
-                                 decoration: BoxDecoration(
-                                   color: Colors.blue.withOpacity(0.3),
-                                   shape: BoxShape.circle,
-                                 ),
-                               ),
-                               Container(
-                                 width: 12,
-                                 height: 12,
-                                 decoration: BoxDecoration(
-                                   color: Colors.blue,
-                                   shape: BoxShape.circle,
-                                   border: Border.all(color: Colors.white, width: 2),
-                                   boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4)]
-                                 ),
-                               ),
-                             ],
-                           ),
-                         )
-                       ]
-                     ),
-
-                  if (point != null)
-                    MarkerLayer(
-                      markers: [
-                        Marker(
-                          point: currentPos,
-                          width: 80, 
-                          height: 80,
-                          child: Transform.rotate(
-                            angle: (rotation * (3.14159 / 180)),
-                            child: Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                // Ping animation using a large container
-                                Container(
-                                  width: 80,
-                                  height: 80,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.primary.withOpacity(0.1),
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                                // The Pin Image
-                                Image.asset(
-                                  'assets/bus_pin.png',
-                                  width: 60,
-                                  height: 60,
-                                ),
-                                // Directional arrow on top
-                                Positioned(
-                                  top: 0,
-                                  right: 0,
-                                  child: Transform.rotate(
-                                    angle: 0, // Heading already applied to parent
-                                    child: Container(
-                                      padding: const EdgeInsets.all(2),
-                                      decoration: const BoxDecoration(
-                                        color: Colors.white,
-                                        shape: BoxShape.circle,
-                                        boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4)],
-                                      ),
-                                      child: Icon(Icons.navigation, color: AppColors.primary, size: 14),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                ],
-              );
-            },
-          ),
-
-          // controls - keeping top fixed
           Positioned(
             top: 24,
             left: 16,
@@ -364,9 +207,9 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
             ),
           ),
 
-          // Speed & Road Overlay - Moved to Bottom (above Bottom Sheet)
+          // Speed & Road Overlay
           Positioned(
-            bottom: 240, // Above TrackBottomSheet (~200px)
+            bottom: 240,
             left: 16,
             right: 16,
             child: SafeArea(
@@ -455,7 +298,6 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
             ),
           ),
 
-          // Bottom Sheet
           Positioned(
             left: 0,
             right: 0,
@@ -491,4 +333,4 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
       ),
     );
   }
-} // End Class
+}

@@ -120,8 +120,12 @@ const updateBusLocation = async (req, res) => {
         await db.runTransaction(async (transaction) => {
             const busDoc = await transaction.get(busRef);
             if (!busDoc.exists) {
+                console.warn(`[GPS MISMATCH] Tracking endpoint busId: ${busId} not found in Firestore.`);
                 throw new Error('Bus not found');
             }
+
+            // SMOKING GUN LOG FOR PROBLEM 2!
+            console.log(`[GPS CHECK] Endpoint busId: ${busId} | Firestore doc.id: ${busDoc.id} | Match: ${busId === busDoc.id}`);
 
             const busData = busDoc.data();
             const isActiveTrip = !!busData.activeTripId;
@@ -182,9 +186,19 @@ const endTrip = async (req, res) => {
     if (!busId) return res.status(400).json({ success: false, message: 'Bus ID required' });
 
     try {
-        const batch = db.batch();
-
         const tripRef = db.collection('trips').doc(tripId);
+        const tripDoc = await tripRef.get();
+
+        if (!tripDoc.exists) {
+            return res.status(404).json({ success: false, message: 'Trip not found' });
+        }
+
+        if (tripDoc.data().driverId !== req.user.id) {
+            console.warn(`[UNAUTHORIZED END TRIP] Driver ${req.user.id} attempted to end trip ${tripId} owned by ${tripDoc.data().driverId}`);
+            return res.status(403).json({ success: false, message: 'You are not authorized to end this trip because you did not start it.' });
+        }
+
+        const batch = db.batch();
         const busRef = db.collection('buses').doc(busId);
 
         // 1. Update Trip Status
@@ -202,8 +216,8 @@ const endTrip = async (req, res) => {
             currentRoadName: '',
             currentSpeed: 0,
             speed: 0,
-            liveTrail: [], // Clear legacy trail
-            liveTrackBuffer: [], // Clear new buffer
+            liveTrail: [],
+            liveTrackBuffer: [],
             lastUpdated: new Date().toISOString()
         });
 

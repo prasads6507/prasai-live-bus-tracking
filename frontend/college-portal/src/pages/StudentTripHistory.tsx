@@ -6,7 +6,7 @@ import {
     ArrowLeft, Bus, Loader2, Map as MapIcon, History
 } from 'lucide-react';
 import { getStudentTripHistory, getTripPath } from '../services/api';
-import MapComponent from '../components/MapComponent';
+import MapLibreMapComponent from '../components/MapLibreMapComponent';
 
 interface Trip {
     _id: string;
@@ -241,7 +241,7 @@ const StudentTripHistory = () => {
                                         <p className="text-sm opacity-60">The route might have been too short or data wasn't captured.</p>
                                     </div>
                                 ) : (
-                                    <MapComponent
+                                    <MapLibreMapComponent
                                         buses={[]}
                                         focusedLocation={null}
                                         path={tripPath}
