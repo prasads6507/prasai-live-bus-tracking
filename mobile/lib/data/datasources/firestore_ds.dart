@@ -14,40 +14,55 @@ class FirestoreDataSource {
     if (points.isEmpty) return;
     
     final lastPoint = points.last;
-    final updateData = {
-      'lastUpdated': DateTime.now().toIso8601String(),
-      'lastLocationUpdate': FieldValue.serverTimestamp(),
-      'location': {
-        'latitude': lastPoint.latitude,
-        'longitude': lastPoint.longitude,
-        'heading': lastPoint.heading ?? 0,
-      },
-      'currentLocation': {
-        'lat': lastPoint.latitude,
-        'lng': lastPoint.longitude,
-      },
-      'speed': lastPoint.speed ?? 0,
-      'heading': lastPoint.heading ?? 0,
-    };
-
-    // Replicate backend buffer logic (arrayUnion points)
     final docRef = _firestore.collection('buses').doc(busId);
-    
-    // We add all new points to the buffer
-    await docRef.update({
-      ...updateData,
-      'liveTrackBuffer': FieldValue.arrayUnion(points.map((p) => {
+
+    await _firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(docRef);
+      if (!snapshot.exists) return;
+
+      final data = snapshot.data() as Map<String, dynamic>?;
+      if (data == null) return;
+
+      final currentBuffer = (data['liveTrackBuffer'] as List<dynamic>?) ?? [];
+      final newPointsData = points.map((p) => {
         'latitude': p.latitude,
         'longitude': p.longitude,
         'speed': p.speed ?? 0,
         'heading': p.heading ?? 0,
         'timestamp': p.timestamp?.toIso8601String() ?? DateTime.now().toIso8601String(),
-      }).toList()),
-    });
+      }).toList();
 
-    // Optional: maintenance of buffer size could be done here or left to grow slightly
-    // The backend keeps 5, but Firestore arrayUnion is cumulative. 
-    // For now, let's keep it simple.
+      final combined = [...currentBuffer, ...newPointsData];
+      
+      // Sort by timestamp
+      combined.sort((a, b) {
+        final timeA = DateTime.parse(a['timestamp'] as String).millisecondsSinceEpoch;
+        final timeB = DateTime.parse(b['timestamp'] as String).millisecondsSinceEpoch;
+        return timeA.compareTo(timeB);
+      });
+
+      // Trim strictly to 5 points
+      final trimmedBuffer = combined.length > 5 ? combined.sublist(combined.length - 5) : combined;
+
+      final updateData = {
+        'lastUpdated': DateTime.now().toIso8601String(),
+        'lastLocationUpdate': FieldValue.serverTimestamp(),
+        'location': {
+          'latitude': lastPoint.latitude,
+          'longitude': lastPoint.longitude,
+          'heading': lastPoint.heading ?? 0,
+        },
+        'currentLocation': {
+          'lat': lastPoint.latitude,
+          'lng': lastPoint.longitude,
+        },
+        'speed': lastPoint.speed ?? 0,
+        'heading': lastPoint.heading ?? 0,
+        'liveTrackBuffer': trimmedBuffer,
+      };
+
+      transaction.update(docRef, updateData);
+    });
   }
 
   /// Finds the canonical collegeId using its slug.

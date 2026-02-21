@@ -22,13 +22,13 @@ class AppTheme {
     
     textTheme: AppTypography.textTheme,
     
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
       color: AppColors.surfaceElevated,
       elevation: 0,
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: AppColors.divider, width: 1),
+        side: const BorderSide(color: AppColors.divider, width: 1),
       ),
     ),
     

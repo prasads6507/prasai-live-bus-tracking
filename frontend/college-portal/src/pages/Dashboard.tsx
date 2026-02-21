@@ -16,7 +16,7 @@ const isLiveBus = (bus: any) => {
     try {
         const lastUpdate = bus.lastLocationUpdate.toDate ? bus.lastLocationUpdate.toDate() : new Date(bus.lastLocationUpdate);
         const diffMinutes = (new Date().getTime() - lastUpdate.getTime()) / 60000;
-        return diffMinutes < 2; // Strict 2 minute limit for "LIVE" badge
+        return diffMinutes < 5; // Relaxed to 5 minute limit for "LIVE" badge
     } catch (e) { return false; }
 };
 

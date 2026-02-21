@@ -469,18 +469,18 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
       return;
     }
 
-    // Initialize DriverLocationService with background_locator_2
+    // Initialize DriverLocationService with background_location_tracker
     await DriverLocationService.startTracking(
       widget.collegeId, 
       widget.busId, 
       (locationDto) {
         if (mounted) {
           final point = LocationPoint(
-             latitude: locationDto.latitude,
-             longitude: locationDto.longitude,
+             latitude: locationDto.lat,
+             longitude: locationDto.lon,
              timestamp: DateTime.now(),
              speed: locationDto.speed,
-             heading: locationDto.heading,
+             heading: locationDto.course,
           );
           setState(() {
             _currentSpeed = (point.speed ?? 0.0) * 2.23694; // mph

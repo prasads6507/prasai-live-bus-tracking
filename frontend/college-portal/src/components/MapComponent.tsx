@@ -164,6 +164,7 @@ const AnimatedBusMarker = ({ bus, icon, onPositionUpdate }: { bus: any, icon: (b
                 const latestPos: [number, number] = [bus.location.latitude, bus.location.longitude];
                 setPosition(latestPos);
                 onPositionUpdate?.(bus._id, latestPos, bus.location.heading || 0);
+                animationFrameRef.current = requestAnimationFrame(animate);
                 return;
             }
 

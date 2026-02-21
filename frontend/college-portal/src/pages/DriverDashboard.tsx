@@ -199,33 +199,19 @@ const DriverDashboard = () => {
         setTripId(newTripId);
 
         try {
-            // Attempt to start trip on backend, but don't block tracking if it fails (e.g. network timeout)
-            try {
-                await startNewTrip(selectedBusId, newTripId);
-                console.log('Trip started:', newTripId);
-            } catch (apiErr) {
-                console.warn('Backend startTrip failed, proceeding with offline/local trip ID:', apiErr);
-                // Optional: Show a "Sync warning" instead of blocking
-            }
+            // Attempt to start trip on backend, MUST succeed to proceed
+            await startNewTrip(selectedBusId, newTripId);
+            console.log('Trip started:', newTripId);
 
             // Persist to localStorage
             localStorage.setItem('driver_active_trip', JSON.stringify({ tripId: newTripId, busId: selectedBusId }));
 
-            // Reset completed stops and live trail
-            const busRef = doc(db, 'buses', selectedBusId);
-            await updateDoc(busRef, {
-                completedStops: [],
-                liveTrail: []
-            });
-
             // Start Tracking
             startTrackingLoop(selectedBusId, newTripId);
-        } catch (err) {
+        } catch (err: any) {
             console.error('Critical failure starting trip:', err);
-            // Only show error if we couldn't even set up the local state or Firestore buffer
-            setError("Issue starting trip. Tracking attempted anyway.");
-            // Try starting loop as fail-safe
-            startTrackingLoop(selectedBusId, newTripId);
+            setError(err.response?.data?.message || err.message || "Failed to start trip on server. Cannot track.");
+            setTripId(null);
         }
     };
 
@@ -275,32 +261,21 @@ const DriverDashboard = () => {
                     getStreetName(latitude, longitude).then(street => setCurrentStreetName(street));
                 }
 
-                // Write live location directly to Firestore every 5 seconds
                 if (now - lastUpdateRef.current > 5000) {
                     try {
-                        console.log(`--- WRITING LOCATION TO FIRESTORE FOR BUS ${busId} ---`);
+                        console.log(`--- WRITING LOCATION TO BACKEND API FOR BUS ${busId} ---`);
                         const speedMph = Math.round((speed || 0) * 2.23694);
                         const headingVal = heading || 0;
 
-                        // Direct Firestore write for real-time updates
-                        const busRef = doc(db, 'buses', busId);
-                        await updateDoc(busRef, {
-                            location: { latitude, longitude },
-                            currentLocation: { lat: latitude, lng: longitude },
-                            currentHeading: headingVal,
-                            currentSpeed: speedMph,
+                        await updateBusLocation(busId, {
+                            latitude,
+                            longitude,
                             speed: speedMph,
                             heading: headingVal,
-                            currentStreetName: currentStreetName || 'Identifying road...',
-                            currentRoadName: currentStreetName || 'Identifying road...',
-                            lastLocationUpdate: serverTimestamp(),
-                            lastUpdated: new Date().toISOString(),
-                            currentTripId: currentTripId || null,
-                            status: currentTripId ? 'ON_ROUTE' : 'ACTIVE',
-                            liveTrail: liveTrailBufferRef.current // Upload the buffered points
+                            status: currentTripId ? 'ON_ROUTE' : 'ACTIVE'
                         });
 
-                        // Clear buffer after upload
+                        // Clear buffer after upload to prevent memory leak
                         liveTrailBufferRef.current = [];
 
                         // Check Stop Completion (Phase 5.1)
@@ -310,25 +285,12 @@ const DriverDashboard = () => {
 
                         lastUpdateRef.current = now;
                         setLastSentTime(new Date().toLocaleTimeString());
-                        console.log('Firestore location update written successfully');
-                    } catch (err: any) {
-                        console.error("Failed to write location to Firestore", err);
-                        // Fallback to API call
-                        try {
-                            await updateBusLocation(busId, {
-                                latitude,
-                                longitude,
-                                speed: Math.round((speed || 0) * 2.23694),
-                                heading: heading || 0,
-                                status: currentTripId ? 'ON_ROUTE' : 'ACTIVE'
-                            });
-                            lastUpdateRef.current = now;
-                            setLastSentTime(new Date().toLocaleTimeString());
-                        } catch (apiErr: any) {
-                            if (apiErr.response?.status === 401) {
-                                setError('Session expired. Please log in again.');
-                                endTrip();
-                            }
+                        console.log('API location update sent successfully');
+                    } catch (apiErr: any) {
+                        console.error("Failed to send location update to API", apiErr);
+                        if (apiErr.response?.status === 401) {
+                            setError('Session expired. Please log in again.');
+                            endTrip();
                         }
                     }
                 }
