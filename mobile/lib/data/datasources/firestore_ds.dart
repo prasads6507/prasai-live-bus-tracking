@@ -92,13 +92,55 @@ class FirestoreDataSource {
     }
   }
 
+  Future<Bus> _populateDriverDetails(Bus bus) async {
+    if (bus.driverId == null) return bus;
+    try {
+      final userDoc = await _firestore.collection('users').doc(bus.driverId).get();
+      if (userDoc.exists) {
+        final userData = userDoc.data() as Map<String, dynamic>;
+        return Bus(
+          id: bus.id,
+          busNumber: bus.busNumber,
+          plateNumber: bus.plateNumber,
+          status: bus.status,
+          activeTripId: bus.activeTripId,
+          location: bus.location,
+          liveTrackBuffer: bus.liveTrackBuffer,
+          driverId: bus.driverId,
+          driverName: userData['name'] ?? bus.driverName,
+          driverPhone: userData['phone'] ?? userData['phoneNumber'] ?? bus.driverPhone,
+          driverEmail: userData['email'] ?? bus.driverEmail,
+          currentDriverId: bus.currentDriverId,
+          assignedRouteId: bus.assignedRouteId,
+          completedStops: bus.completedStops,
+          currentRoadName: bus.currentRoadName,
+          currentSpeed: bus.currentSpeed,
+          currentHeading: bus.currentHeading,
+        );
+      }
+    } catch (_) {}
+    return bus;
+  }
+
   /// Fetches buses for a college from the top-level 'buses' collection.
   Stream<List<Bus>> getBuses(String collegeId) {
     return _firestore
         .collection('buses')
         .where('collegeId', isEqualTo: collegeId)
         .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => Bus.fromFirestore(doc)).toList());
+        .asyncMap((snapshot) async {
+          final buses = snapshot.docs.map((doc) => Bus.fromFirestore(doc)).toList();
+          return Future.wait(buses.map((bus) => _populateDriverDetails(bus)));
+        });
+  }
+
+  /// Fetches students for a college from the 'students' collection.
+  Stream<List<UserProfile>> getStudents(String collegeId) {
+    return _firestore
+        .collection('students')
+        .where('collegeId', isEqualTo: collegeId)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map((doc) => UserProfile.fromFirestore(doc)).toList());
   }
 
   /// Fetches buses assigned to a specific driver.
@@ -108,7 +150,10 @@ class FirestoreDataSource {
         .where('collegeId', isEqualTo: collegeId)
         .where('assignedDriverId', isEqualTo: driverId)
         .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => Bus.fromFirestore(doc)).toList());
+        .asyncMap((snapshot) async {
+          final buses = snapshot.docs.map((doc) => Bus.fromFirestore(doc)).toList();
+          return Future.wait(buses.map((bus) => _populateDriverDetails(bus)));
+        });
   }
 
   /// Updates the live buffer in the top-level 'buses' collection.
@@ -194,10 +239,10 @@ class FirestoreDataSource {
 
     final busses = <String, Bus>{};
     for (var doc in numSnapshot.docs) {
-      busses[doc.id] = Bus.fromFirestore(doc);
+      busses[doc.id] = await _populateDriverDetails(Bus.fromFirestore(doc));
     }
     for (var doc in plateSnapshot.docs) {
-      busses[doc.id] = Bus.fromFirestore(doc);
+      busses[doc.id] = await _populateDriverDetails(Bus.fromFirestore(doc));
     }
 
     return busses.values.toList();
@@ -209,7 +254,7 @@ class FirestoreDataSource {
         .collection('buses')
         .doc(busId)
         .snapshots()
-        .map((doc) => Bus.fromFirestore(doc));
+        .asyncMap((doc) async => await _populateDriverDetails(Bus.fromFirestore(doc)));
   }
 
   /// Checks if a user exists in either 'users' or 'students' top-level collections.

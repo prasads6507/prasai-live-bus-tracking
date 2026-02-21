@@ -6,6 +6,7 @@ class UserProfile {
   final String role; // "student", "driver", "admin"
   final String collegeId;
   final String? name;
+  final String? phone;
   final String? assignedBusId;
   final List<String> favoriteBusIds;
 
@@ -15,6 +16,7 @@ class UserProfile {
     required this.role,
     required this.collegeId,
     this.name,
+    this.phone,
     this.assignedBusId,
     this.favoriteBusIds = const [],
   });
@@ -27,6 +29,7 @@ class UserProfile {
       role: data['role'] ?? 'student',
       collegeId: data['collegeId'] ?? '',
       name: data['name'],
+      phone: data['phone'] ?? data['phoneNumber'],
       assignedBusId: data['assignedBusId'],
       favoriteBusIds: List<String>.from(data['favoriteBusIds'] ?? []),
     );

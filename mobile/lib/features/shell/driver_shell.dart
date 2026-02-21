@@ -25,6 +25,7 @@ class DriverShell extends StatelessWidget {
           onTap: (int idx) => _onItemTapped(idx, context),
           items: const [
             BottomNavigationBarItem(icon: Icon(Icons.directions_bus), label: 'Trip'),
+            BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Students'),
             BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
           ],
         ),
@@ -34,7 +35,8 @@ class DriverShell extends StatelessWidget {
 
   static int _calculateSelectedIndex(BuildContext context) {
     final String location = GoRouterState.of(context).uri.path;
-    if (location.startsWith('/driver/profile')) return 1;
+    if (location.startsWith('/driver/students')) return 1;
+    if (location.startsWith('/driver/profile')) return 2;
     return 0; // Trip
   }
 
@@ -44,6 +46,9 @@ class DriverShell extends StatelessWidget {
         context.go('/driver');
         break;
       case 1:
+        context.go('/driver/students');
+        break;
+      case 2:
         context.go('/driver/profile');
         break;
     }

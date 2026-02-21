@@ -206,8 +206,8 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
         LatLng(busLoc.latitude, busLoc.longitude)
       );
       
-      // Check if student is in the bus (5m precision)
-      if (distanceToUserM <= 5.0) {
+      // Check if student is in the bus or very close (50m precision to account for GPS drift)
+      if (distanceToUserM <= 50.0) {
         userInBus = true;
         etaDisplay = "You're in the bus!";
       } else {

@@ -92,5 +92,11 @@ final userProfileProvider = StreamProvider<UserProfile?>((ref) {
 });
 
 final busesProvider = StreamProvider.family<List<Bus>, String>((ref, collegeId) {
-  return ref.watch(busRepositoryProvider).getBuses(collegeId);
+  final ds = ref.watch(firestoreDataSourceProvider);
+  return ds.getBuses(collegeId);
+});
+
+final studentsProvider = StreamProvider.family<List<UserProfile>, String>((ref, collegeId) {
+  final ds = ref.watch(firestoreDataSourceProvider);
+  return ds.getStudents(collegeId);
 });
