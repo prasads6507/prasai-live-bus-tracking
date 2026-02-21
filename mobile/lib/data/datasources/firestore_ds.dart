@@ -199,20 +199,22 @@ class FirestoreDataSource {
       'currentStreetName': roadName,
     });
   }
-  /// Saves a single point to the trip path history.
+  /// Saves a single point to the trip path array (1 trip = 1 doc).
   Future<void> saveTripPathPoint(String tripId, LocationPoint point, String busId) async {
     try {
-      final tripRef = _firestore.collection('buses').doc(busId).collection('trips').doc(tripId);
-      await tripRef.collection('history').add({
+      final tripRef = _firestore.collection('trips').doc(tripId);
+      final newPoint = {
+        'lat': point.latitude,
+        'lng': point.longitude,
         'latitude': point.latitude,
         'longitude': point.longitude,
         'heading': point.heading ?? 0.0,
-        'speed': point.speed ?? 0.0,
+        'speed': (point.speed ?? 0.0).round(),
         'timestamp': DateTime.now().toIso8601String(),
-        'recordedAt': FieldValue.serverTimestamp(),
-      });
-      // Increment total points
+        'recordedAt': DateTime.now().toIso8601String(),
+      };
       await tripRef.update({
+        'path': FieldValue.arrayUnion([newPoint]),
         'totalPoints': FieldValue.increment(1),
       });
     } catch (e) {
