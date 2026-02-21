@@ -21,12 +21,22 @@ subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
 }
 subprojects {
+    project.configurations.all {
+        resolutionStrategy.eachDependency { details ->
+            if (details.requested.group == 'androidx.core' && details.requested.name == 'core-ktx') {
+                details.useVersion '1.13.1'
+            }
+        }
+    }
+
     afterEvaluate { project ->
         if (project.hasProperty('android')) {
             project.android {
-                compileSdkVersion 36
-                if (namespace == null) {
-                    namespace project.group
+                if (project.android.hasProperty('compileSdkVersion')) {
+                    compileSdkVersion 36
+                }
+                if (project.android.hasProperty('namespace') && project.android.namespace == null) {
+                    project.android.namespace = project.group
                 }
                 compileOptions {
                     sourceCompatibility JavaVersion.VERSION_17
@@ -39,10 +49,12 @@ subprojects {
             sourceCompatibility = '17'
             targetCompatibility = '17'
         }
-        project.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
-            kotlinOptions {
-                jvmTarget = '17'
-            }
+    }
+    
+    tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+        kotlinOptions {
+            jvmTarget = "17"
+            freeCompilerArgs += ["-Xskip-metadata-version-check"]
         }
     }
 }
