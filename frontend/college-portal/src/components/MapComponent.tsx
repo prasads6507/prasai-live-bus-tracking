@@ -5,15 +5,9 @@ import { divIcon } from 'leaflet';
 import { MapPin, Crosshair } from 'lucide-react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { FaBusAlt } from 'react-icons/fa';
+import MapLibreMap from './MapLibreMap';
 
-interface MapComponentProps {
-    buses: any[];
-    focusedLocation?: { lat: number, lng: number } | null;
-    stopMarkers?: { lat: number, lng: number, name: string, isCompleted?: boolean }[];
-    followBus?: boolean;
-    path?: [number, number][]; // Array of [lat, lng] for drawing trip history
-    selectedBusId?: string | null;
-}
+// We removed the MapComponentProps definition here because it was moved to the bottom of the file in the export block
 
 // Component to handle map re-centering with smooth animation
 const ChangeView = ({ center, zoom, shouldAnimate = false }: { center: [number, number], zoom: number, shouldAnimate?: boolean }) => {
@@ -263,7 +257,7 @@ const AnimatedBusMarker = ({ bus, icon, onPositionUpdate }: { bus: any, icon: (b
     );
 };
 
-const MapComponent = ({ buses, focusedLocation, stopMarkers = [], followBus: externalFollowBus, path, selectedBusId }: MapComponentProps) => { // Destructure path
+const LeafletMap = ({ buses, focusedLocation, stopMarkers = [], followBus: externalFollowBus, path, selectedBusId }: MapComponentProps) => { // Destructure path
     const [animatedPositions, setAnimatedPositions] = useState<{ [key: string]: { pos: [number, number], bearing: number } }>({});
     const props = { path }; // Keep props ref for use in logic above if needed
 
@@ -272,12 +266,12 @@ const MapComponent = ({ buses, focusedLocation, stopMarkers = [], followBus: ext
     const [followBusEnabled, setFollowBusEnabled] = useState(externalFollowBus ?? true);
 
     // Track the active bus position for follow mode
-    const selectedBus = selectedBusId ? buses.find(b => b._id === selectedBusId) : null;
+    const selectedBus = selectedBusId ? buses.find((b: any) => b._id === selectedBusId) : null;
     const activeBusWithLocation = selectedBus?.location?.latitude
         ? selectedBus
-        : buses.find(b => b.status === 'ON_ROUTE' && b.location?.latitude && b.location?.longitude);
+        : buses.find((b: any) => b.status === 'ON_ROUTE' && b.location?.latitude && b.location?.longitude);
 
-    const anyBusWithLocation = buses.find(b => b.location?.latitude && b.location?.longitude);
+    const anyBusWithLocation = buses.find((b: any) => b.location?.latitude && b.location?.longitude);
 
     // Use animated position if available, otherwise fallback to DB position
     const activeBusPosition: [number, number] | null = activeBusWithLocation
@@ -393,7 +387,7 @@ const MapComponent = ({ buses, focusedLocation, stopMarkers = [], followBus: ext
 
     return (
         <div className="h-full w-full relative z-0">
-            {buses.filter(b => b.location?.latitude).length === 0 && (
+            {buses.filter((b: any) => b.location?.latitude).length === 0 && (
                 <div className="absolute inset-0 z-10 bg-slate-900/10 backdrop-blur-[1px] flex items-center justify-center">
                     <div className="bg-white p-4 rounded-xl shadow-xl border border-slate-200 text-center max-w-xs mx-4">
                         <MapPin size={32} className="mx-auto text-slate-400 mb-2" />
@@ -408,7 +402,7 @@ const MapComponent = ({ buses, focusedLocation, stopMarkers = [], followBus: ext
             {/* Follow Bus Toggle */}
             {activeBusWithLocation && !path && (
                 <button
-                    onClick={() => setFollowBusEnabled(prev => !prev)}
+                    onClick={() => setFollowBusEnabled((prev: boolean) => !prev)}
                     className={`absolute top-3 right-3 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold shadow-lg transition-all ${followBusEnabled
                         ? 'bg-blue-600 text-white shadow-blue-200'
                         : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
@@ -459,7 +453,7 @@ const MapComponent = ({ buses, focusedLocation, stopMarkers = [], followBus: ext
                 />
 
                 {/* Bus markers with heading rotation */}
-                {buses.map((bus) => {
+                {buses.map((bus: any) => {
                     if (bus.status !== 'ON_ROUTE' || bus.location?.latitude == null || bus.location?.longitude == null) return null;
 
                     return (
@@ -467,8 +461,8 @@ const MapComponent = ({ buses, focusedLocation, stopMarkers = [], followBus: ext
                             key={bus._id}
                             bus={bus}
                             icon={(bearing: number) => createBusIcon(bus.status, bearing)}
-                            onPositionUpdate={(id, pos, bearing) => {
-                                setAnimatedPositions(prev => ({
+                            onPositionUpdate={(id: string, pos: [number, number], bearing: number) => {
+                                setAnimatedPositions((prev: any) => ({
                                     ...prev,
                                     [id]: { pos, bearing }
                                 }));
@@ -478,11 +472,11 @@ const MapComponent = ({ buses, focusedLocation, stopMarkers = [], followBus: ext
                 })}
 
                 {/* GPS Pointer for Selected Bus */}
-                {selectedBusId && buses.find(b => b._id === selectedBusId)?.location?.latitude && (
+                {selectedBusId && buses.find((b: any) => b._id === selectedBusId)?.location?.latitude && (
                     <Marker
                         position={animatedPositions[selectedBusId]?.pos ?? [
-                            buses.find(b => b._id === selectedBusId)!.location.latitude,
-                            buses.find(b => b._id === selectedBusId)!.location.longitude
+                            buses.find((b: any) => b._id === selectedBusId)!.location.latitude,
+                            buses.find((b: any) => b._id === selectedBusId)!.location.longitude
                         ]}
                         icon={createPointerIcon(animatedPositions[selectedBusId]?.bearing ?? 0)}
                         zIndexOffset={1000}
@@ -490,7 +484,7 @@ const MapComponent = ({ buses, focusedLocation, stopMarkers = [], followBus: ext
                 )}
 
                 {/* Stop point markers */}
-                {stopMarkers.map((stop, idx) => (
+                {stopMarkers.map((stop: any, idx: number) => (
                     <Marker
                         key={`stop-${idx}`}
                         position={[stop.lat, stop.lng]}
@@ -509,6 +503,26 @@ const MapComponent = ({ buses, focusedLocation, stopMarkers = [], followBus: ext
             </MapContainer>
         </div>
     );
+};
+
+export interface MapComponentProps {
+    buses: any[];
+    focusedLocation?: { lat: number, lng: number } | null;
+    stopMarkers?: { lat: number, lng: number, name: string, isCompleted?: boolean }[];
+    followBus?: boolean;
+    path?: [number, number][]; // Array of [lat, lng] for drawing trip history
+    selectedBusId?: string | null;
+}
+
+const MapComponent = (props: MapComponentProps) => {
+    // Determine the map engine. Defaults to Leaflet if not explicitly set to 'true'
+    const useMapLibre = import.meta.env.VITE_USE_MAPLIBRE === 'true';
+
+    if (useMapLibre) {
+        return <MapLibreMap {...props} />;
+    }
+
+    return <LeafletMap {...props} />;
 };
 
 export default MapComponent;
