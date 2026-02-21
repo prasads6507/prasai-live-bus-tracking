@@ -29,7 +29,9 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
   StreamSubscription? _busSubscription;
   StreamSubscription<Position>? _positionStream;
   
-  bool _isCameraLocked = true;
+  bool _followBus = false;
+  bool _hasInitialCentered = false;
+  LocationPoint? _mapFocusLocation;
   
   // Real data state
   String _eta = "--";
@@ -74,7 +76,13 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
            ),
          ).listen((pos) {
            if (mounted) {
-             setState(() => _userPosition = pos);
+             setState(() {
+               _userPosition = pos;
+               if (!_hasInitialCentered) {
+                 _focusUserLocation();
+                 _hasInitialCentered = true;
+               }
+             });
            }
          });
        }
@@ -140,28 +148,51 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
   }
 
   void _startMetricsUpdates() {
+    // Initial fetch
+    _updateMetrics();
     _metricsTimer = Timer.periodic(const Duration(seconds: 5), (_) => _updateMetrics());
   }
 
+  void _focusUserLocation() {
+    if (_userPosition != null) {
+      if (mounted) {
+        setState(() {
+          _followBus = false;
+          _mapFocusLocation = LocationPoint(
+            latitude: _userPosition!.latitude,
+            longitude: _userPosition!.longitude,
+            timestamp: DateTime.now(),
+          );
+        });
+      }
+    }
+  }
+
+  void _focusBusLocation() {
+    if (_currentBus?.location != null) {
+      if (mounted) {
+        setState(() {
+          _followBus = true;
+          _mapFocusLocation = LocationPoint(
+            latitude: _currentBus!.location!.latitude,
+            longitude: _currentBus!.location!.longitude,
+            timestamp: DateTime.now(),
+          );
+        });
+      }
+    }
+  }
+
   void _updateMetrics() {
-    if (_currentBus == null || _currentRoute == null) return;
+    if (_currentBus == null) return;
     
     final busLoc = _currentBus!.location;
     if (busLoc == null) return;
-    
-    // 1. Calculate Stops Remaining
-    final totalStops = _currentRoute!.stops.length;
-    final completed = _currentBus!.completedStops.length;
-    final remaining = (totalStops - completed).clamp(0, totalStops);
 
-    // 2. Distance and ETA
+    // 1. Distance and ETA
     double distanceKm = 0.0;
     String distanceDisplay = "-- km";
     String etaDisplay = "-- min";
-    
-    // Total Time estimate: 3 mins per stop on average
-    final estimatedTotalMins = totalStops * 3;
-    final totalTimeDisplay = "$estimatedTotalMins min";
     
     if (_userPosition != null) {
       distanceKm = const Distance().as(LengthUnit.Meter, 
@@ -174,6 +205,19 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
       final timeHours = (distanceKm * 0.621371) / speedMph; 
       final timeMinutes = (timeHours * 60).round();
       etaDisplay = "$timeMinutes min";
+    }
+
+    // 2. Routing Metrics
+    int remaining = 0;
+    String totalTimeDisplay = "-- min";
+    
+    if (_currentRoute != null) {
+      final totalStops = _currentRoute!.stops.length;
+      final completed = _currentBus!.completedStops.length;
+      remaining = (totalStops - completed).clamp(0, totalStops);
+      
+      final estimatedTotalMins = totalStops * 3;
+      totalTimeDisplay = "$estimatedTotalMins min";
     }
 
     if (mounted) {
@@ -219,7 +263,8 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
             MobileMapLibre(
               collegeId: collegeId,
               selectedBusId: widget.busId ?? 'BUS_001',
-              followBus: _isCameraLocked,
+              followBus: _followBus,
+              focusedLocation: _mapFocusLocation,
             ),
 
           Positioned(
@@ -238,9 +283,32 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
             right: 16,
             child: SafeArea(
               child: _buildCircleButton(
-                icon: _isCameraLocked ? Icons.gps_fixed : Icons.gps_not_fixed,
-                color: _isCameraLocked ? AppColors.primary : AppColors.surface,
-                onTap: () => setState(() => _isCameraLocked = !_isCameraLocked),
+                icon: Icons.my_location,
+                color: AppColors.surface,
+                onTap: _focusUserLocation,
+              ),
+            ),
+          ),
+
+          // Track Live Button (Above Overlay)
+          Positioned(
+            bottom: 310,
+            right: 16,
+            child: SafeArea(
+              child: ElevatedButton.icon(
+                onPressed: _focusBusLocation,
+                icon: const Icon(Icons.directions_bus, size: 20),
+                label: const Text("Track Live"),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  elevation: 8,
+                  shadowColor: AppColors.primary.withOpacity(0.5),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                ),
               ),
             ),
           ),

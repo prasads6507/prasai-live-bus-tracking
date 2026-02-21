@@ -9,6 +9,7 @@ import '../student/screens/student_home.dart';
 import '../student/screens/student_track_screen.dart';
 import '../student/screens/student_search_screen.dart';
 import '../student/screens/student_profile_screen.dart';
+import '../student/screens/student_buses_screen.dart';
 import '../driver/screens/driver_home.dart';
 import '../driver/screens/driver_profile_screen.dart';
 import '../admin/screens/admin_dashboard.dart';
@@ -79,6 +80,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/student/search',
             builder: (context, state) => const StudentSearchScreen(),
+          ),
+          GoRoute(
+            path: '/student/buses',
+            builder: (context, state) => const StudentBusesScreen(),
           ),
           GoRoute(
             path: '/student/profile',

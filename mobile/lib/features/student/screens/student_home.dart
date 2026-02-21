@@ -11,9 +11,10 @@ import '../widgets/student_home_header.dart';
 import '../widgets/live_tracker_card.dart';
 import '../widgets/search_bus_card.dart';
 import '../widgets/drop_off_list.dart';
-import '../widgets/bus_search_result_tile.dart';
+import '../../map/widgets/mobile_maplibre.dart';
 import '../../../core/theme/typography.dart';
 import '../../../core/widgets/status_chip.dart';
+import '../../../core/theme/colors.dart';
 
 class StudentHomeScreen extends ConsumerStatefulWidget {
   const StudentHomeScreen({super.key});
@@ -63,72 +64,89 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
                           }
                           
                           final profile = profileAsync.value;
-                          Bus? myBus;
-                          
-                          if (profile?.assignedBusId != null) {
-                             myBus = buses.firstWhere(
-                               (b) => b.id == profile!.assignedBusId, 
-                               orElse: () => buses.first
-                             );
-                          } else {
-                             myBus = buses.first;
-                          }
-                          
-                          // Filter Favorites
                           final favoriteBuses = buses.where((b) => profile?.favoriteBusIds.contains(b.id) ?? false).toList();
                           
                           return Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              LiveTrackerCard(
-                                busNumber: myBus.busNumber,
-                                currentStatus: myBus.status,
-                                licensePlate: myBus.plateNumber,
-                                isLive: myBus.status == 'ON_ROUTE' || myBus.status == 'ACTIVE',
-                                onTap: () {
-                                  context.push('/student/track', extra: myBus?.id);
-                                },
+                              // 1. Mini Map showing all live buses
+                              Container(
+                                height: 220,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(24),
+                                  border: Border.all(color: AppColors.divider),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.1),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(24),
+                                  child: MobileMapLibre(
+                                    collegeId: collegeId ?? "",
+                                    followBus: false, // Just a static overview
+                                  ),
+                                ),
                               ),
                               const SizedBox(height: 24),
 
-                              // Restore Search Card
+                              // 2. Search Card
                               SearchBusCard(
                                 onTap: () => context.push('/student/search'),
                               ),
                               const SizedBox(height: 24),
 
-                              // Favorites Section
-                              if (favoriteBuses.isNotEmpty) ...[
-                                Text(
-                                  "My Favorites",
-                                  style: AppTypography.textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                              // 3. Favorites / Warning Area
+                              Text(
+                                "My Favorites",
+                                style: AppTypography.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textPrimary,
                                 ),
-                                const SizedBox(height: 16),
+                              ),
+                              const SizedBox(height: 16),
+                              
+                              if (favoriteBuses.isEmpty)
+                                Container(
+                                  padding: const EdgeInsets.all(20),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.warning.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: AppColors.warning.withOpacity(0.3)),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.info_outline, color: AppColors.warning, size: 32),
+                                      const SizedBox(width: 16),
+                                      Expanded(
+                                        child: Text(
+                                          "You haven't favored any buses yet! Search and add a bus to your favorites to track its live route here.",
+                                          style: AppTypography.textTheme.bodyMedium?.copyWith(
+                                            color: AppColors.textPrimary,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              else
                                 ...favoriteBuses.map((bus) {
-                                  return LiveTrackerCard(
-                                    busNumber: bus.busNumber,
-                                    currentStatus: bus.status,
-                                    licensePlate: bus.plateNumber,
-                                    isLive: bus.status == 'ON_ROUTE' || bus.status == 'ACTIVE',
-                                    onTap: () {
-                                      context.push('/student/track', extra: bus.id);
-                                    },
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 16.0),
+                                    child: LiveTrackerCard(
+                                      busNumber: bus.busNumber,
+                                      currentStatus: bus.currentRoadName ?? bus.status,
+                                      licensePlate: bus.plateNumber,
+                                      isLive: bus.status == 'ON_ROUTE' || bus.status == 'ACTIVE',
+                                      onTap: () {
+                                        context.push('/student/track', extra: bus.id);
+                                      },
+                                    ),
                                   );
                                 }).toList(),
-                                const SizedBox(height: 24),
-                              ],
-                              
-                              // Drop Off List with Real Data
-                              if (myBus != null && myBus.activeTripId != null)
-                                _RealBody(
-                                  busId: myBus.id, 
-                                  tripId: myBus.activeTripId!,
-                                  collegeId: collegeId ?? "",
-                                )
-                              else 
-                                const SizedBox.shrink(), // Removed label
                             ],
                           );
                         },

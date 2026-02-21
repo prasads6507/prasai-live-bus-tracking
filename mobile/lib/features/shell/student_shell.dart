@@ -25,6 +25,7 @@ class StudentShell extends StatelessWidget {
           onTap: (int idx) => _onItemTapped(idx, context),
           items: const [
             BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: 'Home'),
+            BottomNavigationBarItem(icon: Icon(Icons.directions_bus), label: 'Buses'),
             BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
           ],
         ),
@@ -34,7 +35,8 @@ class StudentShell extends StatelessWidget {
 
   static int _calculateSelectedIndex(BuildContext context) {
     final String location = GoRouterState.of(context).uri.path;
-    if (location.startsWith('/student/profile')) return 1;
+    if (location.startsWith('/student/profile')) return 2;
+    if (location.startsWith('/student/buses')) return 1;
     return 0; // Home
   }
 
@@ -44,6 +46,9 @@ class StudentShell extends StatelessWidget {
         context.go('/student');
         break;
       case 1:
+        context.go('/student/buses');
+        break;
+      case 2:
         context.go('/student/profile');
         break;
     }

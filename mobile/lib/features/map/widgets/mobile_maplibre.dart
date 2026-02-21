@@ -4,6 +4,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 import 'dart:typed_data';
+import 'dart:ui' as dart_ui;
+
+import '../../../../core/theme/colors.dart';
 
 import '../../../../data/models/bus.dart';
 import '../../../../data/models/location_point.dart';
@@ -41,6 +44,25 @@ class _MobileMapLibreState extends ConsumerState<MobileMapLibre> with SingleTick
   final String _selectedPointerId = 'selected-pointer';
 
   @override
+  void didUpdateWidget(MobileMapLibre oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    
+    // Jump to focused location if provided and updated
+    if (widget.focusedLocation != null && 
+        oldWidget.focusedLocation?.timestamp != widget.focusedLocation?.timestamp &&
+        _mapController != null && _styleLoaded) {
+      _mapController!.moveCamera(
+         CameraUpdate.newCameraPosition(
+           CameraPosition(
+             target: LatLng(widget.focusedLocation!.latitude, widget.focusedLocation!.longitude),
+             zoom: 17.0,
+           )
+         )
+      );
+    }
+  }
+
+  @override
   void initState() {
     super.initState();
     _animationTicker = MapAnimationTicker(
@@ -64,7 +86,7 @@ class _MobileMapLibreState extends ConsumerState<MobileMapLibre> with SingleTick
     if (_mapController == null) return;
     try {
       // 1. Load Assets
-      final busImg = await _loadAsset('assets/bus_pin.png'); 
+      final busImg = await _createIcon(Icons.directions_bus_outlined, AppColors.primary, 120); 
       if (busImg != null) await _mapController!.addImage(_busIconId, busImg);
       
       // We can also create a fallback circle pointer image or use the same asset for selected pointer
@@ -93,7 +115,7 @@ class _MobileMapLibreState extends ConsumerState<MobileMapLibre> with SingleTick
         'buses-layer',
         SymbolLayerProperties(
           iconImage: _busIconId,
-          iconSize: 0.25,
+          iconSize: 0.8,
           iconAllowOverlap: true,
           iconIgnorePlacement: true,
           iconRotate: ['get', 'heading'], 
@@ -220,12 +242,47 @@ class _MobileMapLibreState extends ConsumerState<MobileMapLibre> with SingleTick
     };
   }
 
-  Future<Uint8List?> _loadAsset(String path) async {
+
+  Future<Uint8List?> _createIcon(IconData iconData, Color color, double size) async {
     try {
-      final ByteData bytes = await rootBundle.load(path);
-      return bytes.buffer.asUint8List();
+      final pictureRecorder = dart_ui.PictureRecorder();
+      final canvas = Canvas(pictureRecorder);
+      final textPainter = TextPainter(textDirection: TextDirection.ltr);
+
+      // Background circle (optional, provides contrast)
+      final paint = Paint()..color = Colors.white..style = PaintingStyle.fill;
+      canvas.drawCircle(Offset(size / 2, size / 2), size / 2.2, paint);
+      
+      final shadowPaint = Paint()
+        ..color = Colors.black.withOpacity(0.15)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8.0);
+      canvas.drawCircle(Offset(size / 2, size / 2 + 4), size / 2.2, shadowPaint);
+      // Redraw white circle over shadow
+      canvas.drawCircle(Offset(size / 2, size / 2), size / 2.2, paint);
+
+      final iconStr = String.fromCharCode(iconData.codePoint);
+      textPainter.text = TextSpan(
+        text: iconStr,
+        style: TextStyle(
+          letterSpacing: 0.0,
+          fontSize: size * 0.6,
+          fontFamily: iconData.fontFamily,
+          package: iconData.fontPackage,
+          color: color,
+        ),
+      );
+      textPainter.layout();
+      textPainter.paint(
+        canvas,
+        Offset((size - textPainter.width) / 2, (size - textPainter.height) / 2),
+      );
+
+      final picture = pictureRecorder.endRecording();
+      final image = await picture.toImage(size.toInt(), size.toInt());
+      final byteData = await image.toByteData(format: dart_ui.ImageByteFormat.png);
+      return byteData?.buffer.asUint8List();
     } catch (e) {
-      debugPrint("Failed to load asset $path: $e");
+      debugPrint("Failed to create canvas icon: $e");
       return null;
     }
   }
