@@ -14,7 +14,7 @@ class MapAnimationTicker {
     required VoidCallback onTick,
   }) : _controller = AnimationController(
           vsync: vsync,
-          duration: const Duration(seconds: 1),
+          duration: const Duration(milliseconds: 4500),
         )..addListener(onTick);
 
   void updateTarget(LocationPoint point) {

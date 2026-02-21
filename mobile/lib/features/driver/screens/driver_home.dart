@@ -491,21 +491,6 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
         }
       }
     );
-
-    // Start path history timer (every 15 seconds)
-    _pathHistoryTimer?.cancel();
-    _pathHistoryTimer = Timer.periodic(const Duration(seconds: 15), (timer) {
-      if (_lastRecordedPoint != null && mounted) {
-        // We look for a trip that is either 'active' or 'ACTIVE'
-        ref.read(firestoreDataSourceProvider)
-           .getActiveTrip(widget.collegeId, widget.busId)
-           .first.then((trip) {
-          if (trip != null && mounted) {
-            ref.read(firestoreDataSourceProvider).saveTripPathPoint(trip.id, _lastRecordedPoint!);
-          }
-        });
-      }
-    });
   }
 
   void _stopTracking() {
@@ -513,8 +498,6 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
     
     _locationUpdateSubscription?.cancel();
     _locationUpdateSubscription = null;
-    _pathHistoryTimer?.cancel();
-    _pathHistoryTimer = null;
     if (mounted) {
       setState(() {
         _currentSpeed = 0.0;
@@ -569,8 +552,8 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
               Row(
                 children: [
                    IconButton(
-                    onPressed: isTripActive ? null : widget.onBack,
-                    icon: Icon(Icons.arrow_back, color: isTripActive ? AppColors.textTertiary.withOpacity(0.5) : AppColors.textPrimary),
+                    onPressed: widget.onBack,
+                    icon: Icon(Icons.arrow_back, color: AppColors.textPrimary),
                   ),
                   const SizedBox(width: 8),
                   Text(
@@ -584,7 +567,7 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
               ),
               const SizedBox(height: 20),
               DriverStatusCard(
-                speed: _currentSpeed,
+                speed: _currentSpeed.roundToDouble(),
                 isTracking: isTripActive,
                 statusText: isTripActive ? "ON TRIP" : "READY",
                 currentRoad: _currentRoad,

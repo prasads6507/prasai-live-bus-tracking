@@ -18,6 +18,7 @@ void backgroundCallback() {
       await Firebase.initializeApp();
       
       final prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
       final collegeId = prefs.getString('track_college_id');
       final busId = prefs.getString('track_bus_id');
       
@@ -71,6 +72,18 @@ void backgroundCallback() {
             'heading': data.course,
             'liveTrackBuffer': currentBuffer,
           });
+
+          if (isActiveTrip) {
+            final historyRef = db.collection('trips').doc(dataMap['activeTripId'] as String).collection('history').doc();
+            transaction.set(historyRef, {
+              'lat': data.lat,
+              'lng': data.lon,
+              'speed': speedMph,
+              'heading': data.course,
+              'recordedAt': FieldValue.serverTimestamp(),
+              'timestamp': DateTime.now().toIso8601String(),
+            });
+          }
         });
       } catch (e) {
         // Silent fail in background allowed to keep isolate running on network drops
