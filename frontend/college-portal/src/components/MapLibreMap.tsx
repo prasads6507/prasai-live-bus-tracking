@@ -68,33 +68,30 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
             longitude: center[0],
             latitude: center[1],
             zoom,
-            pitch: 45,
+            pitch: 0,
             bearing: 0
         };
     }, []);
 
-    // 3D Buildings only (No more Canvas icons needed with DOM Markers)
+    // Patch existing style to make roads more visible and remove 3D buildings
     const ensureResources = useCallback((map: any) => {
         if (!map.isStyleLoaded()) return;
 
         const layers = map.getStyle().layers;
         if (layers) {
-            const buildingLayer = layers.find((l: any) => l['source-layer'] === 'building' || l['source-layer'] === 'buildings');
-            if (!map.getLayer('3d-buildings') && buildingLayer) {
-                map.addLayer({
-                    'id': '3d-buildings',
-                    'source': buildingLayer.source,
-                    'source-layer': buildingLayer['source-layer'],
-                    'type': 'fill-extrusion',
-                    'minzoom': 15,
-                    'paint': {
-                        'fill-extrusion-color': '#e0e0e0',
-                        'fill-extrusion-height': ['coalesce', ['get', 'render_height'], ['get', 'height'], 20],
-                        'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], ['get', 'min_height'], 0],
-                        'fill-extrusion-opacity': 0.6
+            layers.forEach((l: any) => {
+                if (l.type === 'line' && l.id) {
+                    const id = l.id.toLowerCase();
+                    if (id.includes('road') || id.includes('street') || id.includes('transport')) {
+                        // Increase opacity to ensure minor roads are visible
+                        try {
+                            map.setPaintProperty(l.id, 'line-opacity', 0.9);
+                        } catch (e) {
+                            // Ignore if property is entirely data-driven and can't be easily overridden
+                        }
                     }
-                });
-            }
+                }
+            });
         }
     }, []);
 
@@ -247,9 +244,9 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
         if (mapRef.current) {
             if (focusedLocation) {
                 const latLng = getBusLatLng({ location: focusedLocation });
-                if (latLng) mapRef.current.flyTo({ center: latLng, zoom: 17, duration: 1200 });
+                if (latLng) mapRef.current.flyTo({ center: latLng, zoom: 17, pitch: 0, bearing: 0, duration: 1200 });
             } else if (getBusLatLng(selectedBus)) {
-                mapRef.current.flyTo({ center: getBusLatLng(selectedBus)!, zoom: 17, duration: 1000 });
+                mapRef.current.flyTo({ center: getBusLatLng(selectedBus)!, zoom: 17, pitch: 0, bearing: 0, duration: 1000 });
             }
         }
     }, [focusedLocation, selectedBusId]);
@@ -297,8 +294,10 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
                 onLoad={onLoad}
                 style={{ width: '100%', height: '100%' }}
                 padding={{ top: 80, bottom: 80, left: 80, right: 80 }}
+                dragRotate={false}
+                pitchWithRotate={false}
             >
-                <NavigationControl position="bottom-right" />
+                <NavigationControl position="bottom-right" showCompass={false} />
                 <FullscreenControl position="top-right" />
                 <ScaleControl position="bottom-left" />
 
