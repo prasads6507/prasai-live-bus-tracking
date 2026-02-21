@@ -5,7 +5,7 @@ import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import * as XLSX from 'xlsx';
 import Layout from '../components/Layout';
-import MapLibreMapComponent from '../components/MapLibreMapComponent';
+import MapLibreMap from '../components/MapLibreMap';
 import { getTripHistory, updateTrip, deleteTrip, adminEndTrip, getTripPath } from '../services/api';
 
 interface Trip {
@@ -650,8 +650,8 @@ const TripHistory = () => {
                                     <RefreshCw size={32} className="animate-spin text-blue-600" />
                                 </div>
                             ) : tripPath.length > 0 ? (
-                                <MapLibreMapComponent
-                                    buses={[]} // No live buses needed 
+                                <MapLibreMap
+                                    buses={[]} 
                                     path={tripPath}
                                     followBus={false}
                                 />

@@ -93,9 +93,10 @@ class FirestoreDataSource {
   }
 
   Future<Bus> _populateDriverDetails(Bus bus) async {
-    if (bus.driverId == null) return bus;
+    final activeDriverId = bus.currentDriverId ?? bus.driverId;
+    if (activeDriverId == null || activeDriverId.isEmpty) return bus;
     try {
-      final userDoc = await _firestore.collection('users').doc(bus.driverId).get();
+      final userDoc = await _firestore.collection('users').doc(activeDriverId).get();
       if (userDoc.exists) {
         final userData = userDoc.data() as Map<String, dynamic>;
         return Bus(

@@ -15,7 +15,9 @@ import '../../../core/config/env.dart';
 void backgroundCallback() {
   BackgroundLocationTrackerManager.handleBackgroundUpdated(
     (data) async {
-      await Firebase.initializeApp();
+      if (Firebase.apps.isEmpty) {
+        await Firebase.initializeApp();
+      }
       
       final prefs = await SharedPreferences.getInstance();
       await prefs.reload();

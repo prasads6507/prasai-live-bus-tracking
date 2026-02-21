@@ -201,18 +201,19 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
     bool userInBus = false;
     
     if (_userPosition != null) {
-      final distanceToUserM = const Distance().as(LengthUnit.Meter, 
-        LatLng(_userPosition!.latitude, _userPosition!.longitude), 
-        LatLng(busLoc.latitude, busLoc.longitude)
+      final distanceToUserM = Geolocator.distanceBetween(
+        _userPosition!.latitude, _userPosition!.longitude, 
+        busLoc.latitude, busLoc.longitude
       );
       
-      // Check if student is in the bus or very close (50m precision to account for GPS drift)
-      if (distanceToUserM <= 50.0) {
+      // Check if student is in the bus or very close (100m precision to account for dual-device GPS drift)
+      if (distanceToUserM <= 100.0) {
         userInBus = true;
         etaDisplay = "You're in the bus!";
       } else {
         final distanceToUserKm = distanceToUserM / 1000.0;
-        final speedMph = (_currentBus?.location?.speed ?? 0) > 2 ? (_currentBus!.location!.speed! * 2.23694) : 20.0; 
+        // Fix: Speed is already in mph from backend natively
+        final speedMph = (_currentBus?.location?.speed ?? 0) > 2 ? _currentBus!.location!.speed! : 20.0; 
         final timeHours = (distanceToUserKm * 0.621371) / speedMph; 
         final timeMinutes = (timeHours * 60).round();
         etaDisplay = "ETA $timeMinutes min";
@@ -230,14 +231,14 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
       total = stopList.length;
       final finalStop = stopList.last;
       
-      double distanceToFinalKm = const Distance().as(
-        LengthUnit.Meter,
-        LatLng(busLoc.latitude, busLoc.longitude),
-        LatLng(finalStop.latitude, finalStop.longitude)
+      double distanceToFinalKm = Geolocator.distanceBetween(
+        busLoc.latitude, busLoc.longitude,
+        finalStop.latitude, finalStop.longitude
       ) / 1000.0;
       distanceDisplay = "${(distanceToFinalKm * 0.621371).toStringAsFixed(1)} mi";
       
-      final speedMph = (_currentBus?.location?.speed ?? 0) > 2 ? (_currentBus!.location!.speed! * 2.23694) : 20.0;
+      // Fix: Speed is already in mph from backend natively
+      final speedMph = (_currentBus?.location?.speed ?? 0) > 2 ? _currentBus!.location!.speed! : 20.0;
       final totalTimeHours = (distanceToFinalKm * 0.621371) / speedMph;
       totalTimeDisplay = "${(totalTimeHours * 60).round()} min";
 
@@ -268,10 +269,9 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
     
     if (busLoc != null) {
       for (var stop in stopList) {
-        double dist = const Distance().as(
-           LengthUnit.Meter,
-           LatLng(busLoc.latitude, busLoc.longitude),
-           LatLng(stop.latitude, stop.longitude)
+        double dist = Geolocator.distanceBetween(
+           busLoc.latitude, busLoc.longitude,
+           stop.latitude, stop.longitude
         );
         if (dist <= 100.0) {
            currentStopId = stop.id;
@@ -464,6 +464,8 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
                         stopsRemaining: _stopsRemaining,
                         totalTime: _totalTime,
                         isUserInBus: _isUserInBus,
+                        driverName: _currentBus?.driverName,
+                        driverPhone: _currentBus?.driverPhone,
                       ),
                       if (_currentRoute != null)
                         Padding(

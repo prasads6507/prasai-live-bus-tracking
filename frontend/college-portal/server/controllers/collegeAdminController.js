@@ -787,25 +787,14 @@ const getTripPath = async (req, res) => {
         }
 
         // Fetch path subcollection (Phase 1/3 implementation)
-        let pathSnapshot = await tripRef.collection('path')
-            .orderBy('recordedAt', 'asc')
-            .get();
+        let pathSnapshot = await tripRef.collection('path').get();
 
         console.log(`Path snapshot for ${tripId}: empty=${pathSnapshot.empty}, size=${pathSnapshot.size}`);
 
         // If path is empty, try 'history' subcollection (Legacy API implementation)
         if (pathSnapshot.empty) {
             console.log(`Checking 'history' subcollection for trip ${tripId}...`);
-            pathSnapshot = await tripRef.collection('history')
-                .orderBy('recordedAt', 'asc')
-                .get();
-
-            if (pathSnapshot.empty) {
-                console.log(`Checking 'history' ordered by 'timestamp' for trip ${tripId}...`);
-                pathSnapshot = await tripRef.collection('history')
-                    .orderBy('timestamp', 'asc')
-                    .get();
-            }
+            pathSnapshot = await tripRef.collection('history').get();
         }
 
         if (pathSnapshot.empty) {
@@ -826,6 +815,9 @@ const getTripPath = async (req, res) => {
                 };
             })
             .filter(point => point.lat !== 0 && point.lng !== 0);
+
+        // Sort in memory to avoid Firebase Composite Index requirements on subcollections
+        path.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
         console.log(`Returning ${path.length} path points for trip ${tripId}`);
         res.json({ success: true, data: path });

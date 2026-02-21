@@ -1,7 +1,8 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
+
 import { createRoot } from 'react-dom/client';
 import maplibregl from 'maplibre-gl';
-import Map, { Source, Layer, type MapRef, NavigationControl, FullscreenControl, ScaleControl } from 'react-map-gl/maplibre';
+import Map, { Source, Layer, Marker, type MapRef, NavigationControl, FullscreenControl, ScaleControl } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { calculateBearing } from '../utils/mapUtils';
 import { BsBusFront } from 'react-icons/bs';
@@ -14,6 +15,8 @@ interface MapLibreMapProps {
     followBus?: boolean;
     path?: [number, number][];
     selectedBusId?: string | null;
+    routes?: any[];
+    selectedRouteId?: string | null;
 }
 
 // 1. Universal Coordinate Normalizer (Fix 2 & Mismatch Fix)
@@ -30,7 +33,7 @@ export const getBusLatLng = (bus: any): [number, number] | null => {
     return [lng, lat];
 };
 
-const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, path, selectedBusId }: MapLibreMapProps) => {
+const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, path, selectedBusId, routes, selectedRouteId }: MapLibreMapProps) => {
     const mapRef = useRef<MapRef | null>(null);
 
     // Type definition for DOM Marker State
@@ -128,9 +131,9 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
 
             // React guarantees fast targeted updates to this specific DOM portal
             markerState.root.render(
-                <div className="relative flex items-center justify-center drop-shadow-md transition-transform hover:scale-110">
+                <div className="relative flex items-center justify-center drop-shadow-md transition-transform hover:scale-110 group">
                     {selectedBusId === bus._id && (
-                        <div className="absolute w-14 h-14 bg-blue-500/20 rounded-full animate-pulse" />
+                        <div className="absolute w-14 h-14 bg-dashboard-primary/20 rounded-full animate-pulse" />
                     )}
                     <BsBusFront
                         color={color}
@@ -138,6 +141,16 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
                         className="bus-icon-svg relative z-10 transition-transform duration-200"
                         style={{ transform: `rotate(${bus.location?.heading || 0}deg)` }}
                     />
+                    {/* Tooltip */}
+                    <div className="absolute top-10 whitespace-nowrap bg-dashboard-surface text-dashboard-text border border-dashboard-border shadow-soft text-[11px] font-bold px-3 py-1.5 rounded-lg pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50 flex flex-col gap-0.5">
+                        <div className="flex items-center gap-2">
+                            <span>Bus {bus.busNumber || 'Unknown'} • {bus.driverName || 'No Driver'}</span>
+                            {bus.status === 'ON_ROUTE' && typeof bus.speed === 'number' && (
+                                <span className="text-dashboard-primary">{Math.round(bus.speed)} mph</span>
+                            )}
+                        </div>
+                        {bus.routeName && <span className="text-[10px] text-dashboard-muted font-medium">{bus.routeName}</span>}
+                    </div>
                 </div>
             );
 
@@ -301,19 +314,94 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
                 <FullscreenControl position="top-right" />
                 <ScaleControl position="bottom-left" />
 
+                {/* Legacy simple path for TripHistory */}
                 {path && path.length > 0 && (
-                    <Source id="trip-path" type="geojson" data={{
-                        type: "Feature",
-                        geometry: { type: "LineString", coordinates: path.map(p => [p[1], p[0]]) },
-                        properties: {}
-                    }}>
-                        <Layer
-                            id="trip-path-line"
-                            type="line"
-                            paint={{ 'line-color': '#3b82f6', 'line-width': 4, 'line-opacity': 0.5 }}
-                        />
-                    </Source>
+                    <>
+                        <Source id="trip-path-legacy" type="geojson" data={{
+                            type: "Feature",
+                            geometry: { type: "LineString", coordinates: path.map(p => [p[1], p[0]]) },
+                            properties: {}
+                        }}>
+                            <Layer
+                                id="trip-path-line-legacy"
+                                type="line"
+                                layout={{ 'line-join': 'round', 'line-cap': 'round' }}
+                                paint={{ 'line-color': '#3b82f6', 'line-width': 4, 'line-opacity': 0.8 }}
+                            />
+                            <Layer
+                                id="trip-path-dir-legacy"
+                                type="symbol"
+                                layout={{
+                                    'symbol-placement': 'line',
+                                    'symbol-spacing': 100,
+                                    'text-field': '▶',
+                                    'text-size': 14,
+                                    'text-keep-upright': false,
+                                    'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold']
+                                }}
+                                paint={{
+                                    'text-color': '#1d4ed8',
+                                    'text-halo-color': '#ffffff',
+                                    'text-halo-width': 1.5
+                                }}
+                            />
+                        </Source>
+                        
+                        {/* Start Node */}
+                        <Marker longitude={path[0][1]} latitude={path[0][0]} anchor="center">
+                            <div className="bg-green-500 border-2 border-white w-4 h-4 rounded-full shadow-md" title="Start Point" />
+                        </Marker>
+
+                        {/* End Node */}
+                        {path.length > 1 && (
+                            <Marker longitude={path[path.length - 1][1]} latitude={path[path.length - 1][0]} anchor="center">
+                                <div className="bg-red-500 border-2 border-white w-4 h-4 rounded-full shadow-md z-10" title="End Point" />
+                            </Marker>
+                        )}
+                    </>
                 )}
+
+                {/* Route Polylines */}
+                {routes && routes.map(route => {
+                    if (!route.stops || route.stops.length < 2) return null;
+                    const coords = route.stops
+                        .filter((s: any) => s.longitude !== undefined && s.latitude !== undefined)
+                        .map((s: any) => [s.longitude, s.latitude]);
+                        
+                    if (coords.length < 2) return null;
+                    const isSelected = route._id === selectedRouteId;
+                    
+                    return (
+                        <Source key={`route-${route._id}`} id={`route-source-${route._id}`} type="geojson" data={{
+                            type: "Feature",
+                            geometry: { type: "LineString", coordinates: coords },
+                            properties: {}
+                        }}>
+                            <Layer
+                                id={`route-layer-${route._id}`}
+                                type="line"
+                                layout={{ 'line-join': 'round', 'line-cap': 'round' }}
+                                paint={{ 
+                                    'line-color': isSelected ? '#FF8A3D' : '#374151', 
+                                    'line-width': isSelected ? 5 : 2.5, 
+                                    'line-opacity': isSelected ? 1 : 0.6 
+                                }}
+                            />
+                        </Source>
+                    );
+                })}
+
+                {/* Stop Markers for Selected Route */}
+                {routes && selectedRouteId && routes.find(r => r._id === selectedRouteId)?.stops?.map((stop: any, idx: number) => {
+                    if (stop.longitude === undefined || stop.latitude === undefined) return null;
+                    return (
+                        <Marker key={`stop-${idx}`} longitude={stop.longitude} latitude={stop.latitude} anchor="center">
+                            <div className="bg-white border-2 border-[#1F2A37] text-[#1F2A37] text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full shadow-md">
+                                {idx + 1}
+                            </div>
+                        </Marker>
+                    );
+                })}
             </Map>
         </div>
     );

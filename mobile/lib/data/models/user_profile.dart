@@ -29,8 +29,8 @@ class UserProfile {
       role: data['role'] ?? 'student',
       collegeId: data['collegeId'] ?? '',
       name: data['name'],
-      phone: data['phone'] ?? data['phoneNumber'],
-      assignedBusId: data['assignedBusId'],
+      phone: (data['phone'] ?? data['phoneNumber'])?.toString(),
+      assignedBusId: data['assignedBusId']?.toString(),
       favoriteBusIds: List<String>.from(data['favoriteBusIds'] ?? []),
     );
   }
