@@ -82,7 +82,10 @@ const Login = () => {
                 }
             }
 
-            // 3. Handle Redirects based on Role
+            // 3. Get ID Token for backend API calls
+            const idToken = await firebaseUser.getIdToken();
+
+            // 4. Handle Redirects based on Role
             if (role === 'DRIVER') {
                 const userToStore = {
                     _id: firebaseUser.uid,
@@ -92,6 +95,7 @@ const Login = () => {
                     collegeId: userData.collegeId
                 };
                 localStorage.setItem('driver_user', JSON.stringify(userToStore));
+                localStorage.setItem('driver_token', idToken);
                 localStorage.setItem('current_college_id', orgDetails.collegeId);
                 localStorage.setItem('orgName', orgDetails.collegeName);
                 navigate(`/${orgSlug}/driver-dashboard`);
@@ -109,6 +113,7 @@ const Login = () => {
                     isFirstLogin: userData.isFirstLogin || false
                 };
                 localStorage.setItem('student_user', JSON.stringify(userToStore));
+                localStorage.setItem('student_token', idToken);
                 localStorage.setItem('current_college_id', orgDetails.collegeId);
 
                 if (userData.isFirstLogin) {
@@ -132,6 +137,7 @@ const Login = () => {
                 collegeId: userData.collegeId
             };
             localStorage.setItem('user', JSON.stringify(userToStore));
+            localStorage.setItem('token', idToken);
             localStorage.setItem('current_college_id', orgDetails.collegeId);
             localStorage.setItem('orgName', orgDetails.collegeName);
 

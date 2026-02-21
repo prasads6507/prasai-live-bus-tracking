@@ -38,7 +38,8 @@ const Dashboard = () => {
         const fetchInitialData = async () => {
             // 1. Verify User & Org
             const storedUser = localStorage.getItem('user');
-            if (!storedUser) {
+            const token = localStorage.getItem('token');
+            if (!storedUser || !token) {
                 navigate(`/${orgSlug}/login`);
                 return;
             }
