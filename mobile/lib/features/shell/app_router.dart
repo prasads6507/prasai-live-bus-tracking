@@ -74,7 +74,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/student/track',
-            builder: (context, state) => const StudentTrackScreen(),
+            builder: (context, state) => StudentTrackScreen(busId: state.extra as String?),
           ),
           GoRoute(
             path: '/student/search',

@@ -28,8 +28,8 @@ class LocationPoint {
     }
 
     return LocationPoint(
-      latitude: (json['latitude'] ?? json['lat'] as num).toDouble(),
-      longitude: (json['longitude'] ?? json['lng'] as num).toDouble(),
+      latitude: ((json['latitude'] ?? json['lat']) as num).toDouble(),
+      longitude: ((json['longitude'] ?? json['lng']) as num).toDouble(),
       timestamp: time,
       heading: (json['heading'] as num?)?.toDouble(),
       speed: (json['speed'] as num?)?.toDouble(),
