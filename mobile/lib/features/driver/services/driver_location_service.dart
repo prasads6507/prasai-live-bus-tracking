@@ -74,7 +74,7 @@ void backgroundCallback() {
           });
 
           if (isActiveTrip) {
-            final historyRef = db.collection('trips').doc(dataMap['activeTripId'] as String).collection('history').doc();
+            final historyRef = db.collection('buses').doc(busId).collection('trips').doc(dataMap['activeTripId'] as String).collection('history').doc();
             transaction.set(historyRef, {
               'lat': data.lat,
               'lng': data.lon,

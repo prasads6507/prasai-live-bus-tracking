@@ -446,6 +446,9 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
         final road = p.street ?? p.name ?? "Unknown Road";
         if (mounted && _currentRoad != road) {
           setState(() => _currentRoad = road);
+          try {
+             ref.read(firestoreDataSourceProvider).updateBusRoadName(widget.busId, road);
+          } catch(e) {}
         }
       }
     } catch (e) {
@@ -493,7 +496,7 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
           final busStream = ref.read(firestoreDataSourceProvider).getBus(widget.collegeId, widget.busId);
           busStream.first.then((bus) {
             if (bus.activeTripId != null && bus.activeTripId!.isNotEmpty) {
-              ref.read(firestoreDataSourceProvider).saveTripPathPoint(bus.activeTripId!, point);
+              ref.read(firestoreDataSourceProvider).saveTripPathPoint(bus.activeTripId!, point, widget.busId);
             }
           }).catchError((_) {});
         }

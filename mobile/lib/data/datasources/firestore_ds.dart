@@ -146,11 +146,17 @@ class FirestoreDataSource {
       'status': 'ON_ROUTE', // Ensure it stays ON_ROUTE while tracking
     });
   }
-
+  /// Updates the bus's road/street name
+  Future<void> updateBusRoadName(String busId, String roadName) async {
+    await _firestore.collection('buses').doc(busId).update({
+      'currentRoadName': roadName,
+      'currentStreetName': roadName,
+    });
+  }
   /// Saves a single point to the trip path history.
-  Future<void> saveTripPathPoint(String tripId, LocationPoint point) async {
+  Future<void> saveTripPathPoint(String tripId, LocationPoint point, String busId) async {
     try {
-      final tripRef = _firestore.collection('trips').doc(tripId);
+      final tripRef = _firestore.collection('buses').doc(busId).collection('trips').doc(tripId);
       await tripRef.collection('history').add({
         'latitude': point.latitude,
         'longitude': point.longitude,
@@ -299,7 +305,8 @@ class FirestoreDataSource {
     final batch = _firestore.batch();
     
     // 1. Create Trip Document
-    final tripRef = _firestore.collection('trips').doc();
+    final tripId = 'trip-${busId}-${DateTime.now().millisecondsSinceEpoch}';
+    final tripRef = _firestore.collection('buses').doc(busId).collection('trips').doc(tripId);
     final tripData = {
       'tripId': tripRef.id,
       'collegeId': collegeId,
@@ -345,7 +352,7 @@ class FirestoreDataSource {
       
       // 1. Update Trip Status (if ID provided)
     if (tripId != null && tripId.isNotEmpty) {
-      final tripRef = _firestore.collection('trips').doc(tripId);
+      final tripRef = _firestore.collection('buses').doc(busId).collection('trips').doc(tripId);
       final tripDoc = await tripRef.get();
       
       int? durationMinutes;
