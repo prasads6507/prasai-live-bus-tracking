@@ -95,7 +95,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
 
                               // 2. Search Card
                               SearchBusCard(
-                                onTap: () => context.push('/student/search'),
+                                onTap: () => context.push('/student/buses'),
                               ),
                               const SizedBox(height: 24),
 

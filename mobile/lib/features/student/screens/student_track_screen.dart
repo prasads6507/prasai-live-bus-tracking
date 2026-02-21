@@ -81,6 +81,11 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
                if (!_hasInitialCentered) {
                  _focusUserLocation();
                  _hasInitialCentered = true;
+                 
+                 // Immediately after finding user, switch to tracking bus automatically
+                 Future.delayed(const Duration(seconds: 2), () {
+                   if (mounted) _focusBusLocation();
+                 });
                }
              });
            }
@@ -189,35 +194,45 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
     final busLoc = _currentBus!.location;
     if (busLoc == null) return;
 
-    // 1. Distance and ETA
-    double distanceKm = 0.0;
+    // 1. Distance and ETA to student
+    double distanceToUserKm = 0.0;
     String distanceDisplay = "-- km";
     String etaDisplay = "-- min";
     
     if (_userPosition != null) {
-      distanceKm = const Distance().as(LengthUnit.Meter, 
+      distanceToUserKm = const Distance().as(LengthUnit.Meter, 
         LatLng(_userPosition!.latitude, _userPosition!.longitude), 
         LatLng(busLoc.latitude, busLoc.longitude)
       ) / 1000.0;
-      distanceDisplay = "${distanceKm.toStringAsFixed(1)} km";
       
       final speedMph = (_currentBus?.location?.speed ?? 0) > 2 ? (_currentBus!.location!.speed! * 2.23694) : 20.0; 
-      final timeHours = (distanceKm * 0.621371) / speedMph; 
+      final timeHours = (distanceToUserKm * 0.621371) / speedMph; 
       final timeMinutes = (timeHours * 60).round();
       etaDisplay = "$timeMinutes min";
     }
 
-    // 2. Routing Metrics
+    // 2. Routing Metrics (Distance to final stop)
     int remaining = 0;
     String totalTimeDisplay = "-- min";
     
-    if (_currentRoute != null) {
-      final totalStops = _currentRoute!.stops.length;
-      final completed = _currentBus!.completedStops.length;
-      remaining = (totalStops - completed).clamp(0, totalStops);
+    if (_currentRoute != null && _currentRoute!.stops.isNotEmpty) {
+      final stopList = _currentRoute!.stops;
+      final finalStop = stopList.last;
       
-      final estimatedTotalMins = totalStops * 3;
-      totalTimeDisplay = "$estimatedTotalMins min";
+      double distanceToFinalKm = const Distance().as(
+        LengthUnit.Meter,
+        LatLng(busLoc.latitude, busLoc.longitude),
+        LatLng(finalStop.latitude, finalStop.longitude)
+      ) / 1000.0;
+      distanceDisplay = "${distanceToFinalKm.toStringAsFixed(1)} km";
+      
+      final speedMph = (_currentBus?.location?.speed ?? 0) > 2 ? (_currentBus!.location!.speed! * 2.23694) : 20.0;
+      final totalTimeHours = (distanceToFinalKm * 0.621371) / speedMph;
+      totalTimeDisplay = "${(totalTimeHours * 60).round()} min";
+
+      // Calculate completed using backend data OR local 100m radius tracking
+      final completed = _currentBus!.completedStops.length;
+      remaining = (stopList.length - completed).clamp(0, stopList.length);
     }
 
     if (mounted) {
@@ -233,20 +248,47 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
   List<DropOffItem> _buildDropOffItems() {
     if (_currentRoute == null || _currentBus == null) return [];
     
-    final completedStops = _currentBus!.completedStops;
+    final busLoc = _currentBus!.location;
+    final completedStops = _currentBus!.completedStops.toList(); // Immutable copy to check backend
     final stopList = _currentRoute!.stops;
     
-    final nextStopIndex = stopList.indexWhere((s) => !completedStops.contains(s.id));
+    // We determine the current stop by checking distances. 100m radius = 0.1km
+    String? currentStopId;
     
+    if (busLoc != null) {
+      for (var stop in stopList) {
+        double dist = const Distance().as(
+           LengthUnit.Meter,
+           LatLng(busLoc.latitude, busLoc.longitude),
+           LatLng(stop.latitude, stop.longitude)
+        );
+        if (dist <= 100.0) {
+           currentStopId = stop.id;
+           // If we're at a stop, it shouldn't be marked completed *until we leave*
+           // so we remove it from local completed view if it was there falsely.
+           completedStops.remove(stop.id);
+           break;
+        }
+      }
+    }
+    
+    final nextStopIndex = stopList.indexWhere((s) => s.id == currentStopId);
+    final upcomingIndex = nextStopIndex != -1 ? nextStopIndex : stopList.indexWhere((s) => !completedStops.contains(s.id));
+
     return List.generate(stopList.length, (index) {
       final stop = stopList[index];
+      
+      // A stop is completed if the backend says so AND it's not the current stop we are hovering in.
       final isCompleted = completedStops.contains(stop.id);
-      final isNext = index == nextStopIndex;
+      final isCurrent = stop.id == currentStopId;
+      // If none is current, the first uncompleted is "next". If one is current, it's green.
+      final isNext = (isCurrent || index == upcomingIndex);
       
       return DropOffItem(
-        time: "TBD", 
+        time: isCurrent ? "Arrived" : (isCompleted ? "Done" : "TBD"), 
         location: stop.stopName,
         isCompleted: isCompleted,
+        isCurrent: isCurrent,
         isNext: isNext,
       );
     });
@@ -267,137 +309,106 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
               focusedLocation: _mapFocusLocation,
             ),
 
+          // Top overlay: Back, Speed/Road, Track Live
           Positioned(
             top: 24,
             left: 16,
-            child: SafeArea(
-              child: _buildCircleButton(
-                icon: Icons.arrow_back,
-                onTap: () => context.pop(),
-              ),
-            ),
-          ),
-          
-          Positioned(
-            top: 24,
             right: 16,
             child: SafeArea(
-              child: _buildCircleButton(
-                icon: Icons.my_location,
-                color: AppColors.surface,
-                onTap: _focusUserLocation,
-              ),
-            ),
-          ),
-
-          // Track Live Button (Above Overlay)
-          Positioned(
-            bottom: 310,
-            right: 16,
-            child: SafeArea(
-              child: ElevatedButton.icon(
-                onPressed: _focusBusLocation,
-                icon: const Icon(Icons.directions_bus, size: 20),
-                label: const Text("Track Live"),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  elevation: 8,
-                  shadowColor: AppColors.primary.withOpacity(0.5),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                ),
-              ),
-            ),
-          ),
-
-          // Speed & Road Overlay
-          Positioned(
-            bottom: 240,
-            left: 16,
-            right: 16,
-            child: SafeArea(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: AppColors.background.withOpacity(0.95),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: AppColors.divider.withOpacity(0.5), width: 1.0),
-                      boxShadow: [
-                        BoxShadow(color: Colors.black45, blurRadius: 15, spreadRadius: 2)
-                      ]
+                  _buildCircleButton(
+                    icon: Icons.arrow_back,
+                    onTap: () => context.pop(),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppColors.background.withOpacity(0.95),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: AppColors.divider.withOpacity(0.5), width: 1.0),
+                        boxShadow: [
+                          BoxShadow(color: Colors.black12, blurRadius: 10, spreadRadius: 1)
+                        ]
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withOpacity(0.15),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.location_on, color: AppColors.primary, size: 18),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  "BUS LOCATION",
+                                  style: AppTypography.textTheme.labelSmall?.copyWith(
+                                    color: AppColors.textTertiary,
+                                    letterSpacing: 1.2,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  _currentRoadName,
+                                  style: AppTypography.textTheme.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AppColors.surfaceElevated,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: AppColors.divider),
+                            ),
+                            child: Column(
+                              children: [
+                                Text(
+                                  "${_busSpeed.toStringAsFixed(0)}",
+                                  style: AppTypography.textTheme.titleSmall?.copyWith(
+                                    color: AppColors.primary,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                Text(
+                                  "mph",
+                                  style: AppTypography.textTheme.labelSmall?.copyWith(
+                                    color: AppColors.textSecondary,
+                                    fontSize: 8,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary.withOpacity(0.15),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(Icons.location_on, color: AppColors.primary, size: 20),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                "CURRENT LOCATION",
-                                style: AppTypography.textTheme.labelSmall?.copyWith(
-                                  color: AppColors.textTertiary,
-                                  letterSpacing: 1.5,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                _currentRoadName,
-                                style: AppTypography.textTheme.bodyMedium?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: AppColors.surfaceElevated,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppColors.divider),
-                          ),
-                          child: Column(
-                            children: [
-                              Text(
-                                "${_busSpeed.toStringAsFixed(0)}",
-                                style: AppTypography.textTheme.titleMedium?.copyWith(
-                                  color: AppColors.primary,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              Text(
-                                "mph",
-                                style: AppTypography.textTheme.labelSmall?.copyWith(
-                                  color: AppColors.textSecondary,
-                                  fontSize: 8,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  _buildCircleButton(
+                    icon: Icons.my_location, // Using location icon for tracking re-sync
+                    color: AppColors.primary,
+                    iconColor: Colors.white,
+                    onTap: _focusBusLocation,
                   ),
                 ],
               ),
@@ -457,19 +468,20 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
     required IconData icon,
     required VoidCallback onTap,
     Color? color,
+    Color? iconColor,
   }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: (color ?? AppColors.surface).withOpacity(0.9),
+          color: (color ?? AppColors.surface).withOpacity(0.95),
           shape: BoxShape.circle,
           boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 8, spreadRadius: 1),
+            BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8, spreadRadius: 1),
           ],
         ),
-        child: Icon(icon, color: Colors.white, size: 24),
+        child: Icon(icon, color: iconColor ?? AppColors.textPrimary, size: 20),
       ),
     );
   }

@@ -7,12 +7,14 @@ class DropOffItem {
   final String location;
   final bool isCompleted;
   final bool isNext;
+  final bool isCurrent;
 
   const DropOffItem({
     required this.time,
     required this.location,
     this.isCompleted = false,
     this.isNext = false,
+    this.isCurrent = false,
   });
 }
 
@@ -30,15 +32,12 @@ class DropOffList extends StatelessWidget {
     final total = items.length;
     final completed = items.where((i) => i.isCompleted).length;
     final remaining = total - completed;
-    
-    // Filter to show all pending stops
-    final nextStops = items.where((i) => !i.isCompleted).toList();
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.primary, // Keep primary color (Light Purple now)
+        color: AppColors.primary,
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
@@ -85,7 +84,7 @@ class DropOffList extends StatelessWidget {
                   ),
                 ],
               ),
-              // Progress Circle (Optional)
+              // Progress Circle
               CircularProgressIndicator(
                 value: total > 0 ? completed / total : 0,
                 backgroundColor: Colors.white24,
@@ -95,45 +94,71 @@ class DropOffList extends StatelessWidget {
             ],
           ),
           
-          if (nextStops.isNotEmpty) ...[
+          if (items.isNotEmpty) ...[
             const SizedBox(height: 20),
             const Divider(color: Colors.white24, height: 1),
             const SizedBox(height: 16),
-            ...nextStops.map((stop) => Padding(
-              padding: const EdgeInsets.only(bottom: 12.0),
-              child: Row(
-                children: [
-                  Icon(
-                    stop.isNext ? Icons.radio_button_checked : Icons.radio_button_unchecked, 
-                    color: stop.isNext ? Colors.white : Colors.white60, 
-                    size: 16
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      stop.location,
-                      style: TextStyle(
-                        color: stop.isNext ? Colors.white : Colors.white70,
-                        fontWeight: stop.isNext ? FontWeight.bold : FontWeight.w500,
+            ...items.map((stop) {
+              Color iconColor;
+              IconData iconData;
+              FontWeight fontWeight = FontWeight.w500;
+              Color textColor = Colors.white70;
+
+              if (stop.isCompleted) {
+                iconData = Icons.check_circle;
+                iconColor = Colors.white54;
+                textColor = Colors.white54;
+              } else if (stop.isCurrent) {
+                iconData = Icons.location_on;
+                iconColor = AppColors.success;
+                textColor = Colors.white;
+                fontWeight = FontWeight.bold;
+              } else if (stop.isNext) {
+                iconData = Icons.radio_button_checked;
+                iconColor = Colors.white;
+                textColor = Colors.white;
+                fontWeight = FontWeight.bold;
+              } else {
+                iconData = Icons.radio_button_unchecked;
+                iconColor = Colors.white60;
+              }
+
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12.0),
+                child: Row(
+                  children: [
+                    Icon(iconData, color: iconColor, size: 18),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        stop.location,
+                        style: TextStyle(
+                          color: textColor,
+                          fontWeight: fontWeight,
+                          decoration: stop.isCompleted ? TextDecoration.lineThrough : null,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                  Text(
-                    stop.time,
-                    style: const TextStyle(color: Colors.white54, fontSize: 12),
-                  )
-                ],
-              ),
-            )),
+                    Text(
+                      stop.time,
+                      style: TextStyle(
+                        color: stop.isCurrent ? AppColors.success : (stop.isNext ? Colors.white : Colors.white54), 
+                        fontSize: stop.isCurrent || stop.isNext ? 14 : 12,
+                        fontWeight: stop.isCurrent ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    )
+                  ],
+                ),
+              );
+            }),
           ] else
             const Padding(
               padding: EdgeInsets.only(top: 16),
-              child: Text("Route Completed", style: TextStyle(color: Colors.white)),
+              child: Text("Route info unavailable", style: TextStyle(color: Colors.white)),
             )
         ],
       ),
     );
   }
 }
-

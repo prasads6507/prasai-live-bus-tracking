@@ -19,48 +19,32 @@ class StudentHomeHeader extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "Morning", // Dynamic time of day would be better, but static for now
-                  style: AppTypography.textTheme.bodyMedium?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  studentName,
-                  style: AppTypography.textTheme.titleLarge?.copyWith(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
+          Text(
+            collegeName,
+            style: AppTypography.textTheme.labelMedium?.copyWith(
+              color: AppColors.primary,
+              letterSpacing: 1.5,
+              fontWeight: FontWeight.bold,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            "Hello,",
+            style: AppTypography.textTheme.bodyLarge?.copyWith(
+              color: AppColors.textSecondary,
             ),
           ),
-          Row(
-            children: [
-              GestureDetector(
-                onTap: () => context.push('/student/search'),
-                child: Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceElevated,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: AppColors.divider, width: 0.5),
-                  ),
-                  child: const Icon(Icons.search, color: AppColors.textPrimary),
-                ),
-              ),
-              // Profile pic removed
-            ],
+          Text(
+            studentName,
+            style: AppTypography.textTheme.titleLarge?.copyWith(
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+            ),
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),

@@ -26,6 +26,9 @@ subprojects {
             if (details.requested.group == 'androidx.core' && details.requested.name == 'core-ktx') {
                 details.useVersion '1.13.1'
             }
+            if (details.requested.group == 'androidx.browser' && details.requested.name == 'browser') {
+                details.useVersion '1.8.0'
+            }
         }
     }
 

@@ -11,6 +11,8 @@ class Bus {
   final List<LocationPoint> liveTrackBuffer;
   final String? driverId;
   final String? driverName;
+  final String? driverPhone;
+  final String? driverEmail;
   final String? currentDriverId;
   final String? assignedRouteId;
   final List<String> completedStops;
@@ -28,6 +30,8 @@ class Bus {
     this.liveTrackBuffer = const [],
     this.driverId,
     this.driverName,
+    this.driverPhone,
+    this.driverEmail,
     this.currentDriverId,
     this.assignedRouteId,
     this.completedStops = const [],
@@ -62,6 +66,8 @@ class Bus {
           [],
       driverId: data['assignedDriverId'], // Matches backend field name
       driverName: data['driverName'],
+      driverPhone: data['driverPhone'],
+      driverEmail: data['driverEmail'],
       currentDriverId: data['currentDriverId'],
       assignedRouteId: data['assignedRouteId'],
       completedStops: (data['completedStops'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],

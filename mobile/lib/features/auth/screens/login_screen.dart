@@ -18,8 +18,9 @@ class LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController(text: 'james@sist.ac.in');
-  final _passwordController = TextEditingController(text: '7896541236');
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _isPasswordVisible = false;
 
   @override
   void dispose() {
@@ -165,7 +166,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   Text(
                     'Sign In',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: AppColors.textPrimary,
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
                     ),
@@ -195,7 +196,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           controller: _passwordController,
                           label: 'Password',
                           icon: Icons.lock_outline,
-                          isPassword: true,
+                          isPassword: !_isPasswordVisible,
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
+                              color: AppColors.textSecondary,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _isPasswordVisible = !_isPasswordVisible;
+                              });
+                            },
+                          ),
                         ),
                         const SizedBox(height: 40),
                         PrimaryButton(
@@ -233,6 +245,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     required IconData icon,
     bool isPassword = false,
     TextInputType? keyboardType,
+    Widget? suffixIcon,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -248,11 +261,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           controller: controller,
           obscureText: isPassword,
           keyboardType: keyboardType,
-          style: const TextStyle(color: Colors.white),
+          style: const TextStyle(color: AppColors.textPrimary),
           decoration: InputDecoration(
             prefixIcon: Icon(icon, color: AppColors.textSecondary, size: 20),
+            suffixIcon: suffixIcon,
             filled: true,
-            fillColor: AppColors.surfaceElevated.withOpacity(0.5),
+            fillColor: AppColors.surfaceElevated,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide.none,

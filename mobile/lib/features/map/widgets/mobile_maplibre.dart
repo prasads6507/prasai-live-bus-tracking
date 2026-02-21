@@ -164,6 +164,7 @@ class _MobileMapLibreState extends ConsumerState<MobileMapLibre> with SingleTick
     final interpolated = _animationTicker.currentInterpolated;
     if (interpolated != null) {
       _mapController!.setGeoJsonSource('selected-pointer-source', _buildSelectedPointerGeoJson(interpolated));
+      _updateSources(); // Update the main buses source to use interpolated coords
       
       if (widget.followBus) {
         _mapController!.moveCamera(
@@ -191,21 +192,26 @@ class _MobileMapLibreState extends ConsumerState<MobileMapLibre> with SingleTick
       // but matching web: we show all that have locations.
       
       final isSelected = bus.id == widget.selectedBusId;
+      var lat = bus.location!.latitude;
+      var lng = bus.location!.longitude;
+      var heading = bus.currentHeading ?? bus.location!.heading ?? 0;
+
       if (isSelected && _animationTicker.currentInterpolated != null) {
-         // The selected bus will use the interpolated position via the pointer layer,
-         // but we can also update the main layer if needed. For now, we update main layer with snap data.
+         lat = _animationTicker.currentInterpolated!.latitude;
+         lng = _animationTicker.currentInterpolated!.longitude;
+         heading = _animationTicker.currentInterpolated!.heading ?? heading;
       }
 
       features.add({
         "type": "Feature",
         "geometry": {
           "type": "Point",
-          "coordinates": [bus.location!.longitude, bus.location!.latitude]
+          "coordinates": [lng, lat]
         },
         "properties": {
           "id": bus.id,
           "busNumber": bus.busNumber,
-          "heading": bus.currentHeading ?? bus.location!.heading ?? 0,
+          "heading": heading,
           "status": bus.status,
         }
       });
@@ -311,6 +317,7 @@ class _MobileMapLibreState extends ConsumerState<MobileMapLibre> with SingleTick
       rotateGesturesEnabled: false,
       tiltGesturesEnabled: false,
       trackCameraPosition: true,
+      myLocationEnabled: true,
     );
   }
 }
