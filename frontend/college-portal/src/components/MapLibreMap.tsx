@@ -1,7 +1,10 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
-import Map, { Source, Layer, type MapRef } from 'react-map-gl/maplibre';
+import { createRoot } from 'react-dom/client';
+import maplibregl from 'maplibre-gl';
+import Map, { Source, Layer, type MapRef, NavigationControl, FullscreenControl, ScaleControl } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { calculateBearing } from '../utils/mapUtils';
+import { BsBusFront } from 'react-icons/bs';
 import { FaBusAlt } from 'react-icons/fa';
 
 interface MapLibreMapProps {
@@ -9,51 +12,44 @@ interface MapLibreMapProps {
     focusedLocation?: { lat: number, lng: number } | null;
     stopMarkers?: { lat: number, lng: number, name: string, isCompleted?: boolean }[];
     followBus?: boolean;
-    path?: [number, number][]; // Array of [lat, lng] for drawing trip history
+    path?: [number, number][];
     selectedBusId?: string | null;
 }
 
-// Helper to create an SVG data URI for MapLibre image loading
-const createBusSvgUri = (color: string) => {
-    const svgStr = `
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="-10 -10 44 44" width="40" height="40">
-            <g font-size="24" fill="${color}" stroke="white" stroke-width="1.5">
-                <path d="M4 6c0-1.1.9-2 2-2h12c1.1 0 2 .9 2 2v10H4V6zm0 10v4c0 .6.4 1 1 1h14c.6 0 1-.4 1-1v-4H4zm3 3a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm10 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/>
-            </g>
-        </svg>
-    `;
-    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgStr)}`;
-};
+// 1. Universal Coordinate Normalizer (Fix 2 & Mismatch Fix)
+export const getBusLatLng = (bus: any): [number, number] | null => {
+    if (!bus || !bus.location) return null;
 
-const createPointerSvgUri = () => {
-    const svgStr = `
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="-20 -20 64 64" width="56" height="56">
-            <circle cx="12" cy="12" r="28" fill="rgba(59, 130, 246, 0.2)" />
-            <g font-size="24" fill="#2563eb" filter="drop-shadow(0px 4px 6px rgba(0,0,0,0.3))">
-               <path d="M4 6c0-1.1.9-2 2-2h12c1.1 0 2 .9 2 2v10H4V6zm0 10v4c0 .6.4 1 1 1h14c.6 0 1-.4 1-1v-4H4zm3 3a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm10 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/>
-            </g>
-        </svg>
-    `;
-    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgStr)}`;
+    // Check all possible field structures
+    const lat = bus.location.latitude ?? bus.location.lat ?? bus.latitude;
+    const lng = bus.location.longitude ?? bus.location.lng ?? bus.longitude;
+
+    if (lat === undefined || lng === undefined) return null;
+
+    // Always return MapLibre standard [lng, lat]
+    return [lng, lat];
 };
 
 const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, path, selectedBusId }: MapLibreMapProps) => {
     const mapRef = useRef<MapRef | null>(null);
-    const [imagesLoaded, setImagesLoaded] = useState(false);
 
-    // Animation Refs
+    // Type definition for DOM Marker State
+    const markersRef = useRef<{ [key: string]: { marker: maplibregl.Marker, root: ReturnType<typeof createRoot> } }>({});
+
+    // Animation Refs for high-performance updates
     const animatedPositionsRef = useRef<{ [key: string]: { pos: [number, number], bearing: number } }>({});
     const animationFrameRef = useRef<number | null>(null);
-    const [triggerRender, setTriggerRender] = useState(0); // For forcing UI updates for popups/pure state
 
-    const defaultCenter: [number, number] = [78.4867, 17.3850]; // [lng, lat]
-    const [userLocation] = useState<[number, number] | null>(null);
+    const defaultCenter: [number, number] = [78.4867, 17.3850];
     const [followBusEnabled] = useState(externalFollowBus ?? true);
 
-    const selectedBus = selectedBusId ? buses.find(b => b._id === selectedBusId) : null;
-    const activeBusWithLocation = selectedBus?.location?.latitude
-        ? selectedBus
-        : buses.find(b => b.status === 'ON_ROUTE' && b.location?.latitude && b.location?.longitude);
+    const selectedBus = useMemo(() => selectedBusId ? buses.find(b => b._id === selectedBusId) : null, [buses, selectedBusId]);
+
+    // Inclusive Tracking: Support any bus with location (Fix 1)
+    const activeBusWithLocation = useMemo(() => {
+        if (selectedBus && getBusLatLng(selectedBus)) return selectedBus;
+        return buses.find(b => getBusLatLng(b));
+    }, [buses, selectedBus]);
 
     // Initial View State
     const initialViewState = useMemo(() => {
@@ -61,60 +57,125 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
         let zoom = 13;
 
         if (focusedLocation) {
-            center = [focusedLocation.lng, focusedLocation.lat];
-            zoom = 15;
+            center = getBusLatLng({ location: focusedLocation }) || defaultCenter;
+            zoom = 17;
         } else if (activeBusWithLocation) {
-            center = [activeBusWithLocation.location.longitude, activeBusWithLocation.location.latitude];
-        } else if (path && path.length > 0) {
-            center = [path[0][1], path[0][0]];
-        } else if (userLocation) {
-            center = userLocation;
-            zoom = 14;
+            center = getBusLatLng(activeBusWithLocation) || defaultCenter;
+            zoom = 17;
         }
 
         return {
             longitude: center[0],
             latitude: center[1],
-            zoom
+            zoom,
+            pitch: 45,
+            bearing: 0
         };
     }, []);
 
-    // Handle Map Load & Images
-    const onMapLoad = useCallback((e: any) => {
-        const map = e.target;
+    // 3D Buildings only (No more Canvas icons needed with DOM Markers)
+    const ensureResources = useCallback((map: any) => {
+        if (!map.isStyleLoaded()) return;
 
-        // Load icons
-        map.loadImage(createBusSvgUri('#16a34a'), (error: any, image: any) => {
-            if (error) throw error;
-            if (!map.hasImage('bus-icon-active')) map.addImage('bus-icon-active', image);
-
-            map.loadImage(createBusSvgUri('#ea580c'), (error2: any, image2: any) => {
-                if (error2) throw error2;
-                if (!map.hasImage('bus-icon-maintenance')) map.addImage('bus-icon-maintenance', image2);
-
-                map.loadImage(createPointerSvgUri(), (error3: any, image3: any) => {
-                    if (error3) throw error3;
-                    if (!map.hasImage('pointer-icon')) map.addImage('pointer-icon', image3);
-                    setImagesLoaded(true);
+        const layers = map.getStyle().layers;
+        if (layers) {
+            const buildingLayer = layers.find((l: any) => l['source-layer'] === 'building' || l['source-layer'] === 'buildings');
+            if (!map.getLayer('3d-buildings') && buildingLayer) {
+                map.addLayer({
+                    'id': '3d-buildings',
+                    'source': buildingLayer.source,
+                    'source-layer': buildingLayer['source-layer'],
+                    'type': 'fill-extrusion',
+                    'minzoom': 15,
+                    'paint': {
+                        'fill-extrusion-color': '#e0e0e0',
+                        'fill-extrusion-height': ['coalesce', ['get', 'render_height'], ['get', 'height'], 20],
+                        'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], ['get', 'min_height'], 0],
+                        'fill-extrusion-opacity': 0.6
+                    }
                 });
-            });
-        });
+            }
+        }
     }, []);
 
-    // --- Animation Loop ---
+    const onStyleData = useCallback((e: any) => ensureResources(e.target), [ensureResources]);
+    const onLoad = useCallback((e: any) => ensureResources(e.target), [ensureResources]);
+
+    // --- DOM Marker Management (Option A & Fix Icon Missing) ---
     useEffect(() => {
-        const activeBuses = buses.filter(b => b.status === 'ON_ROUTE' && b.location?.latitude);
-        if (activeBuses.length === 0) return;
+        const map = mapRef.current?.getMap();
+        if (!map) return;
+
+        buses.forEach(bus => {
+            const latLng = getBusLatLng(bus);
+            if (!latLng) return;
+
+            let markerState = markersRef.current[bus._id];
+
+            if (!markerState) {
+                const el = document.createElement('div');
+                el.className = 'bus-dom-marker cursor-pointer relative flex items-center justify-center';
+
+                const root = createRoot(el);
+                const marker = new maplibregl.Marker({ element: el })
+                    .setLngLat(latLng)
+                    .addTo(map);
+
+                markerState = { marker, root };
+                markersRef.current[bus._id] = markerState;
+            }
+
+            let color = '#16a34a';
+            if (bus.status === 'MAINTENANCE') color = '#ea580c';
+            else if (bus.status === 'ACTIVE' || bus.status.includes('Offline')) color = '#64748b';
+
+            // React guarantees fast targeted updates to this specific DOM portal
+            markerState.root.render(
+                <div className="relative flex items-center justify-center drop-shadow-md transition-transform hover:scale-110">
+                    {selectedBusId === bus._id && (
+                        <div className="absolute w-14 h-14 bg-blue-500/20 rounded-full animate-pulse" />
+                    )}
+                    <BsBusFront
+                        color={color}
+                        size={32}
+                        className="bus-icon-svg relative z-10 transition-transform duration-200"
+                        style={{ transform: `rotate(${bus.location?.heading || 0}deg)` }}
+                    />
+                </div>
+            );
+
+            // Sync stationary bus immediately
+            if (bus.status !== 'ON_ROUTE') {
+                markerState.marker.setLngLat(latLng);
+                const iconEl = markerState.marker.getElement().querySelector('.bus-icon-svg') as HTMLElement;
+                if (iconEl) iconEl.style.transform = `rotate(${bus.location?.heading || 0}deg)`;
+            }
+        });
+
+        // Cleanup removed buses
+        Object.keys(markersRef.current).forEach(id => {
+            if (!buses.find(b => b._id === id)) {
+                markersRef.current[id].marker.remove();
+                markersRef.current[id].root.unmount();
+                delete markersRef.current[id];
+            }
+        });
+    }, [buses, selectedBusId]);
+
+    // --- Fast Animation Engine ---
+    useEffect(() => {
+        const busesWithLoc = buses.filter(b => getBusLatLng(b));
+        if (busesWithLoc.length === 0) return;
 
         const animate = (_time: number) => {
-            let needsRender = false;
-
-            activeBuses.forEach(bus => {
+            busesWithLoc.forEach(bus => {
                 const rawBuffer = bus.liveTrackBuffer || [];
+                const latLng = getBusLatLng(bus)!;
+
                 const currentPoint = {
-                    latitude: bus.location.latitude,
-                    longitude: bus.location.longitude,
-                    heading: bus.location.heading,
+                    latitude: latLng[1],
+                    longitude: latLng[0],
+                    heading: bus.location?.heading || 0,
                     timestamp: bus.lastUpdated
                 };
 
@@ -123,66 +184,44 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
                     .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
                     .slice(-5);
 
-                if (combined.length < 2) {
-                    // Snap
-                    animatedPositionsRef.current[bus._id] = {
-                        pos: [bus.location.longitude, bus.location.latitude],
-                        bearing: bus.location.heading || 0
-                    };
-                    needsRender = true;
+                if (bus.status !== 'ON_ROUTE' || combined.length < 2) {
+                    animatedPositionsRef.current[bus._id] = { pos: latLng, bearing: bus.location?.heading || 0 };
                     return;
                 }
 
-                const targetPoint = combined[combined.length - 1]; // P5 (Latest)
-                const prevPoint = combined[combined.length - 2];   // P4 (Previous)
-
-                // Fake a start time implicitly if we don't have one per bus, 
-                // but robust animation needs a start time mapped to the segment.
-                // For simplicity matching the Leaflet logic, we'll assume the interpolation corresponds to ~5s total duration 
-                // between updates.
-
-                // Without complex per-bus time tracking, we'll snap non-selected buses and only aggressively interpolate selected.
-                // Optimization: Only animate selectedBusId if it exists to save CPU.
-                if (selectedBusId && bus._id !== selectedBusId) {
-                    animatedPositionsRef.current[bus._id] = {
-                        pos: [targetPoint.longitude, targetPoint.latitude],
-                        bearing: targetPoint.heading || 0
-                    };
-                    return;
-                }
-
-                // If it is the selected bus, or no selected bus exists, we animate roughly based on time since targetPoint arrived
-                // Using a simpler approach for MapLibre: just keep them moving slowly towards target if not there
+                const targetPoint = combined[combined.length - 1];
+                const prevPoint = combined[combined.length - 2];
+                const targetLatLng = getBusLatLng({ location: targetPoint }) || latLng;
+                const prevLatLng = getBusLatLng({ location: prevPoint }) || latLng;
 
                 const currentAnimated = animatedPositionsRef.current[bus._id];
                 if (!currentAnimated) {
-                    animatedPositionsRef.current[bus._id] = {
-                        pos: [prevPoint.longitude, prevPoint.latitude],
-                        bearing: targetPoint.heading || 0
-                    };
+                    animatedPositionsRef.current[bus._id] = { pos: prevLatLng, bearing: targetPoint.heading || 0 };
                 } else {
-                    // Primitive easing towards target
-                    const dx = targetPoint.longitude - currentAnimated.pos[0];
-                    const dy = targetPoint.latitude - currentAnimated.pos[1];
+                    const dx = targetLatLng[0] - currentAnimated.pos[0];
+                    const dy = targetLatLng[1] - currentAnimated.pos[1];
                     const dist = Math.sqrt(dx * dx + dy * dy);
 
                     if (dist > 0.00001) {
-                        currentAnimated.pos[0] += dx * 0.05; // 5% per frame (60fps = ~1.2s to reach)
+                        currentAnimated.pos[0] += dx * 0.05;
                         currentAnimated.pos[1] += dy * 0.05;
                         currentAnimated.bearing = targetPoint.heading ?? calculateBearing(
                             { lat: currentAnimated.pos[1], lng: currentAnimated.pos[0] },
-                            { lat: targetPoint.latitude, lng: targetPoint.longitude }
+                            { lat: targetLatLng[1], lng: targetLatLng[0] }
                         );
-                        needsRender = true;
                     } else {
-                        currentAnimated.pos = [targetPoint.longitude, targetPoint.latitude];
+                        currentAnimated.pos = targetLatLng;
                     }
+                }
+
+                const markerData = markersRef.current[bus._id];
+                if (markerData?.marker) {
+                    markerData.marker.setLngLat(currentAnimated.pos);
+                    const iconEl = markerData.marker.getElement().querySelector('.bus-icon-svg') as HTMLElement;
+                    if (iconEl) iconEl.style.transform = `rotate(${currentAnimated.bearing}deg)`;
                 }
             });
 
-            if (needsRender) {
-                setTriggerRender(prev => prev + 1); // trigger state update for Sources
-            }
             animationFrameRef.current = requestAnimationFrame(animate);
         };
 
@@ -192,85 +231,59 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
         return () => {
             if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
         };
-    }, [buses, selectedBusId]);
+    }, [buses]);
 
-
-    // Data Sources
-    const geojsonData = useMemo(() => {
-        return {
-            type: "FeatureCollection" as const,
-            features: buses.map(bus => {
-                if (!bus.location?.latitude) return null;
-                const animated = animatedPositionsRef.current[bus._id];
-                const lng = animated ? animated.pos[0] : bus.location.longitude;
-                const lat = animated ? animated.pos[1] : bus.location.latitude;
-                const heading = animated ? animated.bearing : (bus.location.heading || 0);
-
-                return {
-                    type: "Feature" as const,
-                    geometry: { type: "Point" as const, coordinates: [lng, lat] },
-                    properties: {
-                        id: bus._id,
-                        busNumber: bus.busNumber,
-                        status: bus.status,
-                        heading: heading,
-                        icon: bus.status === 'MAINTENANCE' ? 'bus-icon-maintenance' : 'bus-icon-active'
-                    }
-                };
-            }).filter(Boolean) as any[]
-        };
-    }, [buses, triggerRender]); // Recompute when buses change or animation ticks
-
-    const pointerData = useMemo(() => {
-        if (!selectedBusId) return null;
-        const animated = animatedPositionsRef.current[selectedBusId];
-        const selectedBus = buses.find(b => b._id === selectedBusId);
-
-        if (!animated && !selectedBus?.location?.latitude) return null;
-
-        const lng = animated ? animated.pos[0] : selectedBus!.location.longitude;
-        const lat = animated ? animated.pos[1] : selectedBus!.location.latitude;
-        const heading = animated ? animated.bearing : (selectedBus!.location.heading || 0);
-
-        return {
-            type: "FeatureCollection" as const,
-            features: [{
-                type: "Feature" as const,
-                geometry: { type: "Point" as const, coordinates: [lng, lat] },
-                properties: { heading }
-            }]
-        };
-    }, [selectedBusId, triggerRender]);
-
-    // Follow Bus Logic
+    // Follow Mode (Camera Tracking logic)
     useEffect(() => {
         if (followBusEnabled && activeBusWithLocation && mapRef.current) {
             const animated = animatedPositionsRef.current[activeBusWithLocation._id];
-            const lng = animated ? animated.pos[0] : activeBusWithLocation.location.longitude;
-            const lat = animated ? animated.pos[1] : activeBusWithLocation.location.latitude;
-
-            mapRef.current.panTo([lng, lat], { duration: 1000 });
+            const center = animated ? animated.pos : getBusLatLng(activeBusWithLocation);
+            if (center) mapRef.current.panTo(center, { duration: 800 });
         }
-    }, [triggerRender, followBusEnabled]); // Tie to render tick for smoothness if following
+    }, [followBusEnabled, activeBusWithLocation]);
 
-    // Focused Location override
+    // Selection Camera Logic
     useEffect(() => {
-        if (focusedLocation && mapRef.current) {
-            mapRef.current.flyTo({ center: [focusedLocation.lng, focusedLocation.lat], zoom: 15, duration: 1500 });
+        if (mapRef.current) {
+            if (focusedLocation) {
+                const latLng = getBusLatLng({ location: focusedLocation });
+                if (latLng) mapRef.current.flyTo({ center: latLng, zoom: 17, duration: 1200 });
+            } else if (getBusLatLng(selectedBus)) {
+                mapRef.current.flyTo({ center: getBusLatLng(selectedBus)!, zoom: 17, duration: 1000 });
+            }
         }
-    }, [focusedLocation]);
+    }, [focusedLocation, selectedBusId]);
 
-    const isMissingData = buses.filter(b => b.location?.latitude).length === 0;
+    const isMissingData = buses.filter(b => getBusLatLng(b)).length === 0;
 
     return (
-        <div className="h-full w-full relative z-0">
+        <div className="h-full w-full relative z-0 bg-slate-50 overflow-hidden rounded-2xl border border-slate-200">
             {isMissingData && (
-                <div className="absolute inset-0 z-10 bg-slate-900/10 backdrop-blur-[1px] flex items-center justify-center pointer-events-none">
-                    <div className="bg-white p-4 rounded-xl shadow-xl border border-slate-200 text-center max-w-xs mx-4">
-                        <div className="flex justify-center mb-2"><FaBusAlt className="text-slate-400 text-3xl" /></div>
-                        <h4 className="font-bold text-slate-800">No Live Data</h4>
-                        <p className="text-xs text-slate-500 mt-1">
-                            Buses will appear on the map once drivers start trips.
+                <div className="absolute inset-0 z-10 bg-white/60 backdrop-blur-[1px] flex items-center justify-center pointer-events-none">
+                    <div className="bg-white p-5 rounded-2xl shadow-xl border border-slate-100 text-center max-w-xs mx-4">
+                        <div className="flex justify-center mb-3"><FaBusAlt className="text-blue-500/30 text-4xl" /></div>
+                        <h4 className="font-bold text-slate-800">Fleet Monitoring Idle</h4>
+                        <p className="text-[11px] text-slate-500 mt-2 font-medium">No active GPS feeds. Locations will appear on trip start.</p>
+                    </div>
+                </div>
+            )}
+
+            {/* Selection Overlay (Fix 5) */}
+            {selectedBus && (
+                <div className="absolute top-4 left-4 z-20 pointer-events-none">
+                    <div className="bg-white/95 backdrop-blur-md px-4 py-3 rounded-2xl shadow-lg border border-slate-200/50 flex flex-col gap-1 min-w-[220px]">
+                        <div className="flex items-center justify-between gap-4">
+                            <span className="text-[10px] font-black text-slate-400 tracking-wider">MAP VIEW</span>
+                            <div className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${selectedBus.location?.latitude ? (selectedBus.status === 'ON_ROUTE' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700') : 'bg-red-100 text-red-700'
+                                }`}>
+                                {selectedBus.location?.latitude ? (selectedBus.status === 'ON_ROUTE' ? 'LIVE' : 'IDLE') : 'NO DATA'}
+                            </div>
+                        </div>
+                        <h3 className="font-bold text-slate-800">Bus {selectedBus.busNumber}</h3>
+                        <p className="text-[10px] text-slate-500 font-medium">
+                            {!selectedBus.location?.latitude
+                                ? 'No location coordinates received yet.'
+                                : (selectedBus.status === 'ON_ROUTE' ? 'Tracking real-time movement' : 'Pinned at last known location')}
                         </p>
                     </div>
                 </div>
@@ -279,60 +292,28 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
             <Map
                 ref={mapRef}
                 initialViewState={initialViewState}
-                mapStyle={import.meta.env.VITE_MAP_STYLE_URL || "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"}
-                pitchWithRotate={false}
-                dragRotate={false}
-                onLoad={onMapLoad}
+                mapStyle={import.meta.env.VITE_MAP_STYLE_URL || "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json"}
+                onStyleData={onStyleData}
+                onLoad={onLoad}
                 style={{ width: '100%', height: '100%' }}
+                padding={{ top: 80, bottom: 80, left: 80, right: 80 }}
             >
-                {/* Trip Path (Optional) - Keeping it simple for MapLibre if path is present */}
+                <NavigationControl position="bottom-right" />
+                <FullscreenControl position="top-right" />
+                <ScaleControl position="bottom-left" />
+
                 {path && path.length > 0 && (
                     <Source id="trip-path" type="geojson" data={{
                         type: "Feature",
-                        geometry: { type: "LineString", coordinates: path.map(p => [p[1], p[0]]) }, // Leaflet is lat,lng -> maplibre lng,lat
+                        geometry: { type: "LineString", coordinates: path.map(p => [p[1], p[0]]) },
                         properties: {}
                     }}>
                         <Layer
                             id="trip-path-line"
                             type="line"
-                            paint={{ 'line-color': '#3b82f6', 'line-width': 4, 'line-opacity': 0.7 }}
+                            paint={{ 'line-color': '#3b82f6', 'line-width': 4, 'line-opacity': 0.5 }}
                         />
                     </Source>
-                )}
-
-                {imagesLoaded && (
-                    <>
-                        <Source id="buses" type="geojson" data={geojsonData}>
-                            <Layer
-                                id="buses-layer"
-                                type="symbol"
-                                layout={{
-                                    'icon-image': ['get', 'icon'],
-                                    'icon-size': 1,
-                                    'icon-rotate': ['get', 'heading'],
-                                    'icon-allow-overlap': true,
-                                    'icon-rotation-alignment': 'map'
-                                }}
-                            />
-                        </Source>
-
-                        {pointerData && (
-                            <Source id="selected-pointer" type="geojson" data={pointerData}>
-                                <Layer
-                                    id="pointer-layer"
-                                    type="symbol"
-                                    layout={{
-                                        'icon-image': 'pointer-icon',
-                                        'icon-size': 1,
-                                        'icon-rotate': ['get', 'heading'],
-                                        'icon-allow-overlap': true,
-                                        'icon-ignore-placement': true,
-                                        'icon-rotation-alignment': 'map'
-                                    }}
-                                />
-                            </Source>
-                        )}
-                    </>
                 )}
             </Map>
         </div>

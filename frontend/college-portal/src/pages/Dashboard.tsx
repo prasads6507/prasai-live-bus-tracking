@@ -6,7 +6,7 @@ import { db } from '../config/firebase'; // Import Firestore instance
 import { getBuses, getRoutes, validateSlug } from '../services/api';
 import { getStreetName } from '../services/geocoding';
 import Layout from '../components/Layout';
-import MapComponent from '../components/MapComponent';
+import MapLibreMap, { getBusLatLng } from '../components/MapLibreMap';
 
 const isLiveBus = (bus: any) => {
     if (bus.status !== 'ON_ROUTE') return false;
@@ -137,8 +137,9 @@ const Dashboard = () => {
             if (!selectedBusId) return;
 
             const selectedBus = buses.find(b => b._id === selectedBusId);
-            if (selectedBus?.status === 'ON_ROUTE' && selectedBus.location?.latitude && selectedBus.location?.longitude) {
-                const address = await getStreetName(selectedBus.location.latitude, selectedBus.location.longitude);
+            const latLng = getBusLatLng(selectedBus);
+            if (latLng) {
+                const address = await getStreetName(latLng[1], latLng[0]);
                 setBusAddresses(prev => ({
                     ...prev,
                     [selectedBusId]: address
@@ -146,13 +147,14 @@ const Dashboard = () => {
             }
         };
         resolveAddresses();
-    }, [selectedBusId, buses.find(b => b._id === selectedBusId)?.location?.latitude, buses.find(b => b._id === selectedBusId)?.location?.longitude]);
+    }, [selectedBusId, buses]);
 
     const handleBusClick = (bus: any) => {
         setSelectedBusId(bus._id);
         setFollowSelectedBus(true);
-        if (bus.location?.latitude && bus.location?.longitude) {
-            setFocusedBusLocation({ lat: bus.location.latitude, lng: bus.location.longitude });
+        const latLng = getBusLatLng(bus);
+        if (latLng) {
+            setFocusedBusLocation({ lat: latLng[1], lng: latLng[0] });
             // Scroll to map
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
@@ -228,7 +230,7 @@ const Dashboard = () => {
                                     )}
                                 </div>
                             </div>
-                            <MapComponent
+                            <MapLibreMap
                                 buses={buses.map(b => {
                                     if (isLiveBus(b)) return b;
                                     if (b.status === 'ON_ROUTE') return { ...b, status: 'Active (Offline)' };
@@ -358,20 +360,20 @@ const BusCard = ({ bus, address }: { bus: any, address?: string }) => (
             </span>
         </div>
         <div className="space-y-2">
-            {bus.status === 'ON_ROUTE' && bus.location?.latitude ? (
+            {bus.status === 'ON_ROUTE' && getBusLatLng(bus) ? (
                 <div className="flex items-center gap-2 text-sm bg-green-50 p-2 rounded-lg">
                     <Navigation size={14} className="text-green-500" />
                     <div className="flex-1">
                         <span className="font-semibold text-green-700">{bus.speed || 0} mph</span>
                         <div className="text-green-600 ml-2 text-xs font-medium truncate max-w-[200px]" title={address}>
-                            {address || `${bus.location.latitude.toFixed(4)}, ${bus.location.longitude.toFixed(4)}`}
+                            {address || `${getBusLatLng(bus)![1].toFixed(4)}, ${getBusLatLng(bus)![0].toFixed(4)}`}
                         </div>
                     </div>
                 </div>
             ) : (
                 <div className="flex items-center gap-2 text-sm text-slate-500">
                     <MapPin size={14} className="text-slate-400" />
-                    <span>{bus.location?.latitude ? 'Parked' : 'No GPS Data'}</span>
+                    <span>{getBusLatLng(bus) ? 'Parked' : 'No GPS Data'}</span>
                 </div>
             )}
         </div>
