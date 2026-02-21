@@ -5,7 +5,7 @@ import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { getBuses, getRoutes, validateSlug } from '../services/api';
 
-import { AppShell } from '../components/dashboard/AppShell';
+import Layout from '../components/Layout';
 import { ChipStat, KpiStrip } from '../components/dashboard/StatComponents';
 import { RoutePanelOverlay } from '../components/dashboard/RoutePanelOverlay';
 import MapLibreMap from '../components/MapLibreMap';
@@ -94,7 +94,7 @@ const Dashboard = () => {
     }
 
     return (
-        <AppShell activeItem="dashboard">
+        <Layout activeItem="dashboard">
             {/* KPI Strip */}
             <div className="mb-4 shrink-0">
                 <KpiStrip>
@@ -147,6 +147,7 @@ const Dashboard = () => {
                     routes={routes}
                     selectedRouteId={selectedRouteId}
                     followBus={false} // Command Center view usually doesn't aggressively follow unless explicitly asked
+                    onBusClick={(id) => setSelectedBusId(id)}
                 />
 
                 {/* Optional Right Map Toolbar per prompt */}
@@ -154,7 +155,7 @@ const Dashboard = () => {
                     {/* Additional Map tools can be added here */}
                 </div>
             </div>
-        </AppShell>
+        </Layout>
     );
 };
 

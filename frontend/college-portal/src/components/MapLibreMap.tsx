@@ -17,6 +17,7 @@ interface MapLibreMapProps {
     selectedBusId?: string | null;
     routes?: any[];
     selectedRouteId?: string | null;
+    onBusClick?: (busId: string) => void;
 }
 
 // 1. Universal Coordinate Normalizer (Fix 2 & Mismatch Fix)
@@ -33,7 +34,7 @@ export const getBusLatLng = (bus: any): [number, number] | null => {
     return [lng, lat];
 };
 
-const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, path, selectedBusId, routes, selectedRouteId }: MapLibreMapProps) => {
+const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, path, selectedBusId, routes, selectedRouteId, onBusClick }: MapLibreMapProps) => {
     const mapRef = useRef<MapRef | null>(null);
 
     // Type definition for DOM Marker State
@@ -131,7 +132,13 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
 
             // React guarantees fast targeted updates to this specific DOM portal
             markerState.root.render(
-                <div className="relative flex items-center justify-center drop-shadow-md transition-transform hover:scale-110 group">
+                <div 
+                    className="relative flex items-center justify-center drop-shadow-md transition-transform hover:scale-110 group cursor-pointer"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        if (onBusClick) onBusClick(bus._id);
+                    }}
+                >
                     {selectedBusId === bus._id && (
                         <div className="absolute w-14 h-14 bg-dashboard-primary/20 rounded-full animate-pulse" />
                     )}
@@ -142,7 +149,7 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
                         style={{ transform: `rotate(${bus.location?.heading || 0}deg)` }}
                     />
                     {/* Tooltip */}
-                    <div className="absolute top-10 whitespace-nowrap bg-dashboard-surface text-dashboard-text border border-dashboard-border shadow-soft text-[11px] font-bold px-3 py-1.5 rounded-lg pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50 flex flex-col gap-0.5">
+                    <div className={`absolute top-10 whitespace-nowrap bg-dashboard-surface text-dashboard-text border border-dashboard-border shadow-soft text-[11px] font-bold px-3 py-1.5 rounded-lg pointer-events-none transition-opacity z-50 flex flex-col gap-0.5 ${selectedBusId === bus._id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                         <div className="flex items-center gap-2">
                             <span>Bus {bus.busNumber || 'Unknown'} • {bus.driverName || 'No Driver'}</span>
                             {bus.status === 'ON_ROUTE' && typeof bus.speed === 'number' && (

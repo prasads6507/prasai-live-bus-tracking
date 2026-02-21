@@ -55,8 +55,13 @@ export const LeftRailNav = ({ activeItem }: LeftRailNavProps) => {
             <nav className="flex-1 flex flex-col gap-4 w-full px-3">
                 <NavItem id="dashboard" icon={Home} path="dashboard" label="Dashboard" />
                 <NavItem id="buses" icon={Bus} path="buses" label="Fleet/Buses" />
-                <NavItem id="routes" icon={MapPin} path="routes" label="Routes" />
+                <NavItem id="drivers" icon={Users} path="drivers" label="Drivers & Staff" />
                 <NavItem id="students" icon={Users} path="students" label="Students" />
+                <NavItem id="routes" icon={MapPin} path="routes" label="Routes" />
+                <NavItem id="trip-history" icon={MapPin} path="trip-history" label="Trip History" />
+                {JSON.parse(localStorage.getItem('user') || '{}')?.role === 'SUPER_ADMIN' || JSON.parse(localStorage.getItem('user') || '{}')?.role === 'OWNER' ? (
+                    <NavItem id="admins" icon={Users} path="admins" label="Manage Admins" />
+                ) : null}
             </nav>
 
             {/* Bottom Menu */}

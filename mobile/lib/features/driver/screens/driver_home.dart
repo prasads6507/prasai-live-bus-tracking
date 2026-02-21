@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart' as geo;
 import 'package:go_router/go_router.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../services/driver_location_service.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/theme/colors.dart';
@@ -471,6 +472,12 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
       }
       return;
     }
+
+    try {
+      if (await Permission.ignoreBatteryOptimizations.isDenied) {
+        await Permission.ignoreBatteryOptimizations.request();
+      }
+    } catch (_) {}
 
     // Initialize DriverLocationService with background_location_tracker
     await DriverLocationService.startTracking(
