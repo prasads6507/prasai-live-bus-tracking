@@ -66,6 +66,10 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
         } else if (activeBusWithLocation) {
             center = getBusLatLng(activeBusWithLocation) || defaultCenter;
             zoom = 17;
+        } else if (path && path.length > 0) {
+            // Center on path midpoint for trip detail views
+            center = [path[0][1], path[0][0]]; // [lng, lat]
+            zoom = 14;
         }
 
         return {
@@ -132,7 +136,7 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
 
             // React guarantees fast targeted updates to this specific DOM portal
             markerState.root.render(
-                <div 
+                <div
                     className="relative flex items-center justify-center drop-shadow-md transition-transform hover:scale-110 group cursor-pointer"
                     onClick={(e) => {
                         e.stopPropagation();
@@ -259,6 +263,16 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
         }
     }, [followBusEnabled, activeBusWithLocation]);
 
+    // Fit map to trip path bounds when path data is available
+    useEffect(() => {
+        if (path && path.length > 1 && mapRef.current) {
+            const map = mapRef.current;
+            const bounds = new maplibregl.LngLatBounds();
+            path.forEach(p => bounds.extend([p[1], p[0]])); // [lng, lat]
+            map.fitBounds(bounds, { padding: 60, duration: 800 });
+        }
+    }, [path]);
+
     // Selection Camera Logic
     useEffect(() => {
         if (mapRef.current) {
@@ -271,7 +285,8 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
         }
     }, [focusedLocation, selectedBusId]);
 
-    const isMissingData = buses.filter(b => getBusLatLng(b)).length === 0;
+    // Only show idle overlay when there's NO path AND no buses with location
+    const isMissingData = buses.filter(b => getBusLatLng(b)).length === 0 && (!path || path.length === 0);
 
     return (
         <div className="h-full w-full relative z-0 bg-slate-50 overflow-hidden rounded-2xl border border-slate-200">
@@ -353,7 +368,7 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
                                 }}
                             />
                         </Source>
-                        
+
                         {/* Start Node */}
                         <Marker longitude={path[0][1]} latitude={path[0][0]} anchor="center">
                             <div className="bg-green-500 border-2 border-white w-4 h-4 rounded-full shadow-md" title="Start Point" />
@@ -374,10 +389,10 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
                     const coords = route.stops
                         .filter((s: any) => s.longitude !== undefined && s.latitude !== undefined)
                         .map((s: any) => [s.longitude, s.latitude]);
-                        
+
                     if (coords.length < 2) return null;
                     const isSelected = route._id === selectedRouteId;
-                    
+
                     return (
                         <Source key={`route-${route._id}`} id={`route-source-${route._id}`} type="geojson" data={{
                             type: "Feature",
@@ -388,10 +403,10 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
                                 id={`route-layer-${route._id}`}
                                 type="line"
                                 layout={{ 'line-join': 'round', 'line-cap': 'round' }}
-                                paint={{ 
-                                    'line-color': isSelected ? '#FF8A3D' : '#374151', 
-                                    'line-width': isSelected ? 5 : 2.5, 
-                                    'line-opacity': isSelected ? 1 : 0.6 
+                                paint={{
+                                    'line-color': isSelected ? '#FF8A3D' : '#374151',
+                                    'line-width': isSelected ? 5 : 2.5,
+                                    'line-opacity': isSelected ? 1 : 0.6
                                 }}
                             />
                         </Source>
