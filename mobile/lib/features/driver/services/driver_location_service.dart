@@ -76,11 +76,41 @@ void backgroundCallback() {
           });
 
           if (isActiveTrip) {
-            final historyRef = db.collection('buses').doc(busId).collection('trips').doc(dataMap['activeTripId'] as String).collection('history').doc();
-            transaction.set(historyRef, {
+            final String tripId = dataMap['activeTripId'] as String;
+            final int roundedSpeed = speedMph.round();
+            
+            // 1. Root Trips Collection (Canonical for history/reporting)
+            final rootTripRef = db.collection('trips').doc(tripId);
+            
+            // Ensure root trip doc exists with metadata
+            transaction.set(rootTripRef, {
+              'tripId': tripId,
+              'busId': busId,
+              'collegeId': collegeId,
+              'updatedAt': FieldValue.serverTimestamp(),
+            }, SetOptions(merge: true));
+            
+            final rootHistoryRef = rootTripRef.collection('history').doc();
+            transaction.set(rootHistoryRef, {
+              'latitude': data.lat,
+              'longitude': data.lon,
+              'speed': roundedSpeed,
+              'heading': data.course,
+              'recordedAt': FieldValue.serverTimestamp(),
+              'timestamp': DateTime.now().toIso8601String(),
+            });
+
+            // Increment total points
+            transaction.update(rootTripRef, {
+              'totalPoints': FieldValue.increment(1),
+            });
+            
+            // 2. Legacy Nested Trips (Optional background compatibility)
+            final legacyHistoryRef = db.collection('buses').doc(busId).collection('trips').doc(tripId).collection('history').doc();
+            transaction.set(legacyHistoryRef, {
               'lat': data.lat,
               'lng': data.lon,
-              'speed': speedMph,
+              'speed': roundedSpeed,
               'heading': data.course,
               'recordedAt': FieldValue.serverTimestamp(),
               'timestamp': DateTime.now().toIso8601String(),

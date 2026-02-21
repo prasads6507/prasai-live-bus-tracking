@@ -337,16 +337,19 @@ const saveTripHistory = async (req, res) => {
         const tripRef = db.collection('trips').doc(tripId);
         const historyRef = tripRef.collection('history');
 
-        // Check if trip exists in root (optional but good for consistency)
-        // We trust tripId is valid from client state, but could verify ownership here if needed.
-        // For performance, we skip a read unless strictly necessary, 
-        // but we should ensure we are not writing to a dead trip. 
-        // Actually, let's just write. Firestore handles loose collections fine.
+        // Robustly ensure the trip document exists in root and contains metadata
+        // This prevents update() failures if the trip doc was never created
+        await tripRef.set({
+            tripId,
+            busId,
+            collegeId: req.collegeId,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
 
         await historyRef.add({
             latitude,
             longitude,
-            speed: speed || 0,
+            speed: Math.round(speed || 0), // Round to avoid long decimals
             heading: heading || 0,
             timestamp: timestamp || new Date().toISOString(),
             recordedAt: admin.firestore.FieldValue.serverTimestamp()
@@ -357,7 +360,7 @@ const saveTripHistory = async (req, res) => {
             totalPoints: admin.firestore.FieldValue.increment(1)
         });
 
-        console.log('History point saved');
+        console.log('History point saved to root trips collection');
         res.status(201).json({ success: true, message: 'History saved' });
     } catch (error) {
         console.error('Error saving trip history:', error);
