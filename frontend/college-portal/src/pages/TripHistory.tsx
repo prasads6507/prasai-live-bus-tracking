@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Clock, Bus, User, Calendar, RefreshCw, Pencil, Trash2, X, StopCircle, Download, Map } from 'lucide-react';
+import { Clock, Bus, User, Calendar, RefreshCw, Trash2, Download, Map } from 'lucide-react';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import * as XLSX from 'xlsx';
 import Layout from '../components/Layout';
-import MapLibreMap from '../components/MapLibreMap';
-import { getTripHistory, updateTrip, deleteTrip, adminEndTrip, getTripPath } from '../services/api';
+import { getTripHistory, bulkDeleteTrips } from '../services/api';
 
 interface Trip {
     _id: string;
@@ -27,14 +26,9 @@ const TripHistory = () => {
     const [error, setError] = useState<string | null>(null);
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
-    // Modal states
-    const [editModalOpen, setEditModalOpen] = useState(false);
-    const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-    const [stopModalOpen, setStopModalOpen] = useState(false);
-    const [pathModalOpen, setPathModalOpen] = useState(false);
-    const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
-    const [tripPath, setTripPath] = useState<[number, number][]>([]); // Array of [lat, lng]
-    const [editForm, setEditForm] = useState({ startTime: '', endTime: '', driverName: '' });
+    const [selectedTripIds, setSelectedTripIds] = useState<string[]>([]);
+    const [pageSize, setPageSize] = useState(10);
+    const [pageIndex, setPageIndex] = useState(1);
     const [actionLoading, setActionLoading] = useState(false);
 
     // Reporting
@@ -76,7 +70,6 @@ const TripHistory = () => {
             const q = query(busesRef, where('collegeId', '==', collegeId));
 
             const unsubscribe = onSnapshot(q, () => {
-                // Refetch when any bus document changes (trip start/end updates bus status)
                 fetchTrips();
             });
 
@@ -104,116 +97,58 @@ const TripHistory = () => {
         return `${hours}h ${mins}m`;
     };
 
-    const formatDateTimeLocal = (isoString: string | null) => {
-        if (!isoString) return '';
-        const date = new Date(isoString);
-        return date.toISOString().slice(0, 16);
-    };
+    const handleBulkDelete = async () => {
+        if (selectedTripIds.length === 0) return;
+        if (!window.confirm(`Are you sure you want to delete ${selectedTripIds.length} trip record(s)? This action cannot be undone.`)) return;
 
-    const handleEditClick = (trip: Trip) => {
-        setSelectedTrip(trip);
-        setEditForm({
-            startTime: formatDateTimeLocal(trip.startTime),
-            endTime: formatDateTimeLocal(trip.endTime),
-            driverName: trip.driverName
-        });
-        setEditModalOpen(true);
-    };
-
-    const handleDeleteClick = (trip: Trip) => {
-        setSelectedTrip(trip);
-        setDeleteModalOpen(true);
-    };
-
-    const handleEditSubmit = async () => {
-        if (!selectedTrip) return;
         setActionLoading(true);
         try {
-            const data: any = {};
-            if (editForm.startTime) data.startTime = new Date(editForm.startTime).toISOString();
-            if (editForm.endTime) data.endTime = new Date(editForm.endTime).toISOString();
-            if (editForm.driverName) data.driverName = editForm.driverName;
-
-            await updateTrip(selectedTrip._id, data);
-            setEditModalOpen(false);
-            setSelectedTrip(null);
+            await bulkDeleteTrips(selectedTripIds);
+            setSelectedTripIds([]);
             fetchTrips();
         } catch (err: any) {
-            setError(err.response?.data?.message || 'Failed to update trip');
+            setError(err.response?.data?.message || 'Failed to delete trips');
         } finally {
             setActionLoading(false);
         }
     };
 
-    const handleDeleteConfirm = async () => {
-        if (!selectedTrip) return;
-        setActionLoading(true);
-        try {
-            await deleteTrip(selectedTrip._id);
-            setDeleteModalOpen(false);
-            setSelectedTrip(null);
-            fetchTrips();
-        } catch (err: any) {
-            setError(err.response?.data?.message || 'Failed to delete trip');
-        } finally {
-            setActionLoading(false);
+    const handlePreview = () => {
+        if (selectedTripIds.length !== 1) return;
+        navigate(`/${orgSlug}/trips/${selectedTripIds[0]}`);
+    };
+
+    // Filter and Paginate
+    const filteredTrips = trips.filter(t => {
+        if (!t.startTime) return false;
+        const tripDate = new Date(t.startTime);
+        const now = new Date();
+        const start = new Date();
+
+        switch (reportPeriod) {
+            case 'today': start.setHours(0, 0, 0, 0); break;
+            case 'week': start.setDate(now.getDate() - 7); break;
+            case 'month': start.setMonth(now.getMonth() - 1); break;
+            case 'year': start.setFullYear(now.getFullYear() - 1); break;
+        }
+        return tripDate >= start && tripDate <= now;
+    });
+
+    const totalPages = Math.ceil(filteredTrips.length / pageSize);
+    const paginatedTrips = filteredTrips.slice((pageIndex - 1) * pageSize, pageIndex * pageSize);
+
+    const toggleSelectAll = () => {
+        if (selectedTripIds.length === paginatedTrips.length && paginatedTrips.length > 0) {
+            setSelectedTripIds([]);
+        } else {
+            setSelectedTripIds(paginatedTrips.map(t => t._id));
         }
     };
 
-    const handleStopClick = (trip: Trip) => {
-        setSelectedTrip(trip);
-        setStopModalOpen(true);
-    };
-
-    const handleStopConfirm = async () => {
-        if (!selectedTrip) return;
-        setActionLoading(true);
-        try {
-            await adminEndTrip(selectedTrip._id);
-            setStopModalOpen(false);
-            setSelectedTrip(null);
-            fetchTrips();
-        } catch (err: any) {
-            setError(err.response?.data?.message || 'Failed to stop trip');
-        } finally {
-            setActionLoading(false);
-        }
-    };
-
-    const handleViewPath = async (trip: Trip) => {
-        console.log("Viewing path for selected trip object:", trip);
-        if (!trip._id) {
-            console.error("Trip object missing _id!");
-            setError("Cannot view path: Trip ID is missing.");
-            return;
-        }
-        setSelectedTrip(trip);
-        setTripPath([]);
-        setPathModalOpen(true);
-        setActionLoading(true);
-        try {
-            console.log("Calling getTripPath API...");
-            const response = await getTripPath(trip._id);
-            console.log("Trip Path Response:", response);
-            if (response.success && Array.isArray(response.data)) {
-                // Ensure robust mapping of either { lat, lng } or { latitude, longitude } to avoid empty parses
-                const pathPoints = response.data
-                    .map((p: any) => {
-                        const lat = Number(p.lat ?? p.latitude);
-                        const lng = Number(p.lng ?? p.longitude);
-                        return [lat, lng];
-                    })
-                    .filter((coords: number[]) => Number.isFinite(coords[0]) && Number.isFinite(coords[1])) as [number, number][];
-
-                console.log(`Setting path with ${pathPoints.length} valid points`);
-                setTripPath(pathPoints);
-            }
-        } catch (err) {
-            console.error("Failed to fetch trip path", err);
-            // Don't show global error, just maybe an empty map or console log
-        } finally {
-            setActionLoading(false);
-        }
+    const toggleSelectTrip = (tripId: string) => {
+        setSelectedTripIds(prev =>
+            prev.includes(tripId) ? prev.filter(id => id !== tripId) : [...prev, tripId]
+        );
     };
 
     const downloadReport = () => {
@@ -221,27 +156,19 @@ const TripHistory = () => {
         const start = new Date();
 
         switch (reportPeriod) {
-            case 'today':
-                start.setHours(0, 0, 0, 0);
-                break;
-            case 'week':
-                start.setDate(now.getDate() - 7);
-                break;
-            case 'month':
-                start.setMonth(now.getMonth() - 1);
-                break;
-            case 'year':
-                start.setFullYear(now.getFullYear() - 1);
-                break;
+            case 'today': start.setHours(0, 0, 0, 0); break;
+            case 'week': start.setDate(now.getDate() - 7); break;
+            case 'month': start.setMonth(now.getMonth() - 1); break;
+            case 'year': start.setFullYear(now.getFullYear() - 1); break;
         }
 
-        const filteredTrips = trips.filter(t => {
+        const filteredForDownload = trips.filter(t => {
             if (!t.startTime) return false;
             const tripDate = new Date(t.startTime);
             return tripDate >= start && tripDate <= now;
         });
 
-        const data = filteredTrips.map(t => ({
+        const data = filteredForDownload.map(t => ({
             'Bus Number': t.busNumber,
             'Driver': t.driverName,
             'Start Time': formatDateTime(t.startTime),
@@ -253,7 +180,6 @@ const TripHistory = () => {
         const wb = XLSX.utils.book_new();
         const ws = XLSX.utils.json_to_sheet(data);
 
-        // Auto-width
         const wscols = [
             { wch: 15 }, { wch: 20 }, { wch: 25 }, { wch: 25 }, { wch: 15 }, { wch: 15 }
         ];
@@ -310,9 +236,49 @@ const TripHistory = () => {
                     </div>
                 </div>
 
-                {/* Last Updated */}
-                <div className="text-sm text-slate-500 mb-4">
-                    Last updated: {lastRefresh.toLocaleTimeString()}
+                {/* Bulk Action Bar */}
+                {selectedTripIds.length > 0 && (
+                    <div className="bg-blue-600 px-6 py-3 rounded-xl shadow-lg flex items-center justify-between mb-6 animate-in slide-in-from-top duration-300">
+                        <div className="flex items-center gap-4">
+                            <span className="text-white font-bold">{selectedTripIds.length} record(s) selected</span>
+                            <div className="h-4 w-px bg-white/30" />
+                            <button
+                                onClick={() => setSelectedTripIds([])}
+                                className="text-white/80 hover:text-white text-sm font-medium transition-all"
+                            >
+                                Clear selection
+                            </button>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            {selectedTripIds.length === 1 && (
+                                <button
+                                    onClick={handlePreview}
+                                    className="px-4 py-2 bg-white text-blue-600 rounded-lg text-sm font-bold shadow-sm hover:bg-slate-50 transition-all flex items-center gap-2"
+                                >
+                                    <Map size={16} />
+                                    Preview Details
+                                </button>
+                            )}
+                            <button
+                                onClick={handleBulkDelete}
+                                disabled={actionLoading}
+                                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-bold shadow-sm transition-all flex items-center gap-2 disabled:opacity-50"
+                            >
+                                <Trash2 size={16} />
+                                {actionLoading ? 'Deleting...' : 'Delete Selected'}
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Status Row */}
+                <div className="flex flex-wrap items-center justify-between mb-4 gap-4">
+                    <div className="text-sm text-slate-500">
+                        Last updated: {lastRefresh.toLocaleTimeString()}
+                    </div>
+                    <div className="text-sm text-slate-500 font-medium">
+                        Showing {paginatedTrips.length} of {filteredTrips.length} trips
+                    </div>
                 </div>
 
                 {/* Error State */}
@@ -322,7 +288,7 @@ const TripHistory = () => {
                     </div>
                 )}
 
-                {/* Loading State */}
+                {/* Main Content */}
                 {loading && trips.length === 0 ? (
                     <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center">
                         <RefreshCw size={32} className="animate-spin text-blue-600 mx-auto mb-4" />
@@ -332,70 +298,46 @@ const TripHistory = () => {
                     <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center">
                         <Clock size={48} className="text-slate-300 mx-auto mb-4" />
                         <p className="text-slate-500">No trips recorded yet</p>
-                        <p className="text-sm text-slate-400 mt-1">Trips will appear here when drivers start their journeys</p>
                     </div>
                 ) : (
-                    /* Trip Table */
-                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-6">
                         <div className="overflow-x-auto">
                             <table className="w-full">
                                 <thead className="bg-slate-50 border-b border-slate-200">
                                     <tr>
-                                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                                            Bus
+                                        <th className="px-6 py-4 text-left">
+                                            <input
+                                                type="checkbox"
+                                                className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+                                                checked={selectedTripIds.length === paginatedTrips.length && paginatedTrips.length > 0}
+                                                onChange={toggleSelectAll}
+                                            />
                                         </th>
-                                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                                            Driver
-                                        </th>
-                                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                                            Start Time
-                                        </th>
-                                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                                            End Time
-                                        </th>
-                                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                                            Duration
-                                        </th>
-                                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                                            Status
-                                        </th>
-                                        <th className="px-6 py-4 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                                            Actions
-                                        </th>
+                                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Bus</th>
+                                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Driver</th>
+                                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Start Time</th>
+                                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">End Time</th>
+                                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Duration</th>
+                                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
+                                        <th className="px-6 py-4 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
-                                    {trips.map((trip) => (
-                                        <tr key={trip._id} className="hover:bg-slate-50 transition-colors">
+                                    {paginatedTrips.map((trip) => (
+                                        <tr key={trip._id} className={`hover:bg-slate-50 transition-colors ${selectedTripIds.includes(trip._id) ? 'bg-blue-50/50' : ''}`}>
                                             <td className="px-6 py-4">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">
-                                                        <Bus size={20} />
-                                                    </div>
-                                                    <span className="font-medium text-slate-800">{trip.busNumber}</span>
-                                                </div>
+                                                <input
+                                                    type="checkbox"
+                                                    className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+                                                    checked={selectedTripIds.includes(trip._id)}
+                                                    onChange={() => toggleSelectTrip(trip._id)}
+                                                />
                                             </td>
-                                            <td className="px-6 py-4">
-                                                <div className="flex items-center gap-2">
-                                                    <User size={16} className="text-slate-400" />
-                                                    <span className="text-slate-700">{trip.driverName}</span>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <div className="flex items-center gap-2">
-                                                    <Calendar size={14} className="text-green-500" />
-                                                    <span className="text-slate-700">{formatDateTime(trip.startTime)}</span>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <div className="flex items-center gap-2">
-                                                    <Calendar size={14} className="text-red-400" />
-                                                    <span className="text-slate-700">{formatDateTime(trip.endTime)}</span>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <span className="text-slate-600">{formatDuration(trip.durationMinutes)}</span>
-                                            </td>
+                                            <td className="px-6 py-4 font-medium text-slate-800">{trip.busNumber}</td>
+                                            <td className="px-6 py-4 text-slate-700">{trip.driverName}</td>
+                                            <td className="px-6 py-4 text-slate-600">{formatDateTime(trip.startTime)}</td>
+                                            <td className="px-6 py-4 text-slate-600">{formatDateTime(trip.endTime)}</td>
+                                            <td className="px-6 py-4 text-slate-600">{formatDuration(trip.durationMinutes)}</td>
                                             <td className="px-6 py-4">
                                                 {trip.status === 'ACTIVE' ? (
                                                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
@@ -404,42 +346,29 @@ const TripHistory = () => {
                                                     </span>
                                                 ) : (
                                                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600">
-                                                        <span className="w-2 h-2 rounded-full bg-slate-400"></span>
                                                         Off Trip
                                                     </span>
                                                 )}
                                             </td>
-                                            <td className="px-6 py-4">
+                                            <td className="px-6 py-4 text-center">
                                                 <div className="flex items-center justify-center gap-2">
-                                                    {trip.status === 'ACTIVE' && (
-                                                        <button
-                                                            onClick={() => handleStopClick(trip)}
-                                                            className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
-                                                            title="Stop Trip"
-                                                        >
-                                                            <StopCircle size={16} />
-                                                        </button>
-                                                    )}
                                                     <button
-                                                        onClick={() => handleViewPath(trip)}
+                                                        onClick={() => navigate(`/${orgSlug}/trips/${trip._id}`)}
                                                         className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                                        title="View Route Path"
+                                                        title="View Details"
                                                     >
-                                                        <Map size={16} />
+                                                        <Map size={18} />
                                                     </button>
                                                     <button
-                                                        onClick={() => handleEditClick(trip)}
-                                                        className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors"
-                                                        title="Edit Trip Details"
-                                                    >
-                                                        <Pencil size={16} />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleDeleteClick(trip)}
+                                                        onClick={() => {
+                                                            if (window.confirm('Delete this trip record?')) {
+                                                                bulkDeleteTrips([trip._id]).then(() => fetchTrips());
+                                                            }
+                                                        }}
                                                         className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                                        title="Delete Trip"
+                                                        title="Delete"
                                                     >
-                                                        <Trash2 size={16} />
+                                                        <Trash2 size={18} />
                                                     </button>
                                                 </div>
                                             </td>
@@ -448,223 +377,86 @@ const TripHistory = () => {
                                 </tbody>
                             </table>
                         </div>
+
+                        {/* Pagination Footer */}
+                        <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                                <span className="text-sm text-slate-500">Rows per page:</span>
+                                <select
+                                    value={pageSize}
+                                    onChange={(e) => {
+                                        setPageSize(Number(e.target.value));
+                                        setPageIndex(1);
+                                    }}
+                                    className="bg-white border border-slate-200 text-sm rounded-lg px-2 py-1 focus:ring-2 focus:ring-blue-500 outline-none"
+                                >
+                                    {[10, 20, 30, 40, 50].map(size => (
+                                        <option key={size} value={size}>{size}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <span className="text-sm text-slate-500">
+                                    Page {pageIndex} of {Math.max(1, totalPages)}
+                                </span>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        disabled={pageIndex <= 1}
+                                        onClick={() => setPageIndex(p => p - 1)}
+                                        className="px-3 py-1 text-sm border border-slate-300 rounded-md hover:bg-white disabled:opacity-30"
+                                    >
+                                        Prev
+                                    </button>
+                                    <button
+                                        disabled={pageIndex >= totalPages}
+                                        onClick={() => setPageIndex(p => p + 1)}
+                                        className="px-3 py-1 text-sm border border-slate-300 rounded-md hover:bg-white disabled:opacity-30"
+                                    >
+                                        Next
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 )}
 
                 {/* Summary Stats */}
                 {trips.length > 0 && (
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
-                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">
-                                    <Calendar size={20} />
-                                </div>
-                                <div>
-                                    <p className="text-sm text-slate-500">Total Trips</p>
-                                    <p className="text-xl font-bold text-slate-800">{trips.length}</p>
-                                </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">
+                                <Calendar size={20} />
+                            </div>
+                            <div>
+                                <p className="text-xs text-slate-500 uppercase font-semibold">Total Trips</p>
+                                <p className="text-xl font-bold text-slate-800">{filteredTrips.length}</p>
                             </div>
                         </div>
-                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-lg bg-green-100 text-green-600 flex items-center justify-center">
-                                    <Bus size={20} />
-                                </div>
-                                <div>
-                                    <p className="text-sm text-slate-500">Active Trips</p>
-                                    <p className="text-xl font-bold text-slate-800">
-                                        {trips.filter(t => t.status === 'ACTIVE').length}
-                                    </p>
-                                </div>
+                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-green-100 text-green-600 flex items-center justify-center">
+                                <Bus size={20} />
+                            </div>
+                            <div>
+                                <p className="text-xs text-slate-500 uppercase font-semibold">Active</p>
+                                <p className="text-xl font-bold text-slate-800">
+                                    {filteredTrips.filter(t => t.status === 'ACTIVE').length}
+                                </p>
                             </div>
                         </div>
-                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center">
-                                    <Clock size={20} />
-                                </div>
-                                <div>
-                                    <p className="text-sm text-slate-500">Completed Trips</p>
-                                    <p className="text-xl font-bold text-slate-800">
-                                        {trips.filter(t => t.status === 'COMPLETED').length}
-                                    </p>
-                                </div>
+                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center">
+                                <Clock size={20} />
+                            </div>
+                            <div>
+                                <p className="text-xs text-slate-500 uppercase font-semibold">Completed</p>
+                                <p className="text-xl font-bold text-slate-800">
+                                    {filteredTrips.filter(t => t.status === 'COMPLETED').length}
+                                </p>
                             </div>
                         </div>
                     </div>
                 )}
             </div>
-
-            {/* Edit Modal */}
-            {editModalOpen && selectedTrip && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
-                        <div className="flex items-center justify-between p-6 border-b border-slate-200">
-                            <h3 className="text-lg font-semibold text-slate-800">Edit Trip</h3>
-                            <button
-                                onClick={() => setEditModalOpen(false)}
-                                className="p-2 text-slate-400 hover:text-slate-600 rounded-lg"
-                            >
-                                <X size={20} />
-                            </button>
-                        </div>
-                        <div className="p-6 space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Driver Name</label>
-                                <input
-                                    type="text"
-                                    value={editForm.driverName}
-                                    onChange={(e) => setEditForm({ ...editForm, driverName: e.target.value })}
-                                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Start Time</label>
-                                <input
-                                    type="datetime-local"
-                                    value={editForm.startTime}
-                                    onChange={(e) => setEditForm({ ...editForm, startTime: e.target.value })}
-                                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">End Time</label>
-                                <input
-                                    type="datetime-local"
-                                    value={editForm.endTime}
-                                    onChange={(e) => setEditForm({ ...editForm, endTime: e.target.value })}
-                                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                />
-                            </div>
-                        </div>
-                        <div className="flex items-center justify-end gap-3 p-6 border-t border-slate-200">
-                            <button
-                                onClick={() => setEditModalOpen(false)}
-                                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleEditSubmit}
-                                disabled={actionLoading}
-                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50"
-                            >
-                                {actionLoading ? 'Saving...' : 'Save Changes'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Delete Confirmation Modal */}
-            {deleteModalOpen && selectedTrip && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
-                        <div className="p-6">
-                            <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-4">
-                                <Trash2 size={24} />
-                            </div>
-                            <h3 className="text-lg font-semibold text-slate-800 text-center">Delete Trip?</h3>
-                            <p className="text-slate-500 text-center mt-2">
-                                Are you sure you want to delete this trip record for <span className="font-medium">{selectedTrip.busNumber}</span>? This action cannot be undone.
-                            </p>
-                        </div>
-                        <div className="flex items-center justify-end gap-3 p-6 border-t border-slate-200">
-                            <button
-                                onClick={() => setDeleteModalOpen(false)}
-                                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleDeleteConfirm}
-                                disabled={actionLoading}
-                                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
-                            >
-                                {actionLoading ? 'Deleting...' : 'Delete'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Stop Trip Confirmation Modal */}
-            {stopModalOpen && selectedTrip && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
-                        <div className="p-6">
-                            <div className="w-12 h-12 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center mx-auto mb-4">
-                                <StopCircle size={24} />
-                            </div>
-                            <h3 className="text-lg font-semibold text-slate-800 text-center">Stop Active Trip?</h3>
-                            <p className="text-slate-500 text-center mt-2">
-                                Are you sure you want to end this active trip for <span className="font-medium">{selectedTrip.busNumber}</span>?
-                            </p>
-                            <p className="text-sm text-slate-400 text-center mt-1">
-                                This will mark the trip as completed and update the bus status.
-                            </p>
-                        </div>
-                        <div className="flex items-center justify-end gap-3 p-6 border-t border-slate-200">
-                            <button
-                                onClick={() => setStopModalOpen(false)}
-                                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleStopConfirm}
-                                disabled={actionLoading}
-                                className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors disabled:opacity-50"
-                            >
-                                {actionLoading ? 'Stopping...' : 'Stop Trip'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-            {/* Path View Modal */}
-            {pathModalOpen && selectedTrip && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl h-[80vh] flex flex-col overflow-hidden">
-                        <div className="flex items-center justify-between p-4 border-b border-slate-200 shrink-0">
-                            <div>
-                                <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                                    <Map size={20} className="text-blue-600" />
-                                    Trip Path: {selectedTrip.busNumber}
-                                </h3>
-                                <p className="text-sm text-slate-500">
-                                    {formatDateTime(selectedTrip.startTime)} - {formatDateTime(selectedTrip.endTime)}
-                                </p>
-                            </div>
-                            <button
-                                onClick={() => setPathModalOpen(false)}
-                                className="p-2 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
-                            >
-                                <X size={24} />
-                            </button>
-                        </div>
-
-                        <div className="flex-1 relative bg-slate-100">
-                            {actionLoading ? (
-                                <div className="absolute inset-0 flex items-center justify-center">
-                                    <RefreshCw size={32} className="animate-spin text-blue-600" />
-                                </div>
-                            ) : tripPath.length > 0 ? (
-                                <MapLibreMap
-                                    buses={[]} 
-                                    path={tripPath}
-                                    followBus={false}
-                                />
-                            ) : (
-                                <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400">
-                                    <Map size={48} className="mb-2 opacity-50" />
-                                    <p>No path data available for this trip.</p>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
         </Layout>
     );
 };

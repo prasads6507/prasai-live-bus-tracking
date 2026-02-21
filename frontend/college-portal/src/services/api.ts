@@ -213,6 +213,11 @@ export const deleteTrip = async (tripId: string) => {
     return response.data;
 };
 
+export const bulkDeleteTrips = async (tripIds: string[]) => {
+    const response = await api.delete('/admin/trips', { data: { tripIds } });
+    return response.data;
+};
+
 export const adminEndTrip = async (tripId: string) => {
     const response = await api.post(`/admin/trips/${tripId}/end`);
     return response.data;

@@ -753,6 +753,92 @@ const adminEndTrip = async (req, res) => {
     }
 };
 
+// @desc    Bulk delete trip records
+// @route   DELETE /api/admin/trips
+// @access  Private (College Admin)
+const bulkDeleteTrips = async (req, res) => {
+    try {
+        const { tripIds } = req.body;
+        if (!Array.isArray(tripIds) || tripIds.length === 0) {
+            return res.status(400).json({ success: false, message: 'No trip IDs provided' });
+        }
+
+        console.log('--- BULK DELETE TRIPS ---', tripIds.length);
+
+        const results = {
+            success: [],
+            failed: []
+        };
+
+        const deleteSubcollection = async (docRef, subName) => {
+            const snapshot = await docRef.collection(subName).get();
+            if (snapshot.empty) return;
+
+            const batch = db.batch();
+            snapshot.docs.forEach(doc => batch.delete(doc.ref));
+            await batch.commit();
+        };
+
+        for (const tripId of tripIds) {
+            try {
+                // Try ROOT collection first
+                let tripRef = db.collection('trips').doc(tripId);
+                let tripDoc = await tripRef.get();
+
+                // If not found in root, search subcollections (legacy support)
+                if (!tripDoc.exists) {
+                    const busesSnapshot = await db.collection('buses')
+                        .where('collegeId', '==', req.collegeId)
+                        .get();
+
+                    for (const busDoc of busesSnapshot.docs) {
+                        const subTripRef = busDoc.ref.collection('trips').doc(tripId);
+                        const subTripDoc = await subTripRef.get();
+                        if (subTripDoc.exists) {
+                            tripRef = subTripRef;
+                            tripDoc = subTripDoc;
+                            break;
+                        }
+                    }
+                }
+
+                if (!tripDoc.exists) {
+                    results.failed.push({ id: tripId, reason: 'Trip not found or unauthorized' });
+                    continue;
+                }
+
+                // Verify trip belongs to this college
+                if (tripDoc.data().collegeId && tripDoc.data().collegeId !== req.collegeId) {
+                    results.failed.push({ id: tripId, reason: 'Unauthorized access to this trip' });
+                    continue;
+                }
+
+                // 1. Delete Subcollections
+                await deleteSubcollection(tripRef, 'history');
+                await deleteSubcollection(tripRef, 'path');
+
+                // 2. Delete Trip Doc
+                await tripRef.delete();
+                results.success.push(tripId);
+
+                console.log(`Deleted trip: ${tripId}`);
+            } catch (err) {
+                console.error(`Failed to delete trip ${tripId}:`, err);
+                results.failed.push({ id: tripId, reason: err.message });
+            }
+        }
+
+        res.status(200).json({
+            success: true,
+            message: `Processed ${tripIds.length} trips. Deleted: ${results.success.length}, Failed: ${results.failed.length}`,
+            data: results
+        });
+    } catch (error) {
+        console.error('Error in bulk delete trips:', error);
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+    }
+};
+
 // @desc    Get trip path for visualization
 // @route   GET /api/admin/trips/:tripId/path
 // @access  Private (College Admin)
@@ -1024,5 +1110,6 @@ module.exports = {
     getCollegeAdmins,
     createCollegeAdmin,
     updateCollegeAdmin,
-    deleteCollegeAdmin
+    deleteCollegeAdmin,
+    bulkDeleteTrips
 };

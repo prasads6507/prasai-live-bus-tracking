@@ -13,6 +13,7 @@ import Buses from './pages/Buses';
 import RoutesPage from './pages/Routes';
 import Settings from './pages/Settings';
 import TripHistory from './pages/TripHistory';
+import TripDetail from './pages/TripDetail';
 import StudentTripHistory from './pages/StudentTripHistory';
 import CollegeAdmins from './pages/CollegeAdmins';
 
@@ -39,6 +40,7 @@ function App() {
         <Route path="/:orgSlug/routes" element={<ProtectedRoute><RoutesPage /></ProtectedRoute>} />
         <Route path="/:orgSlug/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
         <Route path="/:orgSlug/trip-history" element={<ProtectedRoute><TripHistory /></ProtectedRoute>} />
+        <Route path="/:orgSlug/trips/:tripId" element={<ProtectedRoute><TripDetail /></ProtectedRoute>} />
         <Route path="/:orgSlug/admins" element={<ProtectedRoute><CollegeAdmins /></ProtectedRoute>} />
 
         {/* Driver Portal */}
