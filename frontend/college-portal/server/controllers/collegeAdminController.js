@@ -781,47 +781,43 @@ const bulkDeleteTrips = async (req, res) => {
 
         for (const tripId of tripIds) {
             try {
-                // Try ROOT collection first
+                let deletedCount = 0;
+
+                // 1. Try ROOT collection
                 let tripRef = db.collection('trips').doc(tripId);
                 let tripDoc = await tripRef.get();
 
-                // If not found in root, search subcollections (legacy support)
-                if (!tripDoc.exists) {
-                    const busesSnapshot = await db.collection('buses')
-                        .where('collegeId', '==', req.collegeId)
-                        .get();
-
-                    for (const busDoc of busesSnapshot.docs) {
-                        const subTripRef = busDoc.ref.collection('trips').doc(tripId);
-                        const subTripDoc = await subTripRef.get();
-                        if (subTripDoc.exists) {
-                            tripRef = subTripRef;
-                            tripDoc = subTripDoc;
-                            break;
-                        }
+                if (tripDoc.exists) {
+                    if (!tripDoc.data().collegeId || tripDoc.data().collegeId === req.collegeId) {
+                        await deleteSubcollection(tripRef, 'history');
+                        await deleteSubcollection(tripRef, 'path');
+                        await tripRef.delete();
+                        deletedCount++;
                     }
                 }
 
-                if (!tripDoc.exists) {
+                // 2. Search all buses subcollections (legacy support)
+                const busesSnapshot = await db.collection('buses')
+                    .where('collegeId', '==', req.collegeId)
+                    .get();
+
+                for (const busDoc of busesSnapshot.docs) {
+                    const subTripRef = busDoc.ref.collection('trips').doc(tripId);
+                    const subTripDoc = await subTripRef.get();
+                    if (subTripDoc.exists) {
+                        await deleteSubcollection(subTripRef, 'history');
+                        await deleteSubcollection(subTripRef, 'path');
+                        await subTripRef.delete();
+                        deletedCount++;
+                    }
+                }
+
+                if (deletedCount > 0) {
+                    results.success.push(tripId);
+                    console.log(`Deleted trip: ${tripId} from ${deletedCount} locations`);
+                } else {
                     results.failed.push({ id: tripId, reason: 'Trip not found or unauthorized' });
-                    continue;
                 }
-
-                // Verify trip belongs to this college
-                if (tripDoc.data().collegeId && tripDoc.data().collegeId !== req.collegeId) {
-                    results.failed.push({ id: tripId, reason: 'Unauthorized access to this trip' });
-                    continue;
-                }
-
-                // 1. Delete Subcollections
-                await deleteSubcollection(tripRef, 'history');
-                await deleteSubcollection(tripRef, 'path');
-
-                // 2. Delete Trip Doc
-                await tripRef.delete();
-                results.success.push(tripId);
-
-                console.log(`Deleted trip: ${tripId}`);
             } catch (err) {
                 console.error(`Failed to delete trip ${tripId}:`, err);
                 results.failed.push({ id: tripId, reason: err.message });
