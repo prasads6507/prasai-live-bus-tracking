@@ -373,11 +373,14 @@ const BusCard = ({ bus, address }: { bus: any, address?: string }) => (
         </div>
         <div className="space-y-2">
             {bus.status === 'ON_ROUTE' && getBusLatLng(bus) ? (
-                <div className="flex items-center gap-2 text-sm bg-green-50 p-2 rounded-lg">
-                    <Navigation size={14} className="text-green-500" />
-                    <div className="flex-1">
-                        <span className="font-semibold text-green-700">{bus.speed || 0} mph</span>
-                        <div className="text-green-600 ml-2 text-xs font-medium truncate max-w-[200px]" title={address}>
+                <div className="flex flex-col gap-2 text-sm bg-green-50 p-2 rounded-lg">
+                    <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                        <span className="text-slate-500 font-medium">Speed</span>
+                        <span className="font-semibold text-green-700">{Math.round(bus.speed || 0)} mph</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <MapPin size={14} className="text-green-500" />
+                        <div className="text-green-600 text-xs font-medium truncate max-w-[200px]" title={address}>
                             {address || `${getBusLatLng(bus)![1].toFixed(4)}, ${getBusLatLng(bus)![0].toFixed(4)}`}
                         </div>
                     </div>

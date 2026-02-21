@@ -5,7 +5,7 @@ import {
     Calendar, Clock, MapPin, User, ChevronRight, X,
     ArrowLeft, Bus, Loader2, Map as MapIcon, History
 } from 'lucide-react';
-import { getStudentTripHistory, getTripPath } from '../services/api';
+import { getStudentTripHistory, getStudentTripPath } from '../services/api';
 import MapLibreMapComponent from '../components/MapLibreMapComponent';
 
 interface Trip {
@@ -61,11 +61,17 @@ const StudentTripHistory = () => {
         setPathModalOpen(true);
         setActionLoading(true);
         try {
-            const response = await getTripPath(trip._id);
+            const response = await getStudentTripPath(trip._id);
             if (response.success && Array.isArray(response.data)) {
+                // Ensure robust mapping of either { lat, lng } or { latitude, longitude } to avoid empty parses
                 const pathPoints = response.data
-                    .filter((p: any) => (p.lat || p.latitude) && (p.lng || p.longitude))
-                    .map((p: any) => [p.lat || p.latitude, p.lng || p.longitude] as [number, number]);
+                    .map((p: any) => {
+                        const lat = Number(p.lat ?? p.latitude);
+                        const lng = Number(p.lng ?? p.longitude);
+                        return [lat, lng];
+                    })
+                    .filter((coords: number[]) => Number.isFinite(coords[0]) && Number.isFinite(coords[1])) as [number, number][];
+
                 setTripPath(pathPoints);
             }
         } catch (err) {

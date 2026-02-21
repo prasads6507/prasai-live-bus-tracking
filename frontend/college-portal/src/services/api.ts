@@ -314,6 +314,11 @@ export const getStudentTripHistory = async () => {
     return response.data;
 };
 
+export const getStudentTripPath = async (tripId: string) => {
+    const response = await api.get(`/student/trips/${tripId}/path`);
+    return response.data;
+};
+
 // Admin Management (Super Admin / Owner only)
 export const getCollegeAdmins = async () => {
     const response = await api.get('/admin/college-admins');

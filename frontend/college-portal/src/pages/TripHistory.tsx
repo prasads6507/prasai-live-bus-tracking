@@ -196,10 +196,16 @@ const TripHistory = () => {
             const response = await getTripPath(trip._id);
             console.log("Trip Path Response:", response);
             if (response.success && Array.isArray(response.data)) {
-                // Convert to [lat, lng] format
+                // Ensure robust mapping of either { lat, lng } or { latitude, longitude } to avoid empty parses
                 const pathPoints = response.data
-                    .filter((p: any) => p.lat && p.lng)
-                    .map((p: any) => [p.lat, p.lng] as [number, number]);
+                    .map((p: any) => {
+                        const lat = Number(p.lat ?? p.latitude);
+                        const lng = Number(p.lng ?? p.longitude);
+                        return [lat, lng];
+                    })
+                    .filter((coords: number[]) => Number.isFinite(coords[0]) && Number.isFinite(coords[1])) as [number, number][];
+
+                console.log(`Setting path with ${pathPoints.length} valid points`);
                 setTripPath(pathPoints);
             }
         } catch (err) {

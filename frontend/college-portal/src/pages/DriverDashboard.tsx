@@ -252,7 +252,10 @@ const DriverDashboard = () => {
                 }
 
                 // Update UI state
-                setCurrentSpeed((speed || 0) * 2.23694);
+                if (position.coords.speed !== null) {
+                    // Keep raw mph in state, it will be rounded via Math.round where displayed/sent
+                    setCurrentSpeed(Math.round((speed || 0) * 2.23694));
+                }
                 setCurrentCoords({ lat: latitude, lng: longitude });
                 setLocationError(null);
 
