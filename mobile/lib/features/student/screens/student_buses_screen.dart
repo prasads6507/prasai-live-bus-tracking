@@ -171,7 +171,10 @@ class _StudentBusesScreenState extends ConsumerState<StudentBusesScreen> {
                 final filteredBuses = buses.where((b) {
                   final busNum = b.busNumber.toLowerCase();
                   final dName = (b.driverName ?? "").toLowerCase();
-                  return busNum.contains(_searchQuery) || dName.contains(_searchQuery);
+                  final plate = b.plateNumber.toLowerCase();
+                  return busNum.contains(_searchQuery) || 
+                         dName.contains(_searchQuery) ||
+                         plate.contains(_searchQuery);
                 }).toList();
 
                 if (filteredBuses.isEmpty) {
@@ -245,9 +248,12 @@ class _StudentBusesScreenState extends ConsumerState<StudentBusesScreen> {
                                     color: isFavorite ? AppColors.error : AppColors.textTertiary,
                                     size: 28,
                                   ),
-                                  onPressed: () {
+                                  onPressed: () async {
                                     if (profile != null) {
-                                      ref.read(firestoreDataSourceProvider).toggleFavoriteBus(profile.id, bus.id, !isFavorite);
+                                      // Toggle favorite — StreamProvider will auto-update UI
+                                      await ref.read(firestoreDataSourceProvider).toggleFavoriteBus(
+                                        profile.id, bus.id, !isFavorite,
+                                      );
                                     }
                                   },
                                 ),

@@ -39,11 +39,13 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
   String _currentRoadName = "Locating...";
   double _busSpeed = 0.0;
   int _stopsRemaining = 0;
+  int _totalStops = 0;
   String _totalTime = "-- min";
   Bus? _currentBus;
   BusRoute? _currentRoute;
   Position? _userPosition;
   Timer? _metricsTimer;
+  bool _isUserInBus = false;
 
   @override
   void initState() {
@@ -71,8 +73,8 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
        if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
          _positionStream = Geolocator.getPositionStream(
            locationSettings: const LocationSettings(
-             accuracy: LocationAccuracy.high,
-             distanceFilter: 5,
+             accuracy: LocationAccuracy.best, // 5m precision for "You are in bus" detection
+             distanceFilter: 2, // 2m precision for road movement
            ),
          ).listen((pos) {
            if (mounted) {
@@ -82,12 +84,13 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
                  _focusUserLocation();
                  _hasInitialCentered = true;
                  
-                 // Immediately after finding user, switch to tracking bus automatically
+                 // After finding user, smoothly animate to bus tracking
                  Future.delayed(const Duration(seconds: 2), () {
                    if (mounted) _focusBusLocation();
                  });
                }
              });
+             _updateMetrics();
            }
          });
        }
@@ -153,7 +156,6 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
   }
 
   void _startMetricsUpdates() {
-    // Initial fetch
     _updateMetrics();
     _metricsTimer = Timer.periodic(const Duration(seconds: 5), (_) => _updateMetrics());
   }
@@ -195,28 +197,37 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
     if (busLoc == null) return;
 
     // 1. Distance and ETA to student
-    double distanceToUserKm = 0.0;
-    String distanceDisplay = "-- km";
     String etaDisplay = "-- min";
+    bool userInBus = false;
     
     if (_userPosition != null) {
-      distanceToUserKm = const Distance().as(LengthUnit.Meter, 
+      final distanceToUserM = const Distance().as(LengthUnit.Meter, 
         LatLng(_userPosition!.latitude, _userPosition!.longitude), 
         LatLng(busLoc.latitude, busLoc.longitude)
-      ) / 1000.0;
+      );
       
-      final speedMph = (_currentBus?.location?.speed ?? 0) > 2 ? (_currentBus!.location!.speed! * 2.23694) : 20.0; 
-      final timeHours = (distanceToUserKm * 0.621371) / speedMph; 
-      final timeMinutes = (timeHours * 60).round();
-      etaDisplay = "$timeMinutes min";
+      // Check if student is in the bus (5m precision)
+      if (distanceToUserM <= 5.0) {
+        userInBus = true;
+        etaDisplay = "You're in the bus!";
+      } else {
+        final distanceToUserKm = distanceToUserM / 1000.0;
+        final speedMph = (_currentBus?.location?.speed ?? 0) > 2 ? (_currentBus!.location!.speed! * 2.23694) : 20.0; 
+        final timeHours = (distanceToUserKm * 0.621371) / speedMph; 
+        final timeMinutes = (timeHours * 60).round();
+        etaDisplay = "ETA $timeMinutes min";
+      }
     }
 
     // 2. Routing Metrics (Distance to final stop)
     int remaining = 0;
+    int total = 0;
     String totalTimeDisplay = "-- min";
+    String distanceDisplay = "-- km";
     
     if (_currentRoute != null && _currentRoute!.stops.isNotEmpty) {
       final stopList = _currentRoute!.stops;
+      total = stopList.length;
       final finalStop = stopList.last;
       
       double distanceToFinalKm = const Distance().as(
@@ -224,13 +235,12 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
         LatLng(busLoc.latitude, busLoc.longitude),
         LatLng(finalStop.latitude, finalStop.longitude)
       ) / 1000.0;
-      distanceDisplay = "${distanceToFinalKm.toStringAsFixed(1)} km";
+      distanceDisplay = "${(distanceToFinalKm * 0.621371).toStringAsFixed(1)} mi";
       
       final speedMph = (_currentBus?.location?.speed ?? 0) > 2 ? (_currentBus!.location!.speed! * 2.23694) : 20.0;
       final totalTimeHours = (distanceToFinalKm * 0.621371) / speedMph;
       totalTimeDisplay = "${(totalTimeHours * 60).round()} min";
 
-      // Calculate completed using backend data OR local 100m radius tracking
       final completed = _currentBus!.completedStops.length;
       remaining = (stopList.length - completed).clamp(0, stopList.length);
     }
@@ -240,7 +250,9 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
         _distance = distanceDisplay;
         _eta = etaDisplay;
         _stopsRemaining = remaining;
+        _totalStops = total;
         _totalTime = totalTimeDisplay;
+        _isUserInBus = userInBus;
       });
     }
   }
@@ -249,10 +261,9 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
     if (_currentRoute == null || _currentBus == null) return [];
     
     final busLoc = _currentBus!.location;
-    final completedStops = _currentBus!.completedStops.toList(); // Immutable copy to check backend
+    final completedStops = _currentBus!.completedStops.toList();
     final stopList = _currentRoute!.stops;
     
-    // We determine the current stop by checking distances. 100m radius = 0.1km
     String? currentStopId;
     
     if (busLoc != null) {
@@ -264,8 +275,6 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
         );
         if (dist <= 100.0) {
            currentStopId = stop.id;
-           // If we're at a stop, it shouldn't be marked completed *until we leave*
-           // so we remove it from local completed view if it was there falsely.
            completedStops.remove(stop.id);
            break;
         }
@@ -278,10 +287,8 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
     return List.generate(stopList.length, (index) {
       final stop = stopList[index];
       
-      // A stop is completed if the backend says so AND it's not the current stop we are hovering in.
       final isCompleted = completedStops.contains(stop.id);
       final isCurrent = stop.id == currentStopId;
-      // If none is current, the first uncompleted is "next". If one is current, it's green.
       final isNext = (isCurrent || index == upcomingIndex);
       
       return DropOffItem(
@@ -307,6 +314,14 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
               selectedBusId: widget.busId ?? 'BUS_001',
               followBus: _followBus,
               focusedLocation: _mapFocusLocation,
+              showStudentLocation: true,
+              studentLocation: _userPosition != null
+                  ? LocationPoint(
+                      latitude: _userPosition!.latitude,
+                      longitude: _userPosition!.longitude,
+                      timestamp: DateTime.now(),
+                    )
+                  : null,
             ),
 
           // Top overlay: Back, Speed/Road, Track Live
@@ -365,6 +380,7 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
                                   _currentRoadName,
                                   style: AppTypography.textTheme.bodyMedium?.copyWith(
                                     fontWeight: FontWeight.bold,
+                                    color: AppColors.textPrimary,
                                   ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
@@ -404,8 +420,9 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
                     ),
                   ),
                   const SizedBox(width: 8),
+                  // Track bus button (re-sync)
                   _buildCircleButton(
-                    icon: Icons.my_location, // Using location icon for tracking re-sync
+                    icon: Icons.directions_bus,
                     color: AppColors.primary,
                     iconColor: Colors.white,
                     onTap: _focusBusLocation,
@@ -446,6 +463,7 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
                         distance: _distance,
                         stopsRemaining: _stopsRemaining,
                         totalTime: _totalTime,
+                        isUserInBus: _isUserInBus,
                       ),
                       if (_currentRoute != null)
                         Padding(

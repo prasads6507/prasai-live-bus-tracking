@@ -128,7 +128,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           widget.college['collegeName'] ?? 'Welcome',
                           style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                             fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                            color: AppColors.textPrimary,
                             letterSpacing: -0.5,
                           ),
                           textAlign: TextAlign.center,

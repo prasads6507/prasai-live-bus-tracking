@@ -80,15 +80,15 @@ final userRepositoryProvider = Provider<UserRepository>((ref) {
   );
 });
 
-final userProfileProvider = FutureProvider<UserProfile?>((ref) async {
+final userProfileProvider = StreamProvider<UserProfile?>((ref) {
   final authState = ref.watch(authStateProvider);
   final user = authState.value;
-  if (user == null) return null;
+  if (user == null) return Stream.value(null);
 
   final collegeId = ref.watch(selectedCollegeIdProvider);
-  if (collegeId == null) return null;
+  if (collegeId == null) return Stream.value(null);
 
-  return ref.read(userRepositoryProvider).getCurrentUserProfile(collegeId);
+  return ref.read(firestoreDataSourceProvider).streamUserProfile(collegeId, user.uid);
 });
 
 final busesProvider = StreamProvider.family<List<Bus>, String>((ref, collegeId) {

@@ -488,6 +488,14 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
             _lastRecordedPoint = point;
           });
           _updateRoadName(point.latitude, point.longitude);
+          
+          // Persist point to trip history for post-trip path preview
+          final busStream = ref.read(firestoreDataSourceProvider).getBus(widget.collegeId, widget.busId);
+          busStream.first.then((bus) {
+            if (bus.activeTripId != null && bus.activeTripId!.isNotEmpty) {
+              ref.read(firestoreDataSourceProvider).saveTripPathPoint(bus.activeTripId!, point);
+            }
+          }).catchError((_) {});
         }
       }
     );

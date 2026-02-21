@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:geolocator/geolocator.dart';
 import '../../../core/widgets/app_scaffold.dart';
-import '../../../data/models/bus.dart';
 import '../../../data/models/bus.dart';
 import '../../../data/models/route.dart';
 import '../../../data/models/trip.dart';
+import '../../../data/models/location_point.dart';
 import '../../../data/providers.dart';
 import '../widgets/student_home_header.dart';
 import '../widgets/live_tracker_card.dart';
@@ -24,11 +25,46 @@ class StudentHomeScreen extends ConsumerStatefulWidget {
 }
 
 class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
+  LocationPoint? _studentLocation;
+
+  @override
+  void initState() {
+    super.initState();
+    _getStudentLocation();
+  }
+
+  Future<void> _getStudentLocation() async {
+    try {
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
+        final pos = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+        );
+        if (mounted) {
+          setState(() {
+            _studentLocation = LocationPoint(
+              latitude: pos.latitude,
+              longitude: pos.longitude,
+              timestamp: DateTime.now(),
+            );
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error getting student location: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final profileAsync = ref.watch(userProfileProvider);
     final collegeId = ref.watch(selectedCollegeIdProvider);
+    final selectedCollege = ref.watch(selectedCollegeProvider);
     final busesAsync = ref.watch(busesProvider(collegeId ?? ""));
+    final collegeName = selectedCollege?['collegeName'] ?? collegeId?.toUpperCase() ?? "";
     
     return AppScaffold(
       body: Column(
@@ -37,18 +73,18 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
           profileAsync.when(
             data: (profile) => StudentHomeHeader(
               studentName: profile?.name ?? "Student",
-              collegeName: collegeId?.toUpperCase() ?? "",
+              collegeName: collegeName,
             ),
-            loading: () => const StudentHomeHeader(studentName: "Loading...", collegeName: "..."),
-            error: (_, __) => const StudentHomeHeader(studentName: "Student", collegeName: "Error"),
+            loading: () => StudentHomeHeader(studentName: "Loading...", collegeName: collegeName),
+            error: (_, __) => StudentHomeHeader(studentName: "Student", collegeName: collegeName),
           ),
           
           // Main Content
           Expanded(
             child: RefreshIndicator(
               onRefresh: () async {
-                ref.refresh(busesProvider(collegeId ?? ""));
-                ref.refresh(userProfileProvider);
+                ref.invalidate(busesProvider(collegeId ?? ""));
+                ref.invalidate(userProfileProvider);
               },
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
@@ -69,7 +105,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
                           return Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // 1. Mini Map showing all live buses
+                              // 1. Mini Map showing student's live location
                               Container(
                                 height: 220,
                                 decoration: BoxDecoration(
@@ -87,13 +123,16 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
                                   borderRadius: BorderRadius.circular(24),
                                   child: MobileMapLibre(
                                     collegeId: collegeId ?? "",
-                                    followBus: false, // Just a static overview
+                                    followBus: false,
+                                    focusedLocation: _studentLocation,
+                                    showStudentLocation: true,
+                                    studentLocation: _studentLocation,
                                   ),
                                 ),
                               ),
                               const SizedBox(height: 24),
 
-                              // 2. Search Card
+                              // 2. Search Card → navigates to buses screen
                               SearchBusCard(
                                 onTap: () => context.push('/student/buses'),
                               ),

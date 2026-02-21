@@ -3,6 +3,7 @@ import '../models/bus.dart';
 import '../models/trip.dart';
 import '../models/location_point.dart';
 import '../models/route.dart';
+import '../models/user_profile.dart';
 
 class FirestoreDataSource {
   final FirebaseFirestore _firestore;
@@ -407,7 +408,8 @@ class FirestoreDataSource {
     }
   }
 
-  /// Toggles a bus as favorite for a student/user
+  /// Toggles a bus as favorite for a student/user.
+  /// Enforces single-favorite: clears all existing favorites before adding the new one.
   Future<void> toggleFavoriteBus(String uid, String busId, bool isFavorite) async {
     final studentRef = _firestore.collection('students').doc(uid);
     final userRef = _firestore.collection('users').doc(uid);
@@ -416,13 +418,36 @@ class FirestoreDataSource {
     final docRef = studentDoc.exists ? studentRef : userRef;
 
     if (isFavorite) {
+      // Single favorite: replace all with the new one
       await docRef.update({
-        'favoriteBusIds': FieldValue.arrayUnion([busId])
+        'favoriteBusIds': [busId]
       });
     } else {
       await docRef.update({
         'favoriteBusIds': FieldValue.arrayRemove([busId])
       });
     }
+  }
+
+  /// Streams user profile for real-time updates (favorites, etc.)
+  Stream<UserProfile?> streamUserProfile(String collegeId, String uid) {
+    // Try students collection first, then users
+    return _firestore.collection('students').doc(uid).snapshots().asyncMap((studentDoc) async {
+      if (studentDoc.exists) {
+        final data = studentDoc.data() as Map<String, dynamic>?;
+        if (data != null && data['collegeId'] == collegeId) {
+          return UserProfile.fromFirestore(studentDoc);
+        }
+      }
+      // Fallback to users collection
+      final userDoc = await _firestore.collection('users').doc(uid).get();
+      if (userDoc.exists) {
+        final data = userDoc.data() as Map<String, dynamic>?;
+        if (data != null && data['collegeId'] == collegeId) {
+          return UserProfile.fromFirestore(userDoc);
+        }
+      }
+      return null;
+    });
   }
 }

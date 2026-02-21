@@ -3,7 +3,8 @@ import 'package:maplibre_gl/maplibre_gl.dart';
 import '../../../../data/models/location_point.dart';
 import 'dart:math';
 
-// Interpolates smoothly between previous location and current moving point
+/// Interpolates smoothly between previous location and current moving point.
+/// Uses ease-out curve for more natural movement and shortest-path heading interpolation.
 class MapAnimationTicker {
   final AnimationController _controller;
   LocationPoint? _lastPoint;
@@ -31,7 +32,9 @@ class MapAnimationTicker {
 
   LocationPoint? get currentInterpolated {
     if (_lastPoint == null || _targetPoint == null) return _targetPoint;
-    final t = _controller.value;
+    
+    // Use ease-out curve for smoother deceleration
+    final t = Curves.easeOut.transform(_controller.value);
     
     // Linear interpolation for lat/lng
     final lat = _lastPoint!.latitude + (_targetPoint!.latitude - _lastPoint!.latitude) * t;

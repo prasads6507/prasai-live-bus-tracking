@@ -19,6 +19,8 @@ class MobileMapLibre extends ConsumerStatefulWidget {
   final bool followBus;
   final List<List<double>>? path; // [lat, lng]
   final LocationPoint? focusedLocation;
+  final bool showStudentLocation;
+  final LocationPoint? studentLocation;
 
   const MobileMapLibre({
     super.key,
@@ -27,6 +29,8 @@ class MobileMapLibre extends ConsumerStatefulWidget {
     this.followBus = true,
     this.path,
     this.focusedLocation,
+    this.showStudentLocation = false,
+    this.studentLocation,
   });
 
   @override
@@ -39,9 +43,9 @@ class _MobileMapLibreState extends ConsumerState<MobileMapLibre> with SingleTick
   StreamSubscription<List<Bus>>? _busesSubscription;
   List<Bus> _currentBuses = [];
   bool _styleLoaded = false;
+  bool _studentLayerAdded = false;
 
   final String _busIconId = 'bus-icon';
-  final String _selectedPointerId = 'selected-pointer';
 
   @override
   void didUpdateWidget(MobileMapLibre oldWidget) {
@@ -51,14 +55,22 @@ class _MobileMapLibreState extends ConsumerState<MobileMapLibre> with SingleTick
     if (widget.focusedLocation != null && 
         oldWidget.focusedLocation?.timestamp != widget.focusedLocation?.timestamp &&
         _mapController != null && _styleLoaded) {
-      _mapController!.moveCamera(
+      _mapController!.animateCamera(
          CameraUpdate.newCameraPosition(
            CameraPosition(
              target: LatLng(widget.focusedLocation!.latitude, widget.focusedLocation!.longitude),
              zoom: 17.0,
            )
-         )
+         ),
+         duration: const Duration(milliseconds: 1500),
       );
+    }
+
+    // Update student location marker
+    if (widget.showStudentLocation && 
+        widget.studentLocation != null &&
+        _styleLoaded && _mapController != null) {
+      _updateStudentLocation();
     }
   }
 
@@ -88,9 +100,6 @@ class _MobileMapLibreState extends ConsumerState<MobileMapLibre> with SingleTick
       // 1. Load Assets
       final busImg = await _createIcon(Icons.directions_bus_outlined, AppColors.primary, 120); 
       if (busImg != null) await _mapController!.addImage(_busIconId, busImg);
-      
-      // We can also create a fallback circle pointer image or use the same asset for selected pointer
-      // For now, let's just use the bus pin for everything, we'll size it differently.
 
       // 2. Add Sources
       await _mapController!.addGeoJsonSource('buses-source', _buildBusesGeoJson(_currentBuses));
@@ -124,12 +133,87 @@ class _MobileMapLibreState extends ConsumerState<MobileMapLibre> with SingleTick
         ),
       );
 
+      // 4. Add Student Location Layer (blue circle with 50m radius)
+      if (widget.showStudentLocation) {
+        await _addStudentLocationLayer();
+      }
+
       _styleLoaded = true;
       _subscribeToBuses();
+
+      // Update student location if already available
+      if (widget.studentLocation != null && widget.showStudentLocation) {
+        _updateStudentLocation();
+      }
 
     } catch (e) {
       debugPrint("Error loading MapLibre style resources: $e");
     }
+  }
+
+  Future<void> _addStudentLocationLayer() async {
+    if (_mapController == null || _studentLayerAdded) return;
+    
+    try {
+      await _mapController!.addGeoJsonSource('student-location-source', {
+        "type": "FeatureCollection",
+        "features": []
+      });
+
+      // 50m radius circle (blue, semi-transparent)
+      await _mapController!.addCircleLayer(
+        'student-location-source',
+        'student-radius-layer',
+        CircleLayerProperties(
+          circleRadius: 40.0, // Approximate 50m at zoom 17
+          circleColor: '#3b82f6',
+          circleOpacity: 0.15,
+          circleStrokeColor: '#3b82f6',
+          circleStrokeWidth: 2.0,
+          circleStrokeOpacity: 0.4,
+        ),
+      );
+
+      // Student pin (solid blue dot)
+      await _mapController!.addCircleLayer(
+        'student-location-source',
+        'student-pin-layer',
+        CircleLayerProperties(
+          circleRadius: 8.0,
+          circleColor: '#3b82f6',
+          circleOpacity: 0.9,
+          circleStrokeColor: '#ffffff',
+          circleStrokeWidth: 3.0,
+        ),
+      );
+
+      _studentLayerAdded = true;
+    } catch (e) {
+      debugPrint("Error adding student location layer: $e");
+    }
+  }
+
+  void _updateStudentLocation() {
+    if (!_styleLoaded || _mapController == null || widget.studentLocation == null) return;
+
+    if (!_studentLayerAdded) {
+      _addStudentLocationLayer().then((_) => _updateStudentLocation());
+      return;
+    }
+
+    _mapController!.setGeoJsonSource('student-location-source', {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [widget.studentLocation!.longitude, widget.studentLocation!.latitude]
+          },
+          "properties": {}
+        }
+      ]
+    });
   }
 
   void _subscribeToBuses() {
@@ -167,13 +251,14 @@ class _MobileMapLibreState extends ConsumerState<MobileMapLibre> with SingleTick
       _updateSources(); // Update the main buses source to use interpolated coords
       
       if (widget.followBus) {
-        _mapController!.moveCamera(
+        _mapController!.animateCamera(
           CameraUpdate.newCameraPosition(
             CameraPosition(
               target: LatLng(interpolated.latitude, interpolated.longitude),
-              zoom: 17.0, // Fixed zoom 17 for tracking
+              zoom: 17.0,
             )
-          )
+          ),
+          duration: const Duration(milliseconds: 300),
         );
       }
     }
@@ -188,8 +273,6 @@ class _MobileMapLibreState extends ConsumerState<MobileMapLibre> with SingleTick
     List<Map<String, dynamic>> features = [];
     for (var bus in buses) {
       if (bus.location == null) continue;
-      // Filter if we want to show only active buses, 
-      // but matching web: we show all that have locations.
       
       final isSelected = bus.id == widget.selectedBusId;
       var lat = bus.location!.latitude;
@@ -255,7 +338,7 @@ class _MobileMapLibreState extends ConsumerState<MobileMapLibre> with SingleTick
       final canvas = Canvas(pictureRecorder);
       final textPainter = TextPainter(textDirection: TextDirection.ltr);
 
-      // Background circle (optional, provides contrast)
+      // Background circle
       final paint = Paint()..color = Colors.white..style = PaintingStyle.fill;
       canvas.drawCircle(Offset(size / 2, size / 2), size / 2.2, paint);
       
@@ -295,17 +378,26 @@ class _MobileMapLibreState extends ConsumerState<MobileMapLibre> with SingleTick
 
   @override
   Widget build(BuildContext context) {
-    CameraPosition initialCamera = CameraPosition(
-      target: LatLng(17.3850, 78.4867),
-      zoom: 13.0,
-      tilt: 0,
-      bearing: 0,
-    );
-
+    // Default to student location or a neutral fallback (0,0 triggers myLocationEnabled)
+    CameraPosition initialCamera;
+    
     if (widget.focusedLocation != null) {
       initialCamera = CameraPosition(
         target: LatLng(widget.focusedLocation!.latitude, widget.focusedLocation!.longitude),
         zoom: 17.0,
+      );
+    } else if (widget.studentLocation != null) {
+      initialCamera = CameraPosition(
+        target: LatLng(widget.studentLocation!.latitude, widget.studentLocation!.longitude),
+        zoom: 15.0,
+      );
+    } else {
+      // Use myLocationEnabled to auto-center — this is better than hardcoding Hyderabad
+      initialCamera = const CameraPosition(
+        target: LatLng(40.0, -83.0), // Neutral fallback (Columbus, OH area)
+        zoom: 13.0,
+        tilt: 0,
+        bearing: 0,
       );
     }
 

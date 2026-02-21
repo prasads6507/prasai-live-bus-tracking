@@ -23,160 +23,128 @@ class LiveTrackerCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        height: 220,
         width: double.infinity,
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: AppColors.surfaceElevated,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: AppColors.divider, width: 0.5),
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AppColors.divider),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.3),
-              blurRadius: 20,
-              offset: const Offset(0, 10),
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(24),
-          child: Stack(
-            children: [
-              // Map Placeholder / Background
-              // In a real app, this could be a static map image or a disabled FlutterMap
-              Positioned.fill(
-                child: Container(
-                  color: const Color(0xFF1E1E2C), // Dark map placeholder
-                  child: Center(
-                    child: Icon(
-                      Icons.map_rounded,
-                      size: 80,
-                      color: AppColors.primary.withOpacity(0.2),
-                    ),
-                  ),
-                ),
-              ),
-              
-              // Gradient Overlay
-              Positioned.fill(
-                child: Container(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header Row
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.transparent,
-                        AppColors.background.withOpacity(0.8),
-                      ],
-                      stops: const [0.4, 1.0],
-                    ),
+                    color: AppColors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.directions_bus_rounded,
+                        size: 16,
+                        color: isLive ? AppColors.success : AppColors.textSecondary,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        "Bus $busNumber",
+                        style: AppTypography.textTheme.labelMedium?.copyWith(
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-
-              // Content
-              Padding(
-                padding: const EdgeInsets.all(20.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    // Header Row
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: AppColors.background.withOpacity(0.8),
-                            borderRadius: BorderRadius.circular(30),
-                            border: Border.all(color: AppColors.divider),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.directions_bus_rounded, 
-                                size: 16, 
-                                color: isLive ? AppColors.success : AppColors.textSecondary
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                "Track School Bus",
-                                style: AppTypography.textTheme.labelMedium?.copyWith(
-                                  color: AppColors.textPrimary,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        
-                        // Arrow Button
-                        Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: AppColors.primary,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.arrow_outward_rounded,
-                            color: AppColors.textPrimary,
-                            size: 20,
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    // Footer Info
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          currentStatus, // e.g. "Queens Village"
-                          style: AppTypography.textTheme.bodyMedium?.copyWith(
-                            color: AppColors.textSecondary,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Text(
-                              "License Plate",
-                              style: AppTypography.textTheme.labelSmall,
-                            ),
-                            const SizedBox(width: 8),
-                            Container(
-                              width: 4,
-                              height: 4,
-                              decoration: const BoxDecoration(
-                                color: AppColors.textSecondary,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              licensePlate,
-                              style: AppTypography.textTheme.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          "Bus No. $busNumber",
-                          style: AppTypography.textTheme.labelSmall?.copyWith(
-                            color: AppColors.textTertiary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                // Live indicator or arrow
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.arrow_outward_rounded,
+                    color: Colors.white,
+                    size: 20,
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Status
+            Row(
+              children: [
+                if (isLive) ...[
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: AppColors.success,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                Expanded(
+                  child: Text(
+                    currentStatus,
+                    style: AppTypography.textTheme.bodyMedium?.copyWith(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+
+            // License plate and bus number
+            Row(
+              children: [
+                Text(
+                  "License Plate",
+                  style: AppTypography.textTheme.labelSmall?.copyWith(
+                    color: AppColors.textTertiary,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  width: 4,
+                  height: 4,
+                  decoration: const BoxDecoration(
+                    color: AppColors.textTertiary,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  licensePlate,
+                  style: AppTypography.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
