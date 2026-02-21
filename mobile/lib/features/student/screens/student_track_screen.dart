@@ -12,6 +12,7 @@ import '../../../../data/models/bus.dart';
 import '../../../../data/models/route.dart';
 import '../../../../data/models/location_point.dart';
 import '../widgets/track_bottom_sheet.dart';
+import '../widgets/drop_off_list.dart';
 import '../../map/widgets/mobile_maplibre.dart';
 import 'package:geocoding/geocoding.dart' as geo;
 
@@ -36,6 +37,7 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
   String _currentRoadName = "Locating...";
   double _busSpeed = 0.0;
   int _stopsRemaining = 0;
+  String _totalTime = "-- min";
   Bus? _currentBus;
   BusRoute? _currentRoute;
   Position? _userPosition;
@@ -142,32 +144,68 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
   }
 
   void _updateMetrics() {
-    if (_currentBus == null || _currentRoute == null || _userPosition == null) return;
+    if (_currentBus == null || _currentRoute == null) return;
     
     final busLoc = _currentBus!.location;
     if (busLoc == null) return;
     
-    final distance = const Distance().as(LengthUnit.Kilometer, 
-      LatLng(_userPosition!.latitude, _userPosition!.longitude), 
-      LatLng(busLoc.latitude, busLoc.longitude)
-    );
-    
-    final speedMph = (_currentBus?.location?.speed ?? 0) > 2 ? (_currentBus!.location!.speed! * 2.23694) : 20.0; 
-    
-    final timeHours = (distance * 0.621371) / speedMph; 
-    final timeMinutes = (timeHours * 60).round();
-    
+    // 1. Calculate Stops Remaining
     final totalStops = _currentRoute!.stops.length;
     final completed = _currentBus!.completedStops.length;
     final remaining = (totalStops - completed).clamp(0, totalStops);
 
+    // 2. Distance and ETA
+    double distanceKm = 0.0;
+    String distanceDisplay = "-- km";
+    String etaDisplay = "-- min";
+    
+    // Total Time estimate: 3 mins per stop on average
+    final estimatedTotalMins = totalStops * 3;
+    final totalTimeDisplay = "$estimatedTotalMins min";
+    
+    if (_userPosition != null) {
+      distanceKm = const Distance().as(LengthUnit.Meter, 
+        LatLng(_userPosition!.latitude, _userPosition!.longitude), 
+        LatLng(busLoc.latitude, busLoc.longitude)
+      ) / 1000.0;
+      distanceDisplay = "${distanceKm.toStringAsFixed(1)} km";
+      
+      final speedMph = (_currentBus?.location?.speed ?? 0) > 2 ? (_currentBus!.location!.speed! * 2.23694) : 20.0; 
+      final timeHours = (distanceKm * 0.621371) / speedMph; 
+      final timeMinutes = (timeHours * 60).round();
+      etaDisplay = "$timeMinutes min";
+    }
+
     if (mounted) {
       setState(() {
-        _distance = "${distance.toStringAsFixed(1)} km";
-        _eta = "$timeMinutes min";
+        _distance = distanceDisplay;
+        _eta = etaDisplay;
         _stopsRemaining = remaining;
+        _totalTime = totalTimeDisplay;
       });
     }
+  }
+
+  List<DropOffItem> _buildDropOffItems() {
+    if (_currentRoute == null || _currentBus == null) return [];
+    
+    final completedStops = _currentBus!.completedStops;
+    final stopList = _currentRoute!.stops;
+    
+    final nextStopIndex = stopList.indexWhere((s) => !completedStops.contains(s.id));
+    
+    return List.generate(stopList.length, (index) {
+      final stop = stopList[index];
+      final isCompleted = completedStops.contains(stop.id);
+      final isNext = index == nextStopIndex;
+      
+      return DropOffItem(
+        time: "TBD", 
+        location: stop.stopName,
+        isCompleted: isCompleted,
+        isNext: isNext,
+      );
+    });
   }
 
   @override
@@ -298,15 +336,49 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
             ),
           ),
 
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: TrackBottomSheet(
-              eta: _eta,
-              distance: _distance,
-              stopsRemaining: _stopsRemaining,
-            ),
+          DraggableScrollableSheet(
+            initialChildSize: 0.35,
+            minChildSize: 0.20,
+            maxChildSize: 0.85,
+            builder: (context, scrollController) {
+              return Container(
+                decoration: BoxDecoration(
+                  color: AppColors.background,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black26, blurRadius: 10, spreadRadius: 0, offset: Offset(0, -5))
+                  ],
+                ),
+                child: SingleChildScrollView(
+                  controller: scrollController,
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 12),
+                      Container(
+                        width: 40, 
+                        height: 4, 
+                        decoration: BoxDecoration(
+                          color: AppColors.textTertiary.withOpacity(0.3), 
+                          borderRadius: BorderRadius.circular(2)
+                        )
+                      ),
+                      TrackBottomSheet(
+                        eta: _eta,
+                        distance: _distance,
+                        stopsRemaining: _stopsRemaining,
+                        totalTime: _totalTime,
+                      ),
+                      if (_currentRoute != null)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                          child: DropOffList(items: _buildDropOffItems()),
+                        ),
+                      const SizedBox(height: 24),
+                    ],
+                  ),
+                ),
+              );
+            },
           ),
         ],
       ),

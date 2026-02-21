@@ -31,8 +31,8 @@ class DropOffList extends StatelessWidget {
     final completed = items.where((i) => i.isCompleted).length;
     final remaining = total - completed;
     
-    // Filter to show next 2-3 pending stops
-    final nextStops = items.where((i) => !i.isCompleted).take(3).toList();
+    // Filter to show all pending stops
+    final nextStops = items.where((i) => !i.isCompleted).toList();
 
     return Container(
       width: double.infinity,

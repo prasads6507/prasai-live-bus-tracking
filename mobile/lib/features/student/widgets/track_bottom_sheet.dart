@@ -6,12 +6,14 @@ class TrackBottomSheet extends StatelessWidget {
   final String eta;
   final String distance;
   final int stopsRemaining;
+  final String totalTime;
 
   const TrackBottomSheet({
     super.key,
     required this.eta,
     required this.distance,
     required this.stopsRemaining,
+    required this.totalTime,
   });
 
   @override
@@ -52,7 +54,7 @@ class TrackBottomSheet extends StatelessWidget {
             children: [
               _buildStatItem("Drops", "$stopsRemaining"),
               _buildVerticalDivider(),
-              _buildStatItem("Total Time", "28:25"), // Placeholder total
+              _buildStatItem("Total Time", totalTime),
               _buildVerticalDivider(),
               _buildStatItem("Distance", distance),
             ],
