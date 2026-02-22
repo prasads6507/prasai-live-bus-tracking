@@ -9,6 +9,7 @@ const getBaseUrl = () => {
 
 const api = axios.create({
     baseURL: getBaseUrl(),
+    timeout: 10000, // 10s timeout to prevent infinite hangs
 });
 
 export { api }; // Export for direct use
