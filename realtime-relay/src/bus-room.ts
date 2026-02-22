@@ -189,7 +189,11 @@ export class BusRoom {
      * Stores the location and schedules a throttled broadcast.
      */
     private handleDriverLocation(data: any, info: ClientInfo) {
-        const speedMps = Math.max(0, data.speedMps || 0);
+        // Accept speedMps (preferred) OR speedMph as fallback — never let speed be 0 due to wrong unit
+        let speedMps = Math.max(0, data.speedMps || 0);
+        if (speedMps === 0 && data.speedMph) {
+            speedMps = Math.max(0, data.speedMph) / 2.23694;
+        }
         const speedMph = Math.round(speedMps * 2.23694);
 
         const location: LocationData = {
