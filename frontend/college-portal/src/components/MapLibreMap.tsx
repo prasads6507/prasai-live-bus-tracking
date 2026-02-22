@@ -71,6 +71,9 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
             // Center on path midpoint for trip detail views
             center = [path[0][1], path[0][0]]; // [lng, lat]
             zoom = 14;
+        } else if (stopMarkers && stopMarkers.length > 0) {
+            center = [stopMarkers[0].lng, stopMarkers[0].lat];
+            zoom = 15;
         }
 
         return {
@@ -274,20 +277,51 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
         }
     }, [path]);
 
-    // Selection Camera Logic
+    // Note: Selection camera logic moved to dynamic centering effect below
     useEffect(() => {
-        if (mapRef.current) {
-            if (focusedLocation) {
-                const latLng = getBusLatLng({ location: focusedLocation });
-                if (latLng) mapRef.current.flyTo({ center: latLng, zoom: 17, pitch: 0, bearing: 0, duration: 1200 });
-            } else if (getBusLatLng(selectedBus)) {
-                mapRef.current.flyTo({ center: getBusLatLng(selectedBus)!, zoom: 17, pitch: 0, bearing: 0, duration: 1000 });
+        if (selectedBusId && mapRef.current) {
+            const bus = buses.find(b => b._id === selectedBusId);
+            const latLng = getBusLatLng(bus);
+            if (latLng) mapRef.current.flyTo({ center: latLng, zoom: 17, duration: 1000 });
+        }
+    }, [selectedBusId, buses]);
+
+    // --- Dynamic Centering & Fit Bounds ---
+    useEffect(() => {
+        const map = mapRef.current?.getMap();
+        if (!map) return;
+
+        if (focusedLocation) {
+            map.flyTo({
+                center: [focusedLocation.lng, focusedLocation.lat],
+                zoom: 17,
+                essential: true
+            });
+        } else if (stopMarkers && stopMarkers.length > 0) {
+            // If only one marker, fly to it; if multiple, fit bounds
+            if (stopMarkers.length === 1) {
+                map.flyTo({
+                    center: [stopMarkers[0].lng, stopMarkers[0].lat],
+                    zoom: 15,
+                    essential: true
+                });
+            } else {
+                const bounds = new maplibregl.LngLatBounds();
+                stopMarkers.forEach(m => {
+                    if (m.lng && m.lat) bounds.extend([m.lng, m.lat]);
+                });
+                if (!bounds.isEmpty()) {
+                    map.fitBounds(bounds, { padding: 80, duration: 1000 });
+                }
             }
         }
-    }, [focusedLocation, selectedBusId]);
+    }, [focusedLocation, stopMarkers]);
 
-    // Only show idle overlay when there's NO path AND no buses with location
-    const isMissingData = buses.filter(b => getBusLatLng(b)).length === 0 && (!path || path.length === 0);
+    // Only show idle overlay when there's NO path AND no buses with location AND no markers/routes
+    const isMissingData = buses.filter(b => getBusLatLng(b)).length === 0 &&
+        (!path || path.length === 0) &&
+        (!stopMarkers || stopMarkers.length === 0) &&
+        (!routes || routes.length === 0);
 
     return (
         <div className="h-full w-full relative z-0 bg-slate-50 overflow-hidden rounded-2xl border border-slate-200">

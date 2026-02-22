@@ -5,7 +5,7 @@ import { getRoutes, createRoute, updateRoute, deleteRoute, validateSlug, bulkCre
 import { motion, AnimatePresence } from 'framer-motion';
 import * as XLSX from 'xlsx';
 import Layout from '../components/Layout';
-import AddressAutocomplete from '../components/AddressAutocomplete';
+import AddressAutocomplete, { reverseGeocode } from '../components/AddressAutocomplete';
 import MapLibreMap from '../components/MapLibreMap';
 
 const Routes = () => {
@@ -158,13 +158,25 @@ const Routes = () => {
         setNewRoute({ ...newRoute, stops });
     };
 
-    const updateStop = (index: number, field: string, value: string) => {
+    const updateStop = async (index: number, field: string, value: string) => {
         const updatedStops = [...newRoute.stops];
+        updatedStops[index][field] = value;
+
+        // Auto-reverse geocode if coordinates are manually entered
         if (field === 'latitude' || field === 'longitude') {
-            updatedStops[index][field] = parseFloat(value) || 0;
-        } else {
-            updatedStops[index][field] = value;
+            const lat = parseFloat(field === 'latitude' ? value : updatedStops[index].latitude);
+            const lng = parseFloat(field === 'longitude' ? value : updatedStops[index].longitude);
+
+            if (!isNaN(lat) && !isNaN(lng) && Math.abs(lat) > 0.1 && Math.abs(lng) > 0.1) {
+                // Debounce or just fire? Nominatim has rate limits, but for manual typing it's okay-ish with some checks
+                // For now, let's just do it
+                const address = await reverseGeocode(lat, lng);
+                if (address && !address.includes('Point at')) {
+                    updatedStops[index].address = address;
+                }
+            }
         }
+
         setNewRoute({ ...newRoute, stops: updatedStops });
     };
 
@@ -497,6 +509,8 @@ const Routes = () => {
                                                             <div className="flex-grow z-50">
                                                                 <AddressAutocomplete
                                                                     initialAddress={stop.address || ''}
+                                                                    biasLat={index > 0 ? parseFloat(newRoute.stops[index - 1].latitude) : 17.3850}
+                                                                    biasLon={index > 0 ? parseFloat(newRoute.stops[index - 1].longitude) : 78.4867}
                                                                     onSelect={(data) => {
                                                                         const newStops = [...newRoute.stops];
                                                                         newStops[index].address = data.address;

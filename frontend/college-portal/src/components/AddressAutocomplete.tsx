@@ -6,9 +6,18 @@ interface AddressAutocompleteProps {
     onSelect: (data: { address: string; lat: number; lng: number }) => void;
     placeholder?: string;
     className?: string;
+    biasLat?: number;
+    biasLon?: number;
 }
 
-export default function AddressAutocomplete({ initialAddress = '', onSelect, placeholder = 'Search address...', className = '' }: AddressAutocompleteProps) {
+export default function AddressAutocomplete({
+    initialAddress = '',
+    onSelect,
+    placeholder = 'Search address...',
+    className = '',
+    biasLat,
+    biasLon
+}: AddressAutocompleteProps) {
     const [query, setQuery] = useState(initialAddress);
     const [suggestions, setSuggestions] = useState<any[]>([]);
     const [isOpen, setIsOpen] = useState(false);
@@ -39,8 +48,13 @@ export default function AddressAutocomplete({ initialAddress = '', onSelect, pla
         const fetchSuggestions = async () => {
             setLoading(true);
             try {
-                // Photon API for OSM Geocoding
-                const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=5`);
+                // Photon API for OSM Geocoding with optional location bias
+                let url = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=8`;
+                if (biasLat !== undefined && biasLon !== undefined) {
+                    url += `&lat=${biasLat}&lon=${biasLon}`;
+                }
+
+                const res = await fetch(url);
                 const data = await res.json();
                 if (data.features) {
                     setSuggestions(data.features);
@@ -58,9 +72,16 @@ export default function AddressAutocomplete({ initialAddress = '', onSelect, pla
 
     const handleSelect = async (feature: any) => {
         setIsOpen(false);
-        const name = feature.properties.name || feature.properties.street || '';
-        const city = feature.properties.city || feature.properties.town || '';
-        const displayAddress = [name, city].filter(Boolean).join(', ');
+        const props = feature.properties;
+        const displayAddress = [
+            props.name,
+            props.house_number,
+            props.street,
+            props.district,
+            props.city || props.town || props.village,
+            props.state,
+            props.postcode
+        ].filter(Boolean).join(', ');
 
         setQuery(displayAddress);
 
@@ -107,7 +128,14 @@ export default function AddressAutocomplete({ initialAddress = '', onSelect, pla
                 <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
                     {suggestions.map((feature, i) => {
                         const props = feature.properties;
-                        const label = [props.name, props.street, props.city, props.state].filter(Boolean).join(', ');
+                        const label = [
+                            props.name,
+                            props.street,
+                            props.district,
+                            props.city || props.town || props.village,
+                            props.state,
+                            props.country
+                        ].filter(Boolean).join(', ');
                         return (
                             <div
                                 key={i}
@@ -123,4 +151,21 @@ export default function AddressAutocomplete({ initialAddress = '', onSelect, pla
             )}
         </div>
     );
+}
+
+// Reverse Geocoding Utility using Nominatim (Free & High Precision OSM)
+export async function reverseGeocode(lat: number, lng: number): Promise<string> {
+    try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`, {
+            headers: { 'Accept-Language': 'en' }
+        });
+        const data = await res.json();
+        if (data.display_name) {
+            return data.display_name;
+        }
+        return `Point at ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    } catch (err) {
+        console.error("Reverse Geocoding Error:", err);
+        return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    }
 }
