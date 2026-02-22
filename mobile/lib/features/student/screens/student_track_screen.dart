@@ -395,6 +395,14 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
                       timestamp: DateTime.now(),
                     )
                   : null,
+              stopCircles: _tripStopsSnapshot.isNotEmpty
+                  ? _tripStopsSnapshot.map((s) => {
+                      'lat': (s['lat'] as num?)?.toDouble() ?? 0.0,
+                      'lng': (s['lng'] as num?)?.toDouble() ?? 0.0,
+                      'radiusM': s['radiusM'] ?? 100,
+                      'name': s['name'] ?? '',
+                    }).toList()
+                  : null,
             ),
 
           // Top overlay: Back, Speed/Road, Track Live

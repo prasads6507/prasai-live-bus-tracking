@@ -146,7 +146,62 @@ const checkProximityAndNotify = async (busId, location, collegeId, routeId) => {
     }
 };
 
+/**
+ * Send notification to students assigned to a specific stop when bus arrives
+ */
+const sendStopArrivalNotification = async (tripId, busId, collegeId, routeId, stopId, stopName) => {
+    try {
+        console.log(`[Notification] Bus arrived at stop "${stopName}" (${stopId}) on route ${routeId}`);
+
+        // Find students assigned to this route AND this specific stop
+        const studentsSnapshot = await db.collection('students')
+            .where('collegeId', '==', collegeId)
+            .where('assignedRouteId', '==', routeId)
+            .where('assignedStopId', '==', stopId)
+            .get();
+
+        if (studentsSnapshot.empty) {
+            console.log(`[Notification] No students assigned to stop ${stopId}`);
+            return;
+        }
+
+        const tokens = [];
+        studentsSnapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.fcmToken) {
+                tokens.push(data.fcmToken);
+            }
+        });
+
+        if (tokens.length === 0) {
+            console.log(`[Notification] No FCM tokens for students at stop ${stopId}`);
+            return;
+        }
+
+        const message = {
+            notification: {
+                title: 'Bus Arriving!',
+                body: `Your bus is arriving at ${stopName}. Please be ready.`
+            },
+            data: {
+                tripId: tripId || '',
+                busId: busId || '',
+                stopId: stopId || '',
+                type: 'STOP_ARRIVAL'
+            },
+            tokens: tokens
+        };
+
+        const response = await messaging.sendMulticast(message);
+        console.log(`[Notification] Stop arrival: Sent ${response.successCount}, Failed: ${response.failureCount}`);
+
+    } catch (error) {
+        console.error('[Notification] Error sending stop arrival notification:', error);
+    }
+};
+
 module.exports = {
     sendBusStartedNotification,
-    checkProximityAndNotify
+    checkProximityAndNotify,
+    sendStopArrivalNotification
 };

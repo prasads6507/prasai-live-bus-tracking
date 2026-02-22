@@ -21,6 +21,7 @@ class MobileMapLibre extends ConsumerStatefulWidget {
   final LocationPoint? focusedLocation;
   final bool showStudentLocation;
   final LocationPoint? studentLocation;
+  final List<Map<String, dynamic>>? stopCircles; // [{lat, lng, radiusM, name}]
 
   const MobileMapLibre({
     super.key,
@@ -31,6 +32,7 @@ class MobileMapLibre extends ConsumerStatefulWidget {
     this.focusedLocation,
     this.showStudentLocation = false,
     this.studentLocation,
+    this.stopCircles,
   });
 
   @override
@@ -134,20 +136,81 @@ class _MobileMapLibreState extends ConsumerState<MobileMapLibre> with SingleTick
       );
 
       // 4. Add Student Location Layer (blue circle with 50m radius)
-      if (widget.showStudentLocation) {
-        await _addStudentLocationLayer();
-      }
+    if (widget.showStudentLocation) {
+      await _addStudentLocationLayer();
+    }
 
-      _styleLoaded = true;
-      _subscribeToBuses();
+    // 5. Add Stop Geofence Circles (100m radius)
+    if (widget.stopCircles != null && widget.stopCircles!.isNotEmpty) {
+      await _addStopCircleLayers();
+    }
 
-      // Update student location if already available
-      if (widget.studentLocation != null && widget.showStudentLocation) {
-        _updateStudentLocation();
-      }
+    _styleLoaded = true;
+    _subscribeToBuses();
 
+    // Update student location if already available
+    if (widget.studentLocation != null && widget.showStudentLocation) {
+      _updateStudentLocation();
+    }
+
+  } catch (e) {
+    debugPrint("Error loading MapLibre style resources: $e");
+  }
+}
+
+  Future<void> _addStopCircleLayers() async {
+    if (_mapController == null || widget.stopCircles == null) return;
+    try {
+      final features = widget.stopCircles!.map((stop) {
+        return {
+          "type": "Feature",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              (stop['lng'] as num?)?.toDouble() ?? 0.0,
+              (stop['lat'] as num?)?.toDouble() ?? 0.0,
+            ]
+          },
+          "properties": {
+            "name": stop['name'] ?? '',
+            "radiusM": stop['radiusM'] ?? 100,
+          }
+        };
+      }).toList();
+
+      await _mapController!.addGeoJsonSource('stop-circles-source', {
+        "type": "FeatureCollection",
+        "features": features,
+      });
+
+      // 100m geofence circle (orange, semi-transparent)
+      await _mapController!.addCircleLayer(
+        'stop-circles-source',
+        'stop-circles-layer',
+        CircleLayerProperties(
+          circleRadius: 30.0, // Approximate 100m at typical zoom
+          circleColor: '#f97316',
+          circleOpacity: 0.12,
+          circleStrokeColor: '#f97316',
+          circleStrokeWidth: 1.5,
+          circleStrokeOpacity: 0.5,
+        ),
+      );
+
+      // Stop center dot
+      await _mapController!.addCircleLayer(
+        'stop-circles-source',
+        'stop-dots-layer',
+        CircleLayerProperties(
+          circleRadius: 5.0,
+          circleColor: '#f97316',
+          circleOpacity: 0.8,
+          circleStrokeColor: '#ffffff',
+          circleStrokeWidth: 2.0,
+        ),
+      );
     } catch (e) {
-      debugPrint("Error loading MapLibre style resources: $e");
+      debugPrint("Error adding stop circle layers: $e");
     }
   }
 

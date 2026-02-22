@@ -151,6 +151,18 @@ void backgroundCallback() {
                     'stopProgress.arrivals': arrivals,
                     'eta.nextStopId': nextStopId,
                   });
+
+                  // Write arrival event for push notification trigger
+                  await db.collection('stopArrivals').add({
+                    'tripId': tripId,
+                    'busId': busId,
+                    'collegeId': collegeId,
+                    'routeId': geoData['routeId'] ?? '',
+                    'stopId': stopId,
+                    'stopName': nextStop['name'] ?? '',
+                    'arrivedAt': DateTime.now().toIso8601String(),
+                    'processed': false,
+                  });
                 } else {
                   // Compute ETA to next stop
                   final speedMps = (data.speed > 1) ? data.speed * 0.44704 : 3.0; // mph to m/s, min 3 m/s

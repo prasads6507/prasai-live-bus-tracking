@@ -138,8 +138,22 @@ const Routes = () => {
     };
 
     const removeStop = (index: number) => {
-        const updatedStops = newRoute.stops.filter((_, i) => i !== index);
+        const updatedStops = newRoute.stops.filter((_: any, i: number) => i !== index);
         setNewRoute({ ...newRoute, stops: updatedStops });
+    };
+
+    const moveStopUp = (index: number) => {
+        if (index === 0) return;
+        const stops = [...newRoute.stops];
+        [stops[index - 1], stops[index]] = [stops[index], stops[index - 1]];
+        setNewRoute({ ...newRoute, stops });
+    };
+
+    const moveStopDown = (index: number) => {
+        if (index >= newRoute.stops.length - 1) return;
+        const stops = [...newRoute.stops];
+        [stops[index], stops[index + 1]] = [stops[index + 1], stops[index]];
+        setNewRoute({ ...newRoute, stops });
     };
 
     const updateStop = (index: number, field: string, value: string) => {
@@ -436,7 +450,15 @@ const Routes = () => {
                                             {newRoute.stops.map((stop, index) => (
                                                 <div key={index} className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
                                                     <div className="flex items-start gap-2 w-full">
-                                                        <span className="mt-2 text-xs font-bold text-slate-400 w-6">{index + 1}</span>
+                                                        <div className="flex flex-col items-center gap-0.5 mt-1">
+                                                            <button type="button" onClick={() => moveStopUp(index)} className="p-0.5 text-slate-400 hover:text-blue-600 disabled:opacity-30" disabled={index === 0}>
+                                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="18 15 12 9 6 15" /></svg>
+                                                            </button>
+                                                            <span className="text-xs font-bold text-slate-400 w-4 text-center">{index + 1}</span>
+                                                            <button type="button" onClick={() => moveStopDown(index)} className="p-0.5 text-slate-400 hover:text-blue-600 disabled:opacity-30" disabled={index === newRoute.stops.length - 1}>
+                                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9" /></svg>
+                                                            </button>
+                                                        </div>
                                                         <input
                                                             type="text"
                                                             placeholder="Stop Name"
