@@ -50,17 +50,29 @@ class RouteStop {
   });
 
   factory RouteStop.fromJson(Map<String, dynamic> json) {
+    double parseDouble(dynamic value) {
+      if (value is num) return value.toDouble();
+      if (value is String) return double.tryParse(value) ?? 0.0;
+      return 0.0;
+    }
+
+    int parseInt(dynamic value, int defaultValue) {
+      if (value is num) return value.toInt();
+      if (value is String) return int.tryParse(value) ?? defaultValue;
+      return defaultValue;
+    }
+
     return RouteStop(
       id: json['stopId'] ?? json['_id'] ?? '',
       stopName: json['stopName'] ?? json['name'] ?? '',
       address: json['address'] ?? '',
-      latitude: (json['latitude'] as num?)?.toDouble() ?? (json['lat'] as num?)?.toDouble() ?? 0.0,
-      longitude: (json['longitude'] as num?)?.toDouble() ?? (json['lng'] as num?)?.toDouble() ?? 0.0,
-      radiusM: (json['radiusM'] as num?)?.toInt() ?? 100,
+      latitude: parseDouble(json['latitude'] ?? json['lat']),
+      longitude: parseDouble(json['longitude'] ?? json['lng']),
+      radiusM: parseInt(json['radiusM'], 100),
       pickupPlannedTime: json['pickupPlannedTime'] ?? '',
       dropoffPlannedTime: json['dropoffPlannedTime'] ?? '',
       enabled: json['enabled'] ?? true,
-      order: (json['order'] as num?)?.toInt() ?? 0,
+      order: parseInt(json['order'], 0),
     );
   }
 

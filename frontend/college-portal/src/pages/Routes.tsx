@@ -156,9 +156,18 @@ const Routes = () => {
         setFormError('');
 
         try {
+            // Sanitize stops: ensure coordinates, radius, and order are numbers
+            const sanitizedStops = stopsToSubmit.map((stop, index) => ({
+                ...stop,
+                latitude: parseFloat(stop.latitude) || 0,
+                longitude: parseFloat(stop.longitude) || 0,
+                radiusM: parseInt(stop.radiusM?.toString() || '100', 10),
+                order: index
+            }));
+
             const routeData = {
                 ...newRoute,
-                stops: stopsToSubmit,
+                stops: sanitizedStops,
                 startPoint: '',
                 endPoint: ''
             };
