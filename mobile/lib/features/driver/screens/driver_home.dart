@@ -30,19 +30,14 @@ class DriverHomeScreen extends ConsumerStatefulWidget {
 }
 
 class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
+  String? _selectedBusId;
   String? _selectedRouteId;
   String? _selectedDirection;
-  
-  RelayService? _relay;
-  StreamSubscription? _locationUpdateSubscription;
-  String? _selectedDirection; // 'pickup' or 'dropoff'
   String _searchQuery = "";
   final TextEditingController _searchController = TextEditingController();
 
   @override
   void dispose() {
-    _relay?.dispose();
-    _locationUpdateSubscription?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -546,6 +541,7 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
   BusRoute? _currentRoute; 
   LocationPoint? _lastRecordedPoint;
   String _lastUpdate = "--:--:--";
+  RelayService? _relay;
   
   @override
   void initState() {
@@ -562,6 +558,7 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
   
   @override
   void dispose() {
+    _relay?.dispose();
     _locationUpdateSubscription?.cancel();
     _pathHistoryTimer?.cancel();
     super.dispose();

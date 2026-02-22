@@ -135,7 +135,6 @@ class DropOffList extends StatelessWidget {
                         style: TextStyle(
                           color: textColor,
                           fontWeight: fontWeight,
-                          decoration: stop.isCompleted ? TextDecoration.lineThrough : null,
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),

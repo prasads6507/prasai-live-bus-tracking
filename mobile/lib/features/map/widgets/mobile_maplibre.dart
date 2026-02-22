@@ -22,6 +22,7 @@ class MobileMapLibre extends ConsumerStatefulWidget {
   final bool showStudentLocation;
   final LocationPoint? studentLocation;
   final List<Map<String, dynamic>>? stopCircles; // [{lat, lng, radiusM, name}]
+  final LocationPoint? liveBusLocation; // For high-freq websocket updates
 
   const MobileMapLibre({
     super.key,
@@ -33,6 +34,7 @@ class MobileMapLibre extends ConsumerStatefulWidget {
     this.showStudentLocation = false,
     this.studentLocation,
     this.stopCircles,
+    this.liveBusLocation,
   });
 
   @override
@@ -53,6 +55,13 @@ class _MobileMapLibreState extends ConsumerState<MobileMapLibre> with SingleTick
   void didUpdateWidget(MobileMapLibre oldWidget) {
     super.didUpdateWidget(oldWidget);
     
+    // High-frequency live override for the selected bus
+    if (widget.liveBusLocation != null && 
+        widget.liveBusLocation?.timestamp != oldWidget.liveBusLocation?.timestamp &&
+        widget.selectedBusId != null) {
+      _animationTicker.updateTarget(widget.liveBusLocation!);
+    }
+
     // Jump to focused location if provided and updated
     if (widget.focusedLocation != null && 
         oldWidget.focusedLocation?.timestamp != widget.focusedLocation?.timestamp &&

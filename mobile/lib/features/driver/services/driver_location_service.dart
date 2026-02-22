@@ -298,6 +298,7 @@ class DriverLocationService {
 
   static Future<void> uploadBufferedHistory(String tripId) async {
     final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
     try {
       final existingBuffer = prefs.getString('trip_history_buffer');
       if (existingBuffer != null && existingBuffer.isNotEmpty) {

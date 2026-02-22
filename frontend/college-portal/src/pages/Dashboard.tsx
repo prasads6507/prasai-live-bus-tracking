@@ -143,53 +143,61 @@ const Dashboard = () => {
         };
     }, [currentCollegeId]); // Depend on currentCollegeId state
 
-    // WebSocket connection for tracking a specific selected bus in real-time
+    // WebSocket connections for tracking ALL active buses in real-time
     useEffect(() => {
-        if (!selectedBusId) return;
+        // Find all live buses
+        const liveBuses = buses.filter(b => isLiveBus(b));
+        if (liveBuses.length === 0) return;
 
-        const relay = new RelayService();
+        const relays: { [busId: string]: RelayService } = {};
 
-        const connectRelay = async () => {
-            try {
-                const tokenResp = await getRelayToken(selectedBusId, 'admin');
-                relay.connect(tokenResp.wsUrl, {
-                    onMessage: (data: any) => {
-                        if (data.type === 'bus_location_update') {
-                            setBuses(prev => prev.map(b => {
-                                if (b._id === selectedBusId) {
-                                    return {
-                                        ...b,
-                                        location: {
-                                            latitude: data.lat,
-                                            longitude: data.lng,
-                                            heading: data.heading || 0
-                                        },
-                                        speed: data.speedMph || 0,
-                                        lastUpdated: new Date().toISOString()
-                                    };
+        const connectRelays = async () => {
+            for (const bus of liveBuses) {
+                try {
+                    const relay = new RelayService();
+                    const tokenResp = await getRelayToken(bus._id, 'admin');
+                    relay.connect(tokenResp.wsUrl, {
+                        onMessage: (data: any) => {
+                            if (data.type === 'bus_location_update') {
+                                setBuses(prev => prev.map(b => {
+                                    if (b._id === bus._id) {
+                                        return {
+                                            ...b,
+                                            location: {
+                                                latitude: data.lat,
+                                                longitude: data.lng,
+                                                heading: data.heading || 0
+                                            },
+                                            speed: data.speedMph || 0,
+                                            lastUpdated: new Date().toISOString()
+                                        };
+                                    }
+                                    return b;
+                                }));
+
+                                // Only pan the map to the selected bus if follow is true
+                                if (followSelectedBus && selectedBusId === bus._id) {
+                                    setFocusedBusLocation({ lat: data.lat, lng: data.lng });
                                 }
-                                return b;
-                            }));
-
-                            if (followSelectedBus) {
-                                setFocusedBusLocation({ lat: data.lat, lng: data.lng });
                             }
-                        }
-                    },
-                    onOpen: () => console.log('[Admin] WS connected for bus', selectedBusId),
-                    onClose: () => console.log('[Admin] WS disconnected for bus', selectedBusId),
-                });
-            } catch (err) {
-                console.error('[Admin] Failed to connect relay for bus', selectedBusId, err);
+                        },
+                        onOpen: () => console.log('[Admin] WS connected for bus', bus._id),
+                        onClose: () => console.log('[Admin] WS disconnected for bus', bus._id),
+                    });
+                    relays[bus._id] = relay;
+                } catch (err) {
+                    console.error('[Admin] Failed to connect relay for bus', bus._id, err);
+                }
             }
         };
 
-        connectRelay();
+        connectRelays();
 
         return () => {
-            relay.disconnect();
+            // Disconnect all
+            Object.values(relays).forEach(r => r.disconnect());
         };
-    }, [selectedBusId, followSelectedBus]);
+    }, [buses.map(b => isLiveBus(b) ? b._id : null).join(','), selectedBusId, followSelectedBus]);
 
     // Resolve addresses for active buses - Smart bulk update
     useEffect(() => {
