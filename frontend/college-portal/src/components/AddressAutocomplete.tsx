@@ -47,24 +47,20 @@ export default function AddressAutocomplete({
         const fetchSuggestions = async () => {
             setLoading(true);
             try {
-                // Nominatim for full-address precision (includes house/building numbers)
-                let url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=8&addressdetails=1`;
+                // ArcGIS World Geocoding Service (high precision, Google-like)
+                let url = `https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/suggest?text=${encodeURIComponent(query)}&f=json&maxSuggestions=8`;
                 if (biasLat !== undefined && biasLon !== undefined) {
-                    // Use viewbox bias: 0.5 degree (~55km) around the reference point
-                    const delta = 0.5;
-                    url += `&viewbox=${biasLon - delta},${biasLat - delta},${biasLon + delta},${biasLat + delta}&bounded=0`;
+                    url += `&location=${biasLon},${biasLat}&distance=50000`; // 50km bias
                 }
 
-                const res = await fetch(url, {
-                    headers: { 'Accept-Language': 'en' }
-                });
+                const res = await fetch(url);
                 const data = await res.json();
-                if (Array.isArray(data)) {
-                    setSuggestions(data);
+                if (data.suggestions) {
+                    setSuggestions(data.suggestions);
                     setIsOpen(true);
                 }
             } catch (err) {
-                console.error("Nominatim Search Error:", err);
+                console.error("ArcGIS Search Error:", err);
             }
             setLoading(false);
         };
@@ -73,43 +69,38 @@ export default function AddressAutocomplete({
         return () => clearTimeout(timeoutId);
     }, [query, initialAddress, biasLat, biasLon]);
 
-    const handleSelect = async (result: any) => {
+    const handleSelect = async (suggestion: any) => {
         setIsOpen(false);
-        const displayAddress = result.display_name || '';
+        const displayAddress = suggestion.text || '';
         setQuery(displayAddress);
 
-        let lat = parseFloat(result.lat);
-        let lng = parseFloat(result.lon);
-
         try {
-            // OSRM Nearest API to snap building coordinate to the nearest road network
-            // (Crucial for bus stop accuracy on the map)
-            const osrmRes = await fetch(`https://router.project-osrm.org/nearest/v1/driving/${lng},${lat}?number=1`);
-            const osrmData = await osrmRes.json();
-            if (osrmData.code === 'Ok' && osrmData.waypoints && osrmData.waypoints.length > 0) {
-                const snappedLng = osrmData.waypoints[0].location[0];
-                const snappedLat = osrmData.waypoints[0].location[1];
-                lat = snappedLat;
-                lng = snappedLng;
+            // Get coordinates for the selected suggestion using its magicKey
+            let candidatesUrl = `https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?singleLine=${encodeURIComponent(displayAddress)}&magicKey=${suggestion.magicKey}&f=json&maxLocations=1`;
+            const geoRes = await fetch(candidatesUrl);
+            const geoData = await geoRes.json();
+
+            if (geoData.candidates && geoData.candidates.length > 0) {
+                let lat = geoData.candidates[0].location.y;
+                let lng = geoData.candidates[0].location.x;
+
+                // OSRM Nearest API to snap building coordinate to the nearest road network
+                try {
+                    const osrmRes = await fetch(`https://router.project-osrm.org/nearest/v1/driving/${lng},${lat}?number=1`);
+                    const osrmData = await osrmRes.json();
+                    if (osrmData.code === 'Ok' && osrmData.waypoints && osrmData.waypoints.length > 0) {
+                        lat = osrmData.waypoints[0].location[1];
+                        lng = osrmData.waypoints[0].location[0];
+                    }
+                } catch (err) {
+                    console.error("OSRM Snapping Error:", err);
+                }
+
+                onSelect({ address: displayAddress, lat, lng });
             }
         } catch (err) {
-            console.error("OSRM Snapping Error:", err);
+            console.error("ArcGIS Location Error:", err);
         }
-
-        onSelect({ address: displayAddress, lat, lng });
-    };
-
-    // Build a concise label from Nominatim address components
-    const buildShortLabel = (result: any): string => {
-        const addr = result.address || {};
-        return [
-            addr.house_number,
-            addr.road || addr.street,
-            addr.suburb || addr.neighbourhood,
-            addr.city || addr.town || addr.village || addr.county,
-            addr.state,
-            addr.country
-        ].filter(Boolean).join(', ');
     };
 
     return (
@@ -122,7 +113,7 @@ export default function AddressAutocomplete({
                     onChange={(e) => setQuery(e.target.value)}
                     onFocus={() => { if (suggestions.length > 0) setIsOpen(true); }}
                     placeholder={placeholder}
-                    className={`pl-8 pr-3 py-1.5 focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none ${className}`}
+                    className={`pl-8 pr-3 py-1.5 w-full focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none ${className}`}
                 />
                 {loading && (
                     <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -134,8 +125,6 @@ export default function AddressAutocomplete({
             {isOpen && suggestions.length > 0 && (
                 <div className="absolute z-[200] w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-60 overflow-y-auto">
                     {suggestions.map((result, i) => {
-                        const shortLabel = buildShortLabel(result);
-                        const fullLabel = result.display_name;
                         return (
                             <div
                                 key={i}
@@ -144,10 +133,9 @@ export default function AddressAutocomplete({
                             >
                                 <MapPin size={14} className="text-blue-500 mt-0.5 shrink-0" />
                                 <div>
-                                    <div className="text-xs font-semibold text-slate-800">{shortLabel || fullLabel}</div>
-                                    {shortLabel && (
-                                        <div className="text-[10px] text-slate-500 mt-0.5 line-clamp-1">{fullLabel}</div>
-                                    )}
+                                    <div className="text-xs font-semibold text-slate-800 line-clamp-2">
+                                        {result.text}
+                                    </div>
                                 </div>
                             </div>
                         );
@@ -158,16 +146,15 @@ export default function AddressAutocomplete({
     );
 }
 
-// Reverse Geocoding Utility using Nominatim (Free & High Precision OSM)
+// Reverse Geocoding Utility using ArcGIS (Free & High Precision)
 export async function reverseGeocode(lat: number, lng: number): Promise<string> {
     try {
-        const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
-            { headers: { 'Accept-Language': 'en' } }
-        );
+        const res = await fetch(`https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/reverseGeocode?location=${lng},${lat}&f=json`);
         const data = await res.json();
-        if (data.display_name) {
-            return data.display_name;
+        if (data.address && data.address.LongLabel) {
+            return data.address.LongLabel;
+        } else if (data.address && data.address.Match_addr) {
+            return data.address.Match_addr;
         }
         return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
     } catch (err) {
