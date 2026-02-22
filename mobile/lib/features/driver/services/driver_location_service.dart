@@ -5,12 +5,13 @@ import 'dart:math';
 import 'dart:ui';
 import 'package:background_location_tracker/background_location_tracker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:dio/dio.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 
-import '../../data/datasources/api_ds.dart';
-import '../../core/utils/polyline_encoder.dart';
+import '../../../data/datasources/api_ds.dart';
+import '../../../core/utils/polyline_encoder.dart';
 
 double _sanitizeSpeedMps(double? v) {
   if (v == null) return 0;
@@ -329,7 +330,7 @@ class DriverLocationService {
 
           final String polyline = PolylineEncoder.encode(coords);
 
-          await ApiDataSource().uploadTripHistory(
+          await ApiDataSource(Dio(), FirebaseFirestore.instance).uploadTripHistory(
             tripId,
             polyline: polyline,
             distanceMeters: totalDistM.round(),
