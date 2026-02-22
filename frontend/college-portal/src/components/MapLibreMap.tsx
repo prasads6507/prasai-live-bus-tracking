@@ -6,7 +6,6 @@ import Map, { Source, Layer, Marker, type MapRef, NavigationControl, FullscreenC
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { calculateBearing } from '../utils/mapUtils';
 import { BsBusFront } from 'react-icons/bs';
-import { FaBusAlt } from 'react-icons/fa';
 
 interface MapLibreMapProps {
     buses: any[];
@@ -19,6 +18,7 @@ interface MapLibreMapProps {
     selectedRouteId?: string | null;
     onBusClick?: (busId: string) => void;
     showStopCircles?: boolean;
+    routePreviewPath?: [number, number][]; // [lng, lat] pairs for the preview polyline
 }
 
 // 1. Universal Coordinate Normalizer (Fix 2 & Mismatch Fix)
@@ -35,7 +35,35 @@ export const getBusLatLng = (bus: any): [number, number] | null => {
     return [lng, lat];
 };
 
-const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, path, selectedBusId, routes, selectedRouteId, onBusClick, stopMarkers, showStopCircles }: MapLibreMapProps) => {
+// Helper to create a circle polygon (100m radius)
+const createCirclePolygon = (center: [number, number], radiusInMeters: number = 100, points: number = 64) => {
+    const coords = {
+        latitude: center[1],
+        longitude: center[0]
+    };
+    const ret = [];
+    const distanceX = radiusInMeters / (111320 * Math.cos(coords.latitude * Math.PI / 180));
+    const distanceY = radiusInMeters / 110540;
+
+    for (let i = 0; i < points; i++) {
+        const theta = (i / points) * (2 * Math.PI);
+        const x = distanceX * Math.cos(theta);
+        const y = distanceY * Math.sin(theta);
+        ret.push([coords.longitude + x, coords.latitude + y]);
+    }
+    ret.push(ret[0]); // close the loop
+
+    return {
+        type: 'Feature' as const,
+        geometry: {
+            type: 'Polygon' as const,
+            coordinates: [ret]
+        },
+        properties: {}
+    };
+};
+
+const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, path, selectedBusId, routes, selectedRouteId, onBusClick, stopMarkers, showStopCircles, routePreviewPath }: MapLibreMapProps) => {
     const mapRef = useRef<MapRef | null>(null);
 
     // Type definition for DOM Marker State
@@ -317,23 +345,9 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
         }
     }, [focusedLocation, stopMarkers]);
 
-    // Only show idle overlay when there's NO path AND no buses with location AND no markers/routes
-    const isMissingData = buses.filter(b => getBusLatLng(b)).length === 0 &&
-        (!path || path.length === 0) &&
-        (!stopMarkers || stopMarkers.length === 0) &&
-        (!routes || routes.length === 0);
-
     return (
         <div className="h-full w-full relative z-0 bg-slate-50 overflow-hidden rounded-2xl border border-slate-200">
-            {isMissingData && (
-                <div className="absolute inset-0 z-10 bg-white/60 backdrop-blur-[1px] flex items-center justify-center pointer-events-none">
-                    <div className="bg-white p-5 rounded-2xl shadow-xl border border-slate-100 text-center max-w-xs mx-4">
-                        <div className="flex justify-center mb-3"><FaBusAlt className="text-blue-500/30 text-4xl" /></div>
-                        <h4 className="font-bold text-slate-800">Fleet Monitoring Idle</h4>
-                        <p className="text-[11px] text-slate-500 mt-2 font-medium">No active GPS feeds. Locations will appear on trip start.</p>
-                    </div>
-                </div>
-            )}
+            {/* Fleet Monitor idle overlay removed for clean UX during route editing */}
 
             {/* Selection Overlay (Fix 5) */}
             {selectedBus && (
@@ -460,39 +474,56 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
                     );
                 })}
 
-                {/* 100m Stop Circles (Geofence Preview) */}
+                {/* 100m Stop Circles (Geofence Preview - Exact Polygons) */}
                 {showStopCircles && stopMarkers && stopMarkers.length > 0 && (
                     <Source
                         id="stop-circles-source"
                         type="geojson"
                         data={{
                             type: 'FeatureCollection',
-                            features: stopMarkers.filter(m => m.lat && m.lng).map((m, idx) => ({
-                                type: 'Feature',
-                                geometry: { type: 'Point', coordinates: [m.lng, m.lat] },
-                                properties: { idx }
-                            }))
+                            features: stopMarkers
+                                .filter(m => m.lat && m.lng)
+                                .map(m => createCirclePolygon([m.lng, m.lat], 100))
                         }}
                     >
                         <Layer
                             id="stop-circles-fill"
-                            type="circle"
+                            type="fill"
                             paint={{
-                                'circle-radius': [
-                                    'interpolate',
-                                    ['exponential', 2],
-                                    ['zoom'],
-                                    0, 0,
-                                    20, 100
-                                ],
-                                'circle-color': '#f97316',
-                                'circle-opacity': 0.15,
-                                'circle-stroke-color': '#f97316',
-                                'circle-stroke-width': 2,
-                                'circle-pitch-alignment': 'map'
+                                'fill-color': '#f97316',
+                                'fill-opacity': 0.15,
+                                'fill-outline-color': '#f97316'
                             }}
                         />
                     </Source>
+                )}
+
+                {/* Route Preview Path Polyline */}
+                {routePreviewPath && routePreviewPath.length > 1 && (
+                    <>
+                        <Source id="route-preview-path" type="geojson" data={{
+                            type: "Feature",
+                            geometry: { type: "LineString", coordinates: routePreviewPath },
+                            properties: {}
+                        }}>
+                            <Layer
+                                id="route-preview-line"
+                                type="line"
+                                layout={{ 'line-join': 'round', 'line-cap': 'round' }}
+                                paint={{ 'line-color': '#3b82f6', 'line-width': 5, 'line-opacity': 0.6 }}
+                            />
+                        </Source>
+
+                        {/* Start Marker (Green) */}
+                        <Marker longitude={routePreviewPath[0][0]} latitude={routePreviewPath[0][1]} anchor="center">
+                            <div className="bg-emerald-500 border-2 border-white w-4 h-4 rounded-full shadow-lg z-20" title="Start Point" />
+                        </Marker>
+
+                        {/* End Marker (Red) */}
+                        <Marker longitude={routePreviewPath[routePreviewPath.length - 1][0]} latitude={routePreviewPath[routePreviewPath.length - 1][1]} anchor="center">
+                            <div className="bg-rose-500 border-2 border-white w-4 h-4 rounded-full shadow-lg z-20" title="End Point" />
+                        </Marker>
+                    </>
                 )}
             </Map>
         </div>

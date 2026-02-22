@@ -13,7 +13,7 @@ interface AddressAutocompleteProps {
 export default function AddressAutocomplete({
     initialAddress = '',
     onSelect,
-    placeholder = 'Search address...',
+    placeholder = 'Search full address (incl. building no.)...',
     className = '',
     biasLat,
     biasLon
@@ -29,7 +29,6 @@ export default function AddressAutocomplete({
     }, [initialAddress]);
 
     useEffect(() => {
-        // Handle outside click
         function handleClickOutside(event: MouseEvent) {
             if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
                 setIsOpen(false);
@@ -40,7 +39,7 @@ export default function AddressAutocomplete({
     }, []);
 
     useEffect(() => {
-        if (!query || query === initialAddress) {
+        if (!query || query.length < 3 || query === initialAddress) {
             setSuggestions([]);
             return;
         }
@@ -48,48 +47,43 @@ export default function AddressAutocomplete({
         const fetchSuggestions = async () => {
             setLoading(true);
             try {
-                // Photon API for OSM Geocoding with optional location bias
-                let url = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=8`;
+                // Nominatim for full-address precision (includes house/building numbers)
+                let url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=8&addressdetails=1`;
                 if (biasLat !== undefined && biasLon !== undefined) {
-                    url += `&lat=${biasLat}&lon=${biasLon}`;
+                    // Use viewbox bias: 0.5 degree (~55km) around the reference point
+                    const delta = 0.5;
+                    url += `&viewbox=${biasLon - delta},${biasLat - delta},${biasLon + delta},${biasLat + delta}&bounded=0`;
                 }
 
-                const res = await fetch(url);
+                const res = await fetch(url, {
+                    headers: { 'Accept-Language': 'en' }
+                });
                 const data = await res.json();
-                if (data.features) {
-                    setSuggestions(data.features);
+                if (Array.isArray(data)) {
+                    setSuggestions(data);
                     setIsOpen(true);
                 }
             } catch (err) {
-                console.error("Photon Search Error:", err);
+                console.error("Nominatim Search Error:", err);
             }
             setLoading(false);
         };
 
-        const timeoutId = setTimeout(fetchSuggestions, 350); // Debounce
+        const timeoutId = setTimeout(fetchSuggestions, 400); // Debounce
         return () => clearTimeout(timeoutId);
-    }, [query, initialAddress]);
+    }, [query, initialAddress, biasLat, biasLon]);
 
-    const handleSelect = async (feature: any) => {
+    const handleSelect = async (result: any) => {
         setIsOpen(false);
-        const props = feature.properties;
-        const displayAddress = [
-            props.name,
-            props.house_number,
-            props.street,
-            props.district,
-            props.city || props.town || props.village,
-            props.state,
-            props.postcode
-        ].filter(Boolean).join(', ');
-
+        const displayAddress = result.display_name || '';
         setQuery(displayAddress);
 
-        let lat = feature.geometry.coordinates[1];
-        let lng = feature.geometry.coordinates[0];
+        let lat = parseFloat(result.lat);
+        let lng = parseFloat(result.lon);
 
         try {
-            // OSRM Nearest API to snap to road network
+            // OSRM Nearest API to snap building coordinate to the nearest road network
+            // (Crucial for bus stop accuracy on the map)
             const osrmRes = await fetch(`https://router.project-osrm.org/nearest/v1/driving/${lng},${lat}?number=1`);
             const osrmData = await osrmRes.json();
             if (osrmData.code === 'Ok' && osrmData.waypoints && osrmData.waypoints.length > 0) {
@@ -103,6 +97,19 @@ export default function AddressAutocomplete({
         }
 
         onSelect({ address: displayAddress, lat, lng });
+    };
+
+    // Build a concise label from Nominatim address components
+    const buildShortLabel = (result: any): string => {
+        const addr = result.address || {};
+        return [
+            addr.house_number,
+            addr.road || addr.street,
+            addr.suburb || addr.neighbourhood,
+            addr.city || addr.town || addr.village || addr.county,
+            addr.state,
+            addr.country
+        ].filter(Boolean).join(', ');
     };
 
     return (
@@ -125,25 +132,23 @@ export default function AddressAutocomplete({
             </div>
 
             {isOpen && suggestions.length > 0 && (
-                <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                    {suggestions.map((feature, i) => {
-                        const props = feature.properties;
-                        const label = [
-                            props.name,
-                            props.street,
-                            props.district,
-                            props.city || props.town || props.village,
-                            props.state,
-                            props.country
-                        ].filter(Boolean).join(', ');
+                <div className="absolute z-[200] w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                    {suggestions.map((result, i) => {
+                        const shortLabel = buildShortLabel(result);
+                        const fullLabel = result.display_name;
                         return (
                             <div
                                 key={i}
-                                onClick={() => handleSelect(feature)}
-                                className="px-3 py-2 hover:bg-slate-50 cursor-pointer flex items-start gap-2 border-b border-slate-50 last:border-0"
+                                onClick={() => handleSelect(result)}
+                                className="px-3 py-2.5 hover:bg-blue-50 cursor-pointer flex items-start gap-2 border-b border-slate-50 last:border-0"
                             >
-                                <MapPin size={14} className="text-slate-400 mt-0.5 shrink-0" />
-                                <div className="text-xs text-slate-700">{label}</div>
+                                <MapPin size={14} className="text-blue-500 mt-0.5 shrink-0" />
+                                <div>
+                                    <div className="text-xs font-semibold text-slate-800">{shortLabel || fullLabel}</div>
+                                    {shortLabel && (
+                                        <div className="text-[10px] text-slate-500 mt-0.5 line-clamp-1">{fullLabel}</div>
+                                    )}
+                                </div>
                             </div>
                         );
                     })}
@@ -156,14 +161,15 @@ export default function AddressAutocomplete({
 // Reverse Geocoding Utility using Nominatim (Free & High Precision OSM)
 export async function reverseGeocode(lat: number, lng: number): Promise<string> {
     try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`, {
-            headers: { 'Accept-Language': 'en' }
-        });
+        const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
+            { headers: { 'Accept-Language': 'en' } }
+        );
         const data = await res.json();
         if (data.display_name) {
             return data.display_name;
         }
-        return `Point at ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+        return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
     } catch (err) {
         console.error("Reverse Geocoding Error:", err);
         return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;

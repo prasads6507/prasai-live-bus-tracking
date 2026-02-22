@@ -27,6 +27,7 @@ const Routes = () => {
     // Edit State
     const [isEditMode, setIsEditMode] = useState(false);
     const [editingRoute, setEditingRoute] = useState<any>(null);
+    const [roadPath, setRoadPath] = useState<[number, number][]>([]);
 
     // Upload State
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -62,6 +63,35 @@ const Routes = () => {
             setLoading(false);
         }
     };
+
+    // Auto-calculate road path when stops change
+    useEffect(() => {
+        const validStops = newRoute.stops.filter(s => s.latitude && s.longitude &&
+            !isNaN(parseFloat(s.latitude)) && !isNaN(parseFloat(s.longitude)));
+
+        if (validStops.length < 2) {
+            setRoadPath([]);
+            return;
+        }
+
+        const fetchRoadPath = async () => {
+            try {
+                const coords = validStops.map(s => `${s.longitude},${s.latitude}`).join(';');
+                const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`;
+                const res = await fetch(url);
+                const data = await res.json();
+
+                if (data.code === 'Ok' && data.routes && data.routes[0]) {
+                    setRoadPath(data.routes[0].geometry.coordinates);
+                }
+            } catch (err) {
+                console.error("OSRM Route Error:", err);
+            }
+        };
+
+        const timer = setTimeout(fetchRoadPath, 800); // Debounce
+        return () => clearTimeout(timer);
+    }, [newRoute.stops]);
 
     const handleCreateRoute = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -565,6 +595,10 @@ const Routes = () => {
                                             lng: parseFloat(s.longitude) || 0,
                                             name: s.stopName || 'Stop'
                                         }))}
+                                        routePreviewPath={roadPath.length > 0 ? roadPath : newRoute.stops
+                                            .filter(s => s.latitude && s.longitude)
+                                            .map(s => [parseFloat(s.longitude), parseFloat(s.latitude)])
+                                        }
                                         showStopCircles={true}
                                     />
                                 </div>
