@@ -323,27 +323,26 @@ const searchColleges = async (req, res) => {
 
         const collegesRef = db.collection('colleges');
 
-        // Optimizing Quota: Using "starts-with" query instead of fetching ALL
-        // This dramatically reduces Firestore reads on search
-        const snapshot = await collegesRef
-            .where('status', '==', 'ACTIVE')
-            .where('collegeName', '>=', query)
-            .where('collegeName', '<=', query + '\uf8ff')
-            .limit(10)
-            .get();
+        // Firestore doesn't support full-text search, so we fetch all and filter
+        // For production, consider using Algolia or similar for better performance
+        const snapshot = await collegesRef.where('status', '==', 'ACTIVE').get();
 
         const results = [];
         snapshot.forEach(doc => {
             const data = doc.data();
-            results.push({
-                collegeId: data.collegeId,
-                collegeName: data.collegeName,
-                slug: data.slug,
-                status: data.status
-            });
+            // Case-insensitive partial match
+            if (data.collegeName && data.collegeName.toLowerCase().includes(query.toLowerCase())) {
+                results.push({
+                    collegeId: data.collegeId,
+                    collegeName: data.collegeName,
+                    slug: data.slug,
+                    status: data.status
+                });
+            }
         });
 
-        res.json(results);
+        // Limit to 10 results
+        res.json(results.slice(0, 10));
     } catch (error) {
         console.error("Search Colleges Error:", error);
         res.status(500).json({ message: error.message });
