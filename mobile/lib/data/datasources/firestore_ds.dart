@@ -352,11 +352,11 @@ class FirestoreDataSource {
   }) async {
     final batch = _firestore.batch();
     
-    // 1. Create Trip Document
+    // Generate trip ID
     final tripId = 'trip-${busId}-${DateTime.now().millisecondsSinceEpoch}';
-    final tripRef = _firestore.collection('buses').doc(busId).collection('trips').doc(tripId);
+    
     final tripData = {
-      'tripId': tripRef.id,
+      'tripId': tripId,
       'collegeId': collegeId,
       'busId': busId,
       'busNumber': busNumber ?? 'Unknown',
@@ -369,27 +369,35 @@ class FirestoreDataSource {
       'startTime': DateTime.now().toIso8601String(),
       'createdAt': FieldValue.serverTimestamp(),
       'totalPoints': 0,
+      'path': [],
     };
-    batch.set(tripRef, tripData);
+
+    // 1. Write to ROOT trips collection (canonical source for portal & path data)
+    final rootTripRef = _firestore.collection('trips').doc(tripId);
+    batch.set(rootTripRef, tripData);
+
+    // 2. Also write to bus subcollection (backward compatibility)
+    final subTripRef = _firestore.collection('buses').doc(busId).collection('trips').doc(tripId);
+    batch.set(subTripRef, tripData);
     
-    // 2. Update Bus Status
+    // 3. Update Bus Status
     final busRef = _firestore.collection('buses').doc(busId);
     batch.update(busRef, {
       'status': 'ON_ROUTE',
-      'activeTripId': tripRef.id,
-      'currentTripId': tripRef.id,
-      'routeId': routeId, // Persist current routeId
+      'activeTripId': tripId,
+      'currentTripId': tripId,
+      'routeId': routeId,
       'driverName': driverName ?? 'Unknown Driver',
       'currentDriverId': driverId,
       'currentRoadName': 'Ready to start...',
       'completedStops': [],
-      'liveTrackBuffer': [], // Clear old buffer
+      'liveTrackBuffer': [],
       'lastUpdated': DateTime.now().toIso8601String(),
       'lastLocationUpdate': FieldValue.serverTimestamp(),
     });
     
     await batch.commit();
-    return tripRef.id;
+    return tripId;
   }
 
   /// Ends an active trip and resets the bus status.
@@ -398,34 +406,51 @@ class FirestoreDataSource {
     try {
       final batch = _firestore.batch();
       
-      // 1. Update Trip Status (if ID provided)
-    if (tripId != null && tripId.isNotEmpty) {
-      final tripRef = _firestore.collection('buses').doc(busId).collection('trips').doc(tripId);
-      final tripDoc = await tripRef.get();
-      
-      int? durationMinutes;
-      if (tripDoc.exists) {
-        final data = tripDoc.data();
-        final startTimeStr = data?['startTime'] as String?;
-        if (startTimeStr != null) {
-          try {
-            final start = DateTime.parse(startTimeStr);
-            final end = DateTime.now();
-            durationMinutes = end.difference(start).inMinutes;
-          } catch (e) {
-            print('Error parsing startTime: $e');
+      // 1. Update Trip Status in BOTH locations (if ID provided)
+      if (tripId != null && tripId.isNotEmpty) {
+        int? durationMinutes;
+
+        // Try root collection first for startTime
+        final rootTripRef = _firestore.collection('trips').doc(tripId);
+        final rootTripDoc = await rootTripRef.get();
+
+        // Also reference the subcollection doc
+        final subTripRef = _firestore.collection('buses').doc(busId).collection('trips').doc(tripId);
+        final subTripDoc = await subTripRef.get();
+
+        // Get startTime from whichever doc exists
+        final data = rootTripDoc.exists ? rootTripDoc.data() : (subTripDoc.exists ? subTripDoc.data() : null);
+        if (data != null) {
+          final startTimeStr = data['startTime'] as String?;
+          if (startTimeStr != null) {
+            try {
+              final start = DateTime.parse(startTimeStr);
+              final end = DateTime.now();
+              durationMinutes = end.difference(start).inMinutes;
+            } catch (e) {
+              print('Error parsing startTime: $e');
+            }
           }
         }
-      }
 
-      batch.update(tripRef, {
-        'status': 'COMPLETED',
-        'endedAt': FieldValue.serverTimestamp(),
-        'endTime': DateTime.now().toIso8601String(),
-        'isActive': false,
-        'durationMinutes': durationMinutes,
-      });
-    }
+        final endUpdate = {
+          'status': 'COMPLETED',
+          'endedAt': FieldValue.serverTimestamp(),
+          'endTime': DateTime.now().toIso8601String(),
+          'isActive': false,
+          'durationMinutes': durationMinutes,
+        };
+
+        // Update root trip doc
+        if (rootTripDoc.exists) {
+          batch.update(rootTripRef, endUpdate);
+        }
+
+        // Update subcollection trip doc
+        if (subTripDoc.exists) {
+          batch.update(subTripRef, endUpdate);
+        }
+      }
       
       // 2. Reset Bus Status
       final busRef = _firestore.collection('buses').doc(busId);
