@@ -880,37 +880,54 @@ const getTripPath = async (req, res) => {
 
         const tripData = tripDoc.data();
 
-        // FALLBACK/PRIMARY: Fetch path subcollection (Phase 1/3 implementation)
-        let pathSnapshot = await tripRef.collection('path').get();
+        let path = [];
 
-        console.log(`Path snapshot for ${tripId}: empty=${pathSnapshot.empty}, size=${pathSnapshot.size}`);
+        // PRIMARY: New implementation saves path as an array inside the document
+        if (tripData.path && Array.isArray(tripData.path) && tripData.path.length > 0) {
+            console.log(`Found path array directly in trip document with ${tripData.path.length} points.`);
+            path = tripData.path.map(data => ({
+                lat: data.lat ?? data.latitude ?? 0,
+                lng: data.lng ?? data.longitude ?? 0,
+                speed: data.speed || 0,
+                timestamp: data.recordedAt ?
+                    (data.recordedAt.toDate ? data.recordedAt.toDate().toISOString() : data.recordedAt) :
+                    data.timestamp
+            })).filter(point => point.lat !== 0 && point.lng !== 0);
+        } else {
+            // FALLBACK: Fetch path subcollection (Phase 1/3 implementation)
+            let pathSnapshot = await tripRef.collection('path').get();
 
-        // If path is empty, try 'history' subcollection (Legacy API implementation)
-        if (pathSnapshot.empty) {
-            console.log(`Checking 'history' subcollection for trip ${tripId}...`);
-            pathSnapshot = await tripRef.collection('history').get();
+            console.log(`Path snapshot for ${tripId}: empty=${pathSnapshot.empty}, size=${pathSnapshot.size}`);
+
+            // If path is empty, try 'history' subcollection (Legacy API implementation)
+            if (pathSnapshot.empty) {
+                console.log(`Checking 'history' subcollection for trip ${tripId}...`);
+                pathSnapshot = await tripRef.collection('history').get();
+            }
+
+            if (!pathSnapshot.empty) {
+                path = pathSnapshot.docs
+                    .map(doc => {
+                        const data = doc.data();
+                        return {
+                            lat: data.lat ?? data.latitude ?? 0,
+                            lng: data.lng ?? data.longitude ?? 0,
+                            speed: data.speed || 0,
+                            timestamp: data.recordedAt ?
+                                (data.recordedAt.toDate ? data.recordedAt.toDate().toISOString() : data.recordedAt) :
+                                data.timestamp
+                        };
+                    })
+                    .filter(point => point.lat !== 0 && point.lng !== 0);
+            }
         }
 
-        if (pathSnapshot.empty) {
+        if (path.length === 0) {
             console.log(`No path or history data found for trip ${tripId}`);
             return res.json({ success: true, data: [] });
         }
 
-        const path = pathSnapshot.docs
-            .map(doc => {
-                const data = doc.data();
-                return {
-                    lat: data.lat ?? data.latitude ?? 0,
-                    lng: data.lng ?? data.longitude ?? 0,
-                    speed: data.speed || 0,
-                    timestamp: data.recordedAt ?
-                        (data.recordedAt.toDate ? data.recordedAt.toDate().toISOString() : data.recordedAt) :
-                        data.timestamp
-                };
-            })
-            .filter(point => point.lat !== 0 && point.lng !== 0);
-
-        // Sort in memory to avoid Firebase Composite Index requirements on subcollections
+        // Sort in memory to avoid Firebase Composite Index requirements on subcollections/arrays
         path.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
         console.log(`Returning ${path.length} path points for trip ${tripId}`);
