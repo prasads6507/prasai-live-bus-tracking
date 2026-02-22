@@ -10,15 +10,24 @@ import Layout from '../components/Layout';
 import MapLibreMap, { getBusLatLng } from '../components/MapLibreMap';
 
 const isLiveBus = (bus: any) => {
-    if (bus.status !== 'ON_ROUTE') return false;
-    // Strict check: Must have active activeTripId
+    // If the bus has an active trip ID, it's live (relay is handling movement)
     if (!bus.activeTripId) return false;
-    if (!bus.lastLocationUpdate) return false;
-    try {
-        const lastUpdate = bus.lastLocationUpdate.toDate ? bus.lastLocationUpdate.toDate() : new Date(bus.lastLocationUpdate);
-        const diffMinutes = (new Date().getTime() - lastUpdate.getTime()) / 60000;
-        return diffMinutes < 5; // Relaxed to 5 minute limit for "LIVE" badge
-    } catch (e) { return false; }
+
+    // Status can be ON_ROUTE (set by backend start) or ACTIVE (legacy/alternate)
+    const isActive = bus.status === 'ON_ROUTE' || bus.status === 'ACTIVE';
+    if (!isActive) return false;
+
+    // Use a much longer heartbeat for "Offline" fallback, since we rely on WebSockets now
+    if (bus.lastUpdated || bus.lastLocationUpdate) {
+        try {
+            const dateStr = bus.lastUpdated || (bus.lastLocationUpdate.toDate ? bus.lastLocationUpdate.toDate().toISOString() : bus.lastLocationUpdate);
+            const lastUpdate = new Date(dateStr);
+            const diffMinutes = (new Date().getTime() - lastUpdate.getTime()) / 60000;
+            return diffMinutes < 30; // 30 mins instead of 5
+        } catch (e) { return true; } // If parse fails but we have tripId, assume live
+    }
+
+    return true; // We have activeTripId, so it's live
 };
 
 const Dashboard = () => {
@@ -251,14 +260,14 @@ const Dashboard = () => {
                             color="bg-purple-50"
                         />
                         <StatCard
-                            title="Active Buses"
-                            value={buses.filter(b => b.status === 'ACTIVE').length.toString()}
+                            title="Buses"
+                            value={buses.length.toString()}
                             total={buses.length.toString()}
                             icon={<Bus className="text-blue-600" size={24} />}
                             color="bg-blue-50"
                         />
                         <StatCard
-                            title="On Route"
+                            title="On Road (Live)"
                             value={buses.filter(isLiveBus).length.toString()}
                             total={buses.length.toString()}
                             icon={<Navigation className="text-green-600" size={24} />}

@@ -61,8 +61,10 @@ void backgroundCallback() {
           estMps = distMeters / dtSeconds;
           if (estMps > 60.0) return; // Drop bad point (jump > 134mph)
 
-          smoothedLat = 0.7 * rawLat + 0.3 * prevLat;
-          smoothedLng = 0.7 * rawLng + 0.3 * prevLng;
+          // Only smooth if we have some movement, but avoid sticking if moving fast
+          final double alpha = (estMps > 2.0) ? 0.9 : 0.7; 
+          smoothedLat = alpha * rawLat + (1 - alpha) * prevLat;
+          smoothedLng = alpha * rawLng + (1 - alpha) * prevLng;
         }
 
         final pluginSpeed = _sanitizeSpeedMps(data.speed);
@@ -177,8 +179,9 @@ void backgroundCallback() {
                   });
                 } else {
                   // Compute ETA to next stop
-                  final speedMps = (data.speed > 1) ? data.speed * 0.44704 : 3.0; // mph to m/s, min 3 m/s
-                  final etaSeconds = distM / speedMps;
+                  // data.speed is in meters per second (plugin standard)
+                  final currentSpeedMps = (data.speed > 1.5) ? data.speed : 3.0; // min 3 m/s (~6.7mph)
+                  final etaSeconds = distM / currentSpeedMps;
                   final nextStopEta = DateTime.now().add(Duration(seconds: etaSeconds.round())).toIso8601String();
 
                   await tripRef.update({

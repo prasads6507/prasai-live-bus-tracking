@@ -11,15 +11,24 @@ import MapLibreMapComponent from '../components/MapLibreMapComponent';
 import useNotification from '../hooks/useNotification';
 
 const isLiveBus = (bus: any) => {
-    if (bus.status !== 'ON_ROUTE') return false;
-    // Strict check: Must have active activeTripId
-    if (!bus.activeTripId) return false;
-    if (!bus.lastLocationUpdate) return false;
-    try {
-        const lastUpdate = bus.lastLocationUpdate.toDate ? bus.lastLocationUpdate.toDate() : new Date(bus.lastLocationUpdate);
-        const diffMinutes = (new Date().getTime() - lastUpdate.getTime()) / 60000;
-        return diffMinutes < 2; // Strict 2 minute limit for "LIVE" badge
-    } catch (e) { return false; }
+    // If the bus has an active trip ID, it's live (relay is handling movement)
+    if (!bus || !bus.activeTripId) return false;
+
+    // Status can be ON_ROUTE (set by backend start) or ACTIVE (legacy/alternate)
+    const isActive = bus.status === 'ON_ROUTE' || bus.status === 'ACTIVE';
+    if (!isActive) return false;
+
+    // Heartbeat check for fallback (WebSocket is primary now)
+    if (bus.lastUpdated || bus.lastLocationUpdate) {
+        try {
+            const dateStr = bus.lastUpdated || (bus.lastLocationUpdate.toDate ? bus.lastLocationUpdate.toDate().toISOString() : bus.lastLocationUpdate);
+            const lastUpdate = new Date(dateStr);
+            const diffMinutes = (new Date().getTime() - lastUpdate.getTime()) / 60000;
+            return diffMinutes < 30; // 30 mins
+        } catch (e) { return true; }
+    }
+
+    return true; // Live
 };
 
 const StudentDashboard = () => {

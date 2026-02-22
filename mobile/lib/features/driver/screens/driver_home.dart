@@ -17,6 +17,10 @@ import '../widgets/driver_header.dart';
 import '../widgets/assigned_bus_card.dart';
 import '../widgets/trip_control_panel.dart';
 import '../widgets/telemetry_card.dart';
+import '../../../core/services/relay_service.dart';
+import '../../../data/datasources/api_ds.dart';
+import 'package:dio/dio.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class DriverHomeScreen extends ConsumerStatefulWidget {
   const DriverHomeScreen({super.key});
@@ -26,14 +30,19 @@ class DriverHomeScreen extends ConsumerStatefulWidget {
 }
 
 class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
-  String? _selectedBusId;
   String? _selectedRouteId;
+  String? _selectedDirection;
+  
+  RelayService? _relay;
+  StreamSubscription? _locationUpdateSubscription;
   String? _selectedDirection; // 'pickup' or 'dropoff'
   String _searchQuery = "";
   final TextEditingController _searchController = TextEditingController();
 
   @override
   void dispose() {
+    _relay?.dispose();
+    _locationUpdateSubscription?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -598,6 +607,19 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
       }
     } catch (_) {}
 
+    // 4. Initialize Relay
+    try {
+      final tokenData = await ApiDataSource(Dio(), FirebaseFirestore.instance).getRelayToken(widget.busId, 'driver');
+      final wsUrl = tokenData['wsUrl'];
+      
+      _relay?.dispose();
+      _relay = RelayService();
+      _relay!.connect(wsUrl);
+      debugPrint("Connected to Relay: $wsUrl");
+    } catch (e) {
+      debugPrint("Failed to connect to relay: $e");
+    }
+
     // Initialize DriverLocationService with background_location_tracker
     await DriverLocationService.startTracking(
       widget.collegeId, 
@@ -620,19 +642,25 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
           });
           _updateRoadName(point.latitude, point.longitude);
           
-          // Persist point to trip history for post-trip path preview
-          final busStream = ref.read(firestoreDataSourceProvider).getBus(widget.collegeId, widget.busId);
-          busStream.first.then((bus) {
-            if (bus.activeTripId != null && bus.activeTripId!.isNotEmpty) {
-              ref.read(firestoreDataSourceProvider).saveTripPathPoint(bus.activeTripId!, point, widget.busId);
-            }
-          }).catchError((_) {});
+          // Stream to Relay (Cloudflare)
+          if (_relay != null && _relay!.isConnected) {
+            _relay!.sendLocation(
+              tripId: 'active', // The relay uses busId from the token path, tripId is advisory
+              lat: point.latitude,
+              lng: point.longitude,
+              speedMps: point.speed ?? 0.0,
+              heading: point.heading ?? 0.0,
+            );
+          }
         }
       }
     );
   }
 
   void _stopTracking() {
+    _relay?.disconnect();
+    _relay = null;
+
     DriverLocationService.stopTracking();
     
     _locationUpdateSubscription?.cancel();

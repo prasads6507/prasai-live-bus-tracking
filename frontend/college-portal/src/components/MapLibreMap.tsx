@@ -164,7 +164,8 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
 
             let color = '#16a34a';
             if (bus.status === 'MAINTENANCE') color = '#ea580c';
-            else if (bus.status === 'ACTIVE' || bus.status.includes('Offline')) color = '#64748b';
+            else if (bus.status === 'ACTIVE' || bus.status === 'ON_ROUTE') color = '#16a34a';
+            else color = '#64748b'; // IDLE or Offline
 
             // React guarantees fast targeted updates to this specific DOM portal
             markerState.root.render(
@@ -188,7 +189,7 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
                     <div className={`absolute top-10 whitespace-nowrap bg-dashboard-surface text-dashboard-text border border-dashboard-border shadow-soft text-[11px] font-bold px-3 py-1.5 rounded-lg pointer-events-none transition-opacity z-50 flex flex-col gap-0.5 ${selectedBusId === bus._id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                         <div className="flex items-center gap-2">
                             <span>Bus {bus.busNumber || 'Unknown'} • {bus.driverName || 'No Driver'}</span>
-                            {bus.status === 'ON_ROUTE' && typeof bus.speed === 'number' && (
+                            {(bus.status === 'ON_ROUTE' || bus.status === 'ACTIVE') && typeof bus.speed === 'number' && (
                                 <span className="text-dashboard-primary">{Math.round(bus.speed)} mph</span>
                             )}
                         </div>
@@ -198,7 +199,8 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
             );
 
             // Sync stationary bus immediately
-            if (bus.status !== 'ON_ROUTE') {
+            const moving = bus.status === 'ON_ROUTE' || bus.status === 'ACTIVE';
+            if (!moving) {
                 markerState.marker.setLngLat(latLng);
                 const iconEl = markerState.marker.getElement().querySelector('.bus-icon-svg') as HTMLElement;
                 if (iconEl) iconEl.style.transform = `rotate(${bus.location?.heading || 0}deg)`;
@@ -237,7 +239,8 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
                     .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
                     .slice(-5);
 
-                if (bus.status !== 'ON_ROUTE' || combined.length < 2) {
+                const moving = bus.status === 'ON_ROUTE' || bus.status === 'ACTIVE';
+                if (!moving || combined.length < 2) {
                     animatedPositionsRef.current[bus._id] = { pos: latLng, bearing: bus.location?.heading || 0 };
                     return;
                 }
