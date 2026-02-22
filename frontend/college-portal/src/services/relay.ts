@@ -22,6 +22,8 @@ class RelayService {
     private reconnectAttempts: number = 0;
     private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     private isIntentionalClose: boolean = false;
+    private messageQueue: any[] = [];
+    private pingInterval: ReturnType<typeof setInterval> | null = null;
 
     /**
      * Connect to the WebSocket relay.
@@ -50,6 +52,18 @@ class RelayService {
                 console.log('[Relay] Connected to', this.wsUrl);
                 this.reconnectAttempts = 0;
                 this.config.onOpen?.();
+
+                // Flush queue
+                while (this.messageQueue.length > 0) {
+                    const msg = this.messageQueue.shift();
+                    this.send(msg);
+                }
+
+                // Start ping interval
+                if (this.pingInterval) clearInterval(this.pingInterval);
+                this.pingInterval = setInterval(() => {
+                    this.send({ type: 'ping' });
+                }, 25000);
             };
 
             this.ws.onmessage = (event: MessageEvent) => {
@@ -64,6 +78,11 @@ class RelayService {
             this.ws.onclose = (event: CloseEvent) => {
                 console.log('[Relay] Connection closed', event.code, event.reason);
                 this.config.onClose?.();
+
+                if (this.pingInterval) {
+                    clearInterval(this.pingInterval);
+                    this.pingInterval = null;
+                }
 
                 if (!this.isIntentionalClose) {
                     this._scheduleReconnect();
@@ -105,7 +124,13 @@ class RelayService {
      */
     send(data: any): boolean {
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-            console.warn('[Relay] Cannot send — WebSocket not open');
+            console.log('[Relay] WebSocket not open — queuing message', data.type);
+            this.messageQueue.push(data);
+
+            // Limit queue size to avoid memory leaks if offline forever
+            if (this.messageQueue.length > 50) {
+                this.messageQueue.shift();
+            }
             return false;
         }
 
@@ -154,6 +179,11 @@ class RelayService {
             this.reconnectTimer = null;
         }
 
+        if (this.pingInterval) {
+            clearInterval(this.pingInterval);
+            this.pingInterval = null;
+        }
+
         if (this.ws) {
             try {
                 this.ws.close(1000, 'Client disconnect');
@@ -161,6 +191,7 @@ class RelayService {
             this.ws = null;
         }
 
+        this.messageQueue = [];
         console.log('[Relay] Disconnected');
     }
 }
