@@ -8,9 +8,6 @@ import 'package:geolocator/geolocator.dart';
 import '../../../../core/theme/colors.dart';
 import '../../../../core/theme/typography.dart';
 import '../../../../core/widgets/app_scaffold.dart';
-import '../../../../core/services/relay_service.dart';
-import '../../../../data/datasources/api_ds.dart';
-import 'package:dio/dio.dart';
 import '../../../../data/providers.dart';
 import '../../../../data/models/bus.dart';
 import '../../../../data/models/route.dart';
@@ -51,10 +48,6 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
   Timer? _metricsTimer;
   bool _isUserInBus = false;
 
-  // Relay State
-  RelayService? _relay;
-  LocationPoint? _liveBusLocation;
-
   // Trip stop progress data (from Firestore trip doc)
   StreamSubscription? _tripSubscription;
   List<Map<String, dynamic>> _tripStopsSnapshot = [];
@@ -72,7 +65,6 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
 
   @override
   void dispose() {
-    _relay?.dispose();
     _busSubscription?.cancel();
     _positionStream?.cancel();
     _tripSubscription?.cancel();
@@ -143,14 +135,12 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
           if (mounted) {
             setState(() {
               _currentBus = bus;
-              if (_relay == null || !_relay!.isConnected) {
-                _busSpeed = bus.currentSpeed ?? (bus.location?.speed ?? 0.0) * 2.23694; 
-              }
+              _busSpeed = bus.currentSpeed ?? (bus.location?.speed ?? 0.0) * 2.23694; 
             });
             
             if (bus.currentRoadName != null && bus.currentRoadName!.isNotEmpty) {
                if (mounted) setState(() => _currentRoadName = bus.currentRoadName!);
-            } else if (bus.location != null && (_relay == null || !_relay!.isConnected)) {
+            } else if (bus.location != null) {
               _updateRoadName(bus.location!.latitude, bus.location!.longitude);
             }
           }
@@ -162,42 +152,8 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
           // Subscribe to trip document for stopsSnapshot + stopProgress + eta
           if (bus.activeTripId != null) {
             _subscribeTripProgress(bus.activeTripId!);
-            if (_relay == null) _connectRelay(bus.id);
-          } else if (bus.activeTripId == null && _relay != null) {
-            _relay?.dispose();
-            _relay = null;
           }
         });
-  }
-
-  Future<void> _connectRelay(String busId) async {
-    try {
-      final tokenData = await ApiDataSource(Dio(), FirebaseFirestore.instance).getRelayToken(busId, 'student');
-      final wsUrl = tokenData['wsUrl'];
-      
-      _relay = RelayService();
-      _relay!.onMessage = (data) {
-        if (mounted && data['type'] == 'bus_location_update') {
-          setState(() {
-            _busSpeed = (data['speedMph'] as num?)?.toDouble() ?? 0.0;
-            _liveBusLocation = LocationPoint(
-              latitude: (data['lat'] as num?)?.toDouble() ?? 0.0,
-              longitude: (data['lng'] as num?)?.toDouble() ?? 0.0,
-              heading: (data['heading'] as num?)?.toDouble() ?? 0.0,
-              speed: (data['speedMps'] as num?)?.toDouble() ?? 0.0,
-              timestamp: DateTime.now(),
-            );
-            if (_followBus && _mapFocusLocation != null) {
-                _mapFocusLocation = _liveBusLocation;
-            }
-          });
-          _updateRoadName(_liveBusLocation!.latitude, _liveBusLocation!.longitude);
-        }
-      };
-      _relay!.connect(wsUrl);
-    } catch (e) {
-      debugPrint("Error connecting relay: $e");
-    }
   }
 
   void _subscribeTripProgress(String tripId) {
@@ -471,7 +427,6 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
                       timestamp: DateTime.now(),
                     )
                   : null,
-              liveBusLocation: _liveBusLocation,
               stopCircles: _tripStopsSnapshot.isNotEmpty
                   ? _tripStopsSnapshot.map((s) => {
                       'lat': (s['lat'] as num?)?.toDouble() ?? 0.0,

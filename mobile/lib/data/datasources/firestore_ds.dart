@@ -45,6 +45,8 @@ class FirestoreDataSource {
       // Trim strictly to 5 points
       final trimmedBuffer = combined.length > 5 ? combined.sublist(combined.length - 5) : combined;
 
+      final speedMph = ((lastPoint.speed ?? 0.0) * 2.23694).round();
+
       final updateData = {
         'lastUpdated': DateTime.now().toIso8601String(),
         'lastLocationUpdate': FieldValue.serverTimestamp(),
@@ -57,9 +59,12 @@ class FirestoreDataSource {
           'lat': lastPoint.latitude,
           'lng': lastPoint.longitude,
         },
-        'speed': lastPoint.speed ?? 0,
+        'speed': speedMph,
+        'currentSpeed': speedMph,
         'heading': lastPoint.heading ?? 0,
+        'currentHeading': lastPoint.heading ?? 0.0,
         'liveTrackBuffer': trimmedBuffer,
+        'status': 'ON_ROUTE',
       };
 
       transaction.update(docRef, updateData);
@@ -209,7 +214,7 @@ class FirestoreDataSource {
         'latitude': point.latitude,
         'longitude': point.longitude,
         'heading': point.heading ?? 0.0,
-        'speed': (point.speed ?? 0.0).round(),
+        'speed': ((point.speed ?? 0.0) * 2.23694).round(),
         'timestamp': DateTime.now().toIso8601String(),
         'recordedAt': DateTime.now().toIso8601String(),
       };

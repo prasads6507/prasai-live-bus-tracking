@@ -639,7 +639,7 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
           });
           _updateRoadName(point.latitude, point.longitude);
           
-          // Stream to Relay (Cloudflare)
+          // Stream to Relay (Cloudflare) — primary real-time channel
           if (_relay != null && _relay!.isConnected) {
             _relay!.sendLocation(
               tripId: 'active', // The relay uses busId from the token path, tripId is advisory
@@ -649,6 +649,18 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
               heading: point.heading ?? 0.0,
             );
           }
+
+          // Also update Firestore bus doc (for map subscriptions to animate markers)
+          ref.read(firestoreDataSourceProvider).updateDriverLocation(
+              widget.collegeId, widget.busId, [point]);
+
+          // Persist point to trip path history (for post-trip route playback)
+          final busStream = ref.read(firestoreDataSourceProvider).getBus(widget.collegeId, widget.busId);
+          busStream.first.then((bus) {
+            if (bus.activeTripId != null && bus.activeTripId!.isNotEmpty) {
+              ref.read(firestoreDataSourceProvider).saveTripPathPoint(bus.activeTripId!, point, widget.busId);
+            }
+          }).catchError((_) {});
         }
       }
     );
