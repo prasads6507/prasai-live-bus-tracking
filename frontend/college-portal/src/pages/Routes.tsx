@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { MapPin, Plus, Search, X, AlertCircle, CheckCircle, Edit2, Trash2, Upload, Download } from 'lucide-react';
+import { MapPin, Plus, Search, X, AlertCircle, CheckCircle, Edit2, Trash2, Upload, Download, Sparkles, Navigation } from 'lucide-react';
 import { getRoutes, createRoute, updateRoute, deleteRoute, validateSlug, bulkCreateRoutes } from '../services/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as XLSX from 'xlsx';
@@ -98,8 +98,9 @@ const Routes = () => {
         return () => clearTimeout(timer);
     }, [newRoute.stops]);
 
-    const checkRouteOrder = async () => {
-        const validStops = newRoute.stops.filter(s => s.latitude && s.longitude &&
+    const checkRouteOrder = async (stopsToCheck?: any[]) => {
+        const stops = stopsToCheck || newRoute.stops;
+        const validStops = stops.filter(s => s.latitude && s.longitude &&
             !isNaN(parseFloat(s.latitude)) && !isNaN(parseFloat(s.longitude)));
 
         if (validStops.length < 3) return false; // Only suggest for 3+ stops
@@ -134,41 +135,57 @@ const Routes = () => {
         return false;
     };
 
-    const handleCreateRoute = async (e?: React.FormEvent) => {
+    const handleCreateRoute = async (e?: React.FormEvent, skipReorderCheck = false, overriddenStops?: any[]) => {
         if (e) e.preventDefault();
 
-        // If we haven't checked reordering yet and there are enough stops
-        if (!showReorderUI && newRoute.stops.length >= 3) {
-            const hasSuggestion = await checkRouteOrder();
-            if (hasSuggestion) return;
+        const stopsToUse = overriddenStops || newRoute.stops;
+
+        // If we haven't checked reordering yet and there are enough stops, and not forcing submission
+        if (!skipReorderCheck && !showReorderUI && stopsToUse.length >= 3) {
+            const hasSuggestion = await checkRouteOrder(stopsToUse);
+            if (hasSuggestion) {
+                console.log("Optimization suggestion available. Showing UI.");
+                return;
+            }
         }
 
         setFormLoading(true);
         setFormError('');
+        console.log(`[SUBMIT] Mode: ${isEditMode ? 'UPDATE' : 'CREATE'}, RouteName: ${newRoute.routeName}, ID: ${editingRoute?._id}`);
 
         try {
             const routeData = {
                 ...newRoute,
+                stops: stopsToUse,
                 startPoint: '',
                 endPoint: ''
             };
 
-            if (isEditMode && editingRoute) {
+            if (isEditMode && editingRoute?._id) {
+                console.log("Executing updateRoute for ID:", editingRoute._id);
                 await updateRoute(editingRoute._id, routeData);
                 setSuccessMessage(`Route ${newRoute.routeName} updated successfully!`);
             } else {
+                console.log("Calling createRoute");
                 await createRoute(routeData);
                 setSuccessMessage(`Route ${newRoute.routeName} created successfully!`);
+                // If we were in reorder mode, clear it
+                setShowReorderUI(false);
             }
 
-            fetchRoutes();
+            // Refresh the list
+            await fetchRoutes();
+
+            // Note: We don't close the modal automatically per user request
+            // Only hide the reorder UI if it was open
             setShowReorderUI(false);
 
             setTimeout(() => {
                 setSuccessMessage('');
-            }, 3000);
+            }, 5000);
 
         } catch (err: any) {
+            console.error("Submission failed:", err);
             setFormError(err.response?.data?.message || err.message || 'Operation failed');
         } finally {
             setFormLoading(false);
@@ -491,149 +508,160 @@ const Routes = () => {
                                 </div>
                             )}
 
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                <div className="space-y-6">
-                                    {showReorderUI ? (
-                                        <div className="space-y-6">
-                                            <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl">
-                                                <h3 className="text-blue-800 font-bold flex items-center gap-2 mb-1">
-                                                    <AlertCircle size={18} />
-                                                    Optimization Available
-                                                </h3>
-                                                <p className="text-blue-700 text-sm">
-                                                    We found a shorter sequence for these stops. Choose the order you prefer:
-                                                </p>
-                                            </div>
-
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                                {/* Current Order */}
-                                                <div
-                                                    className="bg-slate-50 border border-slate-200 rounded-xl p-4 cursor-pointer hover:border-slate-400 transition-all flex flex-col group"
-                                                    onClick={() => { setShowReorderUI(false); handleCreateRoute(); }}
-                                                >
-                                                    <div className="flex justify-between items-center mb-3">
-                                                        <span className="text-xs font-bold text-slate-500 uppercase">Current</span>
-                                                        <span className="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-bold">YOURS</span>
-                                                    </div>
-                                                    <div className="space-y-2 mb-4 max-h-[200px] overflow-y-auto pr-1">
-                                                        {newRoute.stops.map((s, i) => (
-                                                            <div key={i} className="flex items-center gap-2 text-xs text-slate-600">
-                                                                <div className="w-4 h-4 rounded-full bg-slate-200 flex items-center justify-center text-[8px] font-bold">{i + 1}</div>
-                                                                <span className="truncate">{s.stopName || 'Unnamed'}</span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                    <button className="mt-auto w-full py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold transition-colors">
-                                                        Keep Original
-                                                    </button>
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 relative">
+                                {showReorderUI && (
+                                    <div className="absolute inset-0 bg-white/95 z-40 flex flex-col p-8 animate-in fade-in zoom-in duration-300">
+                                        <div className="flex justify-between items-center mb-6">
+                                            <div className="flex items-center gap-3">
+                                                <div className="p-3 bg-blue-100 rounded-xl">
+                                                    <Sparkles className="text-blue-600" size={24} />
                                                 </div>
-
-                                                {/* Optimized Order */}
-                                                <div
-                                                    className="bg-white border-2 border-green-200 rounded-xl p-4 cursor-pointer hover:border-green-500 transition-all flex flex-col group shadow-md"
-                                                    onClick={() => { setNewRoute({ ...newRoute, stops: suggestedStops }); setShowReorderUI(false); }}
-                                                >
-                                                    <div className="flex justify-between items-center mb-3">
-                                                        <span className="text-xs font-bold text-green-700 uppercase">Optimized</span>
-                                                        <span className="text-[10px] bg-green-500 text-white px-2 py-0.5 rounded-full font-bold">BETTER</span>
-                                                    </div>
-                                                    <div className="space-y-2 mb-4 max-h-[200px] overflow-y-auto pr-1">
-                                                        {suggestedStops.map((s, i) => (
-                                                            <div key={i} className="flex items-center gap-2 text-xs text-green-800">
-                                                                <div className="w-4 h-4 rounded-full bg-green-500 text-white flex items-center justify-center text-[8px] font-bold">{i + 1}</div>
-                                                                <span className="font-medium truncate">{s.stopName || 'Unnamed'}</span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                    <button className="mt-auto w-full py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold transition-colors">
-                                                        Use Recommended
-                                                    </button>
+                                                <div>
+                                                    <h3 className="text-xl font-bold text-slate-800">Route Optimization</h3>
+                                                    <p className="text-slate-500 text-sm">We've calculated a more efficient sequence for your stops.</p>
                                                 </div>
                                             </div>
-
-                                            <button onClick={() => setShowReorderUI(false)} className="w-full text-slate-400 hover:text-slate-600 text-[10px] font-bold uppercase tracking-tighter">
-                                                Discard and go back to editing
+                                            <button onClick={() => setShowReorderUI(false)} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+                                                <X size={20} className="text-slate-500" />
                                             </button>
                                         </div>
-                                    ) : (
-                                        <form onSubmit={handleCreateRoute} className="space-y-6">
-                                            <div>
-                                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">Route Name</label>
-                                                <input
-                                                    type="text" required
-                                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all font-semibold"
-                                                    value={newRoute.routeName}
-                                                    onChange={(e) => setNewRoute({ ...newRoute, routeName: e.target.value })}
-                                                    placeholder="e.g. City Center Route"
-                                                />
+
+                                        <div className="flex-grow grid grid-cols-1 md:grid-cols-2 gap-8 min-h-0">
+                                            {/* Current Order (Left) */}
+                                            <div
+                                                className="border-2 border-slate-200 rounded-2xl p-6 hover:border-blue-500 hover:bg-blue-50/10 cursor-pointer transition-all flex flex-col group relative"
+                                                onClick={() => handleCreateRoute(undefined, true)}
+                                            >
+                                                <div className="absolute top-4 right-4">
+                                                    <div className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-bold uppercase tracking-wider">Original</div>
+                                                </div>
+                                                <h4 className="font-bold text-slate-700 mb-4 flex items-center gap-2">
+                                                    <MapPin size={18} /> Current Order
+                                                </h4>
+                                                <div className="space-y-3 overflow-y-auto pr-2 custom-scrollbar flex-grow mb-6">
+                                                    {newRoute.stops.map((s, i) => (
+                                                        <div key={i} className="flex items-center gap-3 p-3 bg-white border border-slate-100 rounded-xl shadow-sm">
+                                                            <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500">{i + 1}</div>
+                                                            <span className="text-sm font-medium text-slate-600 truncate">{s.stopName || 'Unnamed Stop'}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                                <button className="w-full py-4 bg-slate-800 text-white rounded-xl font-bold transition-all group-hover:bg-slate-900 group-hover:scale-[1.02]">
+                                                    Keep My Order
+                                                </button>
                                             </div>
 
-                                            <div className="space-y-4">
-                                                <div className="flex items-center justify-between">
-                                                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Stops Sequence</h3>
-                                                    <button type="button" onClick={addStop} className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1">
-                                                        <Plus size={14} /> Add Stop
-                                                    </button>
+                                            {/* Optimized Order (Right) */}
+                                            <div
+                                                className="border-2 border-blue-200 bg-blue-50/5 rounded-2xl p-6 hover:border-blue-600 hover:bg-blue-50/20 cursor-pointer transition-all flex flex-col group relative shadow-xl shadow-blue-50"
+                                                onClick={() => handleCreateRoute(undefined, true, suggestedStops)}
+                                            >
+                                                <div className="absolute top-4 right-4">
+                                                    <div className="px-3 py-1 bg-blue-600 text-white rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
+                                                        <Sparkles size={10} /> Optimized
+                                                    </div>
                                                 </div>
-
-                                                <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-                                                    {newRoute.stops.length === 0 ? (
-                                                        <div className="py-12 border-2 border-dashed border-slate-100 rounded-xl flex flex-col items-center justify-center text-slate-300">
-                                                            <MapPin size={32} strokeWidth={1.5} />
-                                                            <p className="text-xs font-medium mt-2">No stops added yet</p>
+                                                <h4 className="font-bold text-blue-800 mb-4 flex items-center gap-2">
+                                                    <Navigation size={18} /> Recommended Path
+                                                </h4>
+                                                <div className="space-y-3 overflow-y-auto pr-2 custom-scrollbar flex-grow mb-6">
+                                                    {suggestedStops.map((s, i) => (
+                                                        <div key={i} className="flex items-center gap-3 p-3 bg-white border border-blue-100 rounded-xl shadow-sm">
+                                                            <div className="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-xs font-bold text-white">{i + 1}</div>
+                                                            <span className="text-sm font-bold text-blue-900 truncate">{s.stopName || 'Unnamed Stop'}</span>
                                                         </div>
-                                                    ) : (
-                                                        newRoute.stops.map((stop, index) => (
-                                                            <div key={index} className="bg-slate-50 border border-slate-200 rounded-xl p-3 shadow-sm">
-                                                                <div className="flex items-center gap-3">
-                                                                    <div className="flex flex-col gap-1 items-center">
-                                                                        <button type="button" onClick={() => moveStopUp(index)} className="text-slate-400 hover:text-blue-600 disabled:opacity-20" disabled={index === 0}>
-                                                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="18 15 12 9 6 15" /></svg>
-                                                                        </button>
-                                                                        <span className="text-[10px] font-bold text-slate-400">{index + 1}</span>
-                                                                        <button type="button" onClick={() => moveStopDown(index)} className="text-slate-400 hover:text-blue-600 disabled:opacity-20" disabled={index === newRoute.stops.length - 1}>
-                                                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="6 9 12 15 18 9" /></svg>
-                                                                        </button>
-                                                                    </div>
-                                                                    <input
-                                                                        type="text" placeholder="Stop Name"
-                                                                        className="flex-grow px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:border-blue-400"
-                                                                        value={stop.stopName}
-                                                                        onChange={(e) => updateStop(index, 'stopName', e.target.value)}
-                                                                    />
-                                                                    <button type="button" onClick={() => removeStop(index)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg">
-                                                                        <X size={18} />
+                                                    ))}
+                                                </div>
+                                                <button className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold transition-all group-hover:bg-blue-700 group-hover:scale-[1.02] shadow-lg shadow-blue-200">
+                                                    Use Shortest Path
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <p className="mt-6 text-center text-slate-400 text-xs font-medium uppercase tracking-widest">
+                                            Select an option to save the route
+                                        </p>
+                                    </div>
+                                )}
+
+                                <div className="space-y-6">
+                                    <form onSubmit={handleCreateRoute} className="space-y-6">
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">Route Name</label>
+                                            <input
+                                                type="text" required
+                                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all font-semibold"
+                                                value={newRoute.routeName}
+                                                onChange={(e) => setNewRoute({ ...newRoute, routeName: e.target.value })}
+                                                placeholder="e.g. City Center Route"
+                                            />
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            <div className="flex items-center justify-between">
+                                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Stops Sequence</h3>
+                                                <button type="button" onClick={addStop} className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1">
+                                                    <Plus size={14} /> Add Stop
+                                                </button>
+                                            </div>
+
+                                            <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                                                {newRoute.stops.length === 0 ? (
+                                                    <div className="py-12 border-2 border-dashed border-slate-100 rounded-xl flex flex-col items-center justify-center text-slate-300">
+                                                        <MapPin size={32} strokeWidth={1.5} />
+                                                        <p className="text-xs font-medium mt-2">No stops added yet</p>
+                                                    </div>
+                                                ) : (
+                                                    newRoute.stops.map((stop, index) => (
+                                                        <div key={index} className="bg-slate-50 border border-slate-200 rounded-xl p-3 shadow-sm">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="flex flex-col gap-1 items-center">
+                                                                    <button type="button" onClick={() => moveStopUp(index)} className="text-slate-400 hover:text-blue-600 disabled:opacity-20" disabled={index === 0}>
+                                                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="18 15 12 9 6 15" /></svg>
+                                                                    </button>
+                                                                    <span className="text-[10px] font-bold text-slate-400">{index + 1}</span>
+                                                                    <button type="button" onClick={() => moveStopDown(index)} className="text-slate-400 hover:text-blue-600 disabled:opacity-20" disabled={index === newRoute.stops.length - 1}>
+                                                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="6 9 12 15 18 9" /></svg>
                                                                     </button>
                                                                 </div>
-                                                                <AddressAutocomplete
-                                                                    initialAddress={stop.address || ''}
-                                                                    biasLat={index > 0 ? parseFloat(newRoute.stops[index - 1].latitude) : 17.3850}
-                                                                    biasLon={index > 0 ? parseFloat(newRoute.stops[index - 1].longitude) : 78.4867}
-                                                                    onSelect={(data) => {
-                                                                        const ns = [...newRoute.stops];
-                                                                        ns[index] = { ...ns[index], address: data.address, latitude: data.lat.toString(), longitude: data.lng.toString() };
-                                                                        setNewRoute({ ...newRoute, stops: ns });
-                                                                    }}
-                                                                    className="w-full mt-2"
+                                                                <input
+                                                                    type="text" placeholder="Stop Name"
+                                                                    className="flex-grow px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:border-blue-400"
+                                                                    value={stop.stopName}
+                                                                    onChange={(e) => updateStop(index, 'stopName', e.target.value)}
                                                                 />
+                                                                <button type="button" onClick={() => removeStop(index)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg">
+                                                                    <X size={18} />
+                                                                </button>
                                                             </div>
-                                                        ))
-                                                    )}
-                                                </div>
+                                                            <AddressAutocomplete
+                                                                initialAddress={stop.address || ''}
+                                                                biasLat={index > 0 ? parseFloat(newRoute.stops[index - 1].latitude) : 17.3850}
+                                                                biasLon={index > 0 ? parseFloat(newRoute.stops[index - 1].longitude) : 78.4867}
+                                                                onSelect={(data) => {
+                                                                    const ns = [...newRoute.stops];
+                                                                    ns[index] = { ...ns[index], address: data.address, latitude: data.lat.toString(), longitude: data.lng.toString() };
+                                                                    setNewRoute({ ...newRoute, stops: ns });
+                                                                }}
+                                                                className="w-full mt-2"
+                                                            />
+                                                        </div>
+                                                    ))
+                                                )}
                                             </div>
+                                        </div>
 
-                                            <motion.button
-                                                whileHover={{ scale: 1.01 }}
-                                                whileTap={{ scale: 0.99 }}
-                                                type="submit"
-                                                disabled={formLoading || isReorderLoading}
-                                                className={`w-full py-4 rounded-xl font-bold text-white shadow-lg transition-all ${formLoading || isReorderLoading ? 'bg-slate-300' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-200'
-                                                    }`}
-                                            >
-                                                {formLoading ? 'Saving...' : (isReorderLoading ? 'Checking path...' : (isEditMode ? 'Update Route' : 'Create Route'))}
-                                            </motion.button>
-                                        </form>
-                                    )}
+                                        <motion.button
+                                            whileHover={{ scale: 1.01 }}
+                                            whileTap={{ scale: 0.99 }}
+                                            type="submit"
+                                            disabled={formLoading || isReorderLoading}
+                                            className={`w-full py-4 rounded-xl font-bold text-white shadow-lg transition-all ${formLoading || isReorderLoading ? 'bg-slate-300' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-200'
+                                                }`}
+                                        >
+                                            {formLoading ? 'Saving...' : (isReorderLoading ? 'Checking path...' : (isEditMode ? 'Update Route' : 'Create Route'))}
+                                        </motion.button>
+                                    </form>
                                 </div>
 
                                 <div className="h-[500px] lg:h-full lg:min-h-[600px] bg-slate-50 rounded-2xl overflow-hidden border border-slate-200 sticky top-0 z-0">
