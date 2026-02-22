@@ -3,7 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Bus, MapPin, Navigation, Settings, User, Bell } from 'lucide-react';
 import { collection, query, where, onSnapshot, orderBy, limit } from 'firebase/firestore';
 import { db } from '../config/firebase'; // Import Firestore instance
-import { getBuses, getRoutes, validateSlug } from '../services/api';
+import { validateSlug, getBuses, getRoutes, getRelayToken } from '../services/api';
+import { RelayService } from '../services/relay';
 import { getStreetName } from '../services/geocoding';
 import Layout from '../components/Layout';
 import MapLibreMap, { getBusLatLng } from '../components/MapLibreMap';
@@ -82,15 +83,17 @@ const Dashboard = () => {
 
         console.log('Setting up real-time bus subscription for college:', currentCollegeId);
 
-        // Listen for real-time updates to 'buses' collection
-        const qBuses = query(collection(db, 'buses'), where('collegeId', '==', currentCollegeId));
-        const unsubscribeBuses = onSnapshot(qBuses, (snapshot) => {
-            const updatedBuses = snapshot.docs.map(doc => ({
-                _id: doc.id,
-                ...doc.data()
-            }));
-            setBuses(updatedBuses);
-        });
+        // Periodic bus list refresh (every 30s)
+        const refreshBuses = async () => {
+            try {
+                const response = await getBuses();
+                setBuses(Array.isArray(response) ? response : response.data || []);
+            } catch (err) {
+                console.error('Failed to refresh buses:', err);
+            }
+        };
+
+        const busInterval = setInterval(refreshBuses, 30000);
 
         // Listen for real-time updates to 'routes' collection
         const qRoutes = query(collection(db, 'routes'), where('collegeId', '==', currentCollegeId));
@@ -119,17 +122,65 @@ const Dashboard = () => {
 
         return () => {
             console.log('Cleaning up real-time subscriptions for college:', currentCollegeId);
-            unsubscribeBuses();
+            clearInterval(busInterval);
             unsubscribeRoutes();
             unsubscribeNotifications();
         };
 
         return () => {
             console.log('Cleaning up real-time subscriptions for college:', currentCollegeId);
-            unsubscribeBuses();
+            clearInterval(busInterval);
             unsubscribeRoutes();
         };
     }, [currentCollegeId]); // Depend on currentCollegeId state
+
+    // WebSocket connection for tracking a specific selected bus in real-time
+    useEffect(() => {
+        if (!selectedBusId) return;
+
+        const relay = new RelayService();
+
+        const connectRelay = async () => {
+            try {
+                const tokenResp = await getRelayToken(selectedBusId, 'admin');
+                relay.connect(tokenResp.wsUrl, {
+                    onMessage: (data: any) => {
+                        if (data.type === 'bus_location_update') {
+                            setBuses(prev => prev.map(b => {
+                                if (b._id === selectedBusId) {
+                                    return {
+                                        ...b,
+                                        location: {
+                                            latitude: data.lat,
+                                            longitude: data.lng,
+                                            heading: data.heading || 0
+                                        },
+                                        speed: data.speedMph || 0,
+                                        lastUpdated: new Date().toISOString()
+                                    };
+                                }
+                                return b;
+                            }));
+
+                            if (followSelectedBus) {
+                                setFocusedBusLocation({ lat: data.lat, lng: data.lng });
+                            }
+                        }
+                    },
+                    onOpen: () => console.log('[Admin] WS connected for bus', selectedBusId),
+                    onClose: () => console.log('[Admin] WS disconnected for bus', selectedBusId),
+                });
+            } catch (err) {
+                console.error('[Admin] Failed to connect relay for bus', selectedBusId, err);
+            }
+        };
+
+        connectRelay();
+
+        return () => {
+            relay.disconnect();
+        };
+    }, [selectedBusId, followSelectedBus]);
 
     // Resolve addresses for active buses - Smart bulk update
     useEffect(() => {

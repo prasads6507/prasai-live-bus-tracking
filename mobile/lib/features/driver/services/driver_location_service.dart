@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:isolate';
 import 'dart:math';
 import 'dart:ui';
@@ -6,6 +7,10 @@ import 'package:background_location_tracker/background_location_tracker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart';
+
+import '../../data/datasources/api_ds.dart';
+import '../../core/utils/polyline_encoder.dart';
 
 double _sanitizeSpeedMps(double? v) {
   if (v == null) return 0;
@@ -33,117 +38,77 @@ void backgroundCallback() {
       if (collegeId == null || busId == null) return;
       
       try {
+        final rawLat = data.lat;
+        final rawLng = data.lon;
+        
+        if (rawLat == 0.0 || rawLng == 0.0) return;
+
+        final prevLat = prefs.getDouble('prev_lat');
+        final prevLng = prefs.getDouble('prev_lng');
+        final prevTimeStr = prefs.getString('prev_time');
+        final nowTime = DateTime.now();
+
+        double estMps = 0.0;
+        double smoothedLat = rawLat;
+        double smoothedLng = rawLng;
+
+        if (prevLat != null && prevLng != null && prevTimeStr != null) {
+          final prevTime = DateTime.parse(prevTimeStr);
+          final dtSeconds = max(1, nowTime.difference(prevTime).inSeconds);
+          final distMeters = _haversineMeters(prevLat, prevLng, rawLat, rawLng);
+
+          estMps = distMeters / dtSeconds;
+          if (estMps > 60.0) return; // Drop bad point (jump > 134mph)
+
+          smoothedLat = 0.7 * rawLat + 0.3 * prevLat;
+          smoothedLng = 0.7 * rawLng + 0.3 * prevLng;
+        }
+
+        final pluginSpeed = _sanitizeSpeedMps(data.speed);
+        double finalSpeedMps = pluginSpeed > 0 ? pluginSpeed : estMps;
+        if (finalSpeedMps > 45.0) finalSpeedMps = 45.0; // clamp max ~100mph
+        final speedMph = _speedMphRounded(finalSpeedMps);
+
+        // Update prev point
+        await prefs.setDouble('prev_lat', smoothedLat);
+        await prefs.setDouble('prev_lng', smoothedLng);
+        await prefs.setString('prev_time', nowTime.toIso8601String());
+
+        // ─── LOCAL BUFFER instead of Firestore writes ───
+        // Buffer GPS points locally; they'll be uploaded in one batch at trip end.
+        // This eliminates ALL Firestore writes from background tracking.
+
+        final newPoint = {
+          'lat': smoothedLat,
+          'lng': smoothedLng,
+          'speed': speedMph,
+          'heading': data.course,
+          'timestamp': nowTime.toIso8601String(),
+        };
+
+        // Append to SharedPreferences buffer
+        final existingBuffer = prefs.getString('trip_history_buffer') ?? '[]';
+        List<dynamic> buffer;
+        try {
+          buffer = existingBuffer.isNotEmpty
+            ? List<dynamic>.from(jsonDecode(existingBuffer) as List)
+            : [];
+        } catch (_) {
+          buffer = [];
+        }
+        buffer.add(newPoint);
+
+        // Cap at 10,000 points (~3 hour trip at 1 point/5sec)
+        if (buffer.length > 10000) {
+          buffer.removeRange(0, buffer.length - 10000);
+        }
+
+        await prefs.setString('trip_history_buffer', jsonEncode(buffer));
+        await prefs.setInt('trip_buffer_count', buffer.length);
+
+        // --- Geofence + ETA check (fire-and-forget, reads only) ---
         final db = FirebaseFirestore.instance;
         final busRef = db.collection('buses').doc(busId);
-        
-        await db.runTransaction((transaction) async {
-          final snapshot = await transaction.get(busRef);
-          if (!snapshot.exists) return;
-          
-          final dataMap = snapshot.data();
-          if (dataMap == null) return;
-          
-          final isActiveTrip = dataMap['activeTripId'] != null;
-          final newStatus = isActiveTrip ? 'ON_ROUTE' : (dataMap['status'] == 'MAINTENANCE' ? 'MAINTENANCE' : 'ACTIVE');
-
-          final rawLat = data.lat;
-          final rawLng = data.lon;
-          
-          if (rawLat == 0.0 || rawLng == 0.0) return;
-
-          final prevLat = prefs.getDouble('prev_lat');
-          final prevLng = prefs.getDouble('prev_lng');
-          final prevTimeStr = prefs.getString('prev_time');
-          final nowTime = DateTime.now();
-
-          double estMps = 0.0;
-          double smoothedLat = rawLat;
-          double smoothedLng = rawLng;
-
-          if (prevLat != null && prevLng != null && prevTimeStr != null) {
-            final prevTime = DateTime.parse(prevTimeStr);
-            final dtSeconds = max(1, nowTime.difference(prevTime).inSeconds);
-            final distMeters = _haversineMeters(prevLat, prevLng, rawLat, rawLng);
-
-            estMps = distMeters / dtSeconds;
-            if (estMps > 60.0) return; // Drop bad point (jump > 134mph)
-
-            smoothedLat = 0.7 * rawLat + 0.3 * prevLat;
-            smoothedLng = 0.7 * rawLng + 0.3 * prevLng;
-          }
-
-          final pluginSpeed = _sanitizeSpeedMps(data.speed);
-          double finalSpeedMps = pluginSpeed > 0 ? pluginSpeed : estMps;
-          if (finalSpeedMps > 45.0) finalSpeedMps = 45.0; // clamp max ~100mph
-          final speedMph = _speedMphRounded(finalSpeedMps);
-
-          // Update prev point
-          await prefs.setDouble('prev_lat', smoothedLat);
-          await prefs.setDouble('prev_lng', smoothedLng);
-          await prefs.setString('prev_time', nowTime.toIso8601String());
-
-          final currentBuffer = List.from(dataMap['liveTrackBuffer'] ?? []);
-          final newTracePoint = {
-            'latitude': smoothedLat,
-            'longitude': smoothedLng,
-            'speed': speedMph,
-            'heading': data.course,
-            'timestamp': nowTime.toIso8601String(),
-          };
-          
-          currentBuffer.add(newTracePoint);
-          if (currentBuffer.length > 5) {
-            currentBuffer.removeRange(0, currentBuffer.length - 5);
-          }
-          
-          transaction.update(busRef, {
-            'status': newStatus,
-            'lastUpdated': nowTime.toIso8601String(),
-            'lastLocationUpdate': FieldValue.serverTimestamp(),
-            'location': {
-              'latitude': smoothedLat,
-              'longitude': smoothedLng,
-              'heading': data.course,
-            },
-            'currentLocation': {
-              'lat': smoothedLat,
-              'lng': smoothedLng,
-            },
-            'speed': speedMph,
-            'currentSpeed': speedMph,
-            'heading': data.course,
-            'liveTrackBuffer': currentBuffer,
-          });
-
-          if (isActiveTrip) {
-            final String tripId = dataMap['activeTripId'] as String;
-            
-            final rootTripRef = db.collection('trips').doc(tripId);
-            
-            final newPathPoint = {
-              'lat': smoothedLat,
-              'lng': smoothedLng,
-              'latitude': smoothedLat,
-              'longitude': smoothedLng,
-              'speed': speedMph,
-              'heading': data.course,
-              'recordedAt': FieldValue.serverTimestamp(),
-              'timestamp': nowTime.toIso8601String(),
-            };
-
-            // Ensure root trip doc exists with metadata, update metrics
-            transaction.set(rootTripRef, {
-              'updatedAt': FieldValue.serverTimestamp(),
-              'totalPoints': FieldValue.increment(1),
-            }, SetOptions(merge: true));
-
-            // Write point into subcollection
-            transaction.set(rootTripRef.collection('path').doc(), newPathPoint);
-          }
-        });
-
-        // --- Geofence + ETA check (fire-and-forget, outside transaction) ---
-        // Read bus doc again to get activeTripId (variables from transaction are out of scope)
         final busDocForGeofence = await busRef.get();
         final geoData = busDocForGeofence.data();
         if (geoData != null && geoData['activeTripId'] != null) {
@@ -325,5 +290,63 @@ class DriverLocationService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('track_college_id');
     await prefs.remove('track_bus_id');
+  }
+
+  static Future<void> uploadBufferedHistory(String tripId) async {
+    final prefs = await SharedPreferences.getInstance();
+    try {
+      final existingBuffer = prefs.getString('trip_history_buffer');
+      if (existingBuffer != null && existingBuffer.isNotEmpty) {
+        final buffer = List<dynamic>.from(jsonDecode(existingBuffer));
+        if (buffer.isNotEmpty) {
+          double totalDistM = 0;
+          double maxSpeedMph = 0;
+          double sumSpeedMph = 0;
+          final coords = <List<double>>[];
+
+          for (int i = 0; i < buffer.length; i++) {
+            final point = buffer[i];
+            final lat = (point['lat'] as num).toDouble();
+            final lng = (point['lng'] as num).toDouble();
+            final speed = (point['speed'] as num).toDouble();
+
+            coords.add([lat, lng]);
+            if (speed > maxSpeedMph) maxSpeedMph = speed;
+            sumSpeedMph += speed;
+
+            if (i > 0) {
+              final prev = buffer[i - 1];
+              totalDistM += _haversineMeters(
+                (prev['lat'] as num).toDouble(), (prev['lng'] as num).toDouble(),
+                lat, lng,
+              );
+            }
+          }
+
+          final firstTs = DateTime.parse(buffer.first['timestamp']);
+          final lastTs = DateTime.parse(buffer.last['timestamp']);
+          final durationSec = lastTs.difference(firstTs).inSeconds.abs();
+
+          final String polyline = PolylineEncoder.encode(coords);
+
+          await ApiDataSource().uploadTripHistory(
+            tripId,
+            polyline: polyline,
+            distanceMeters: totalDistM.round(),
+            durationSeconds: durationSec,
+            maxSpeedMph: maxSpeedMph.round(),
+            avgSpeedMph: (sumSpeedMph / buffer.length).round(),
+            pointsCount: buffer.length,
+          );
+          
+          debugPrint("Successfully uploaded trip history for $tripId (${buffer.length} points, compressed to polyline)");
+        }
+      }
+    } catch (e) {
+      debugPrint("Failed to upload buffered trip history: $e");
+    } finally {
+      await prefs.remove('trip_history_buffer');
+      await prefs.remove('trip_buffer_count');
+    }
   }
 }

@@ -801,9 +801,15 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
 
                   setState(() => _isLoading = true);
                   try {
+                    final String? activeTripId = bus.activeTripId;
                     // Always call endTrip to ensure the bus is reset in Firestore
-                    await ref.read(firestoreDataSourceProvider).endTrip(bus.activeTripId, widget.busId);
+                    await ref.read(firestoreDataSourceProvider).endTrip(activeTripId, widget.busId);
                     _stopTracking();
+
+                    if (activeTripId != null && activeTripId.isNotEmpty) {
+                      await DriverLocationService.uploadBufferedHistory(activeTripId);
+                    }
+
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text("Trip ended successfully!")),

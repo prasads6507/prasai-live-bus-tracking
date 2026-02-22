@@ -1,10 +1,11 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Bus, LogOut, User, MapPin, Search, Star, X, Crosshair, AlertCircle, ArrowLeft, Clock } from 'lucide-react';
-import { validateSlug, getStudentBuses, getStudentRoutes } from '../services/api';
+import { validateSlug, getStudentBuses, getStudentRoutes, getRelayToken } from '../services/api';
 import { getStreetName } from '../services/geocoding';
-import { collection, query, where, onSnapshot, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { RelayService } from '../services/relay';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import MapLibreMapComponent from '../components/MapLibreMapComponent';
 import useNotification from '../hooks/useNotification';
@@ -116,34 +117,35 @@ const StudentDashboard = () => {
         if (collegeId) fetchBuses();
     }, [collegeId, user?.assignedBusId]);
 
-    // Real-time bus updates
+    // Periodic bus list refresh (every 30s instead of Firestore onSnapshot)
     useEffect(() => {
         if (!collegeId) return;
 
-        const qBuses = query(collection(db, 'buses'), where('collegeId', '==', collegeId));
-        const unsubscribe = onSnapshot(qBuses, (snapshot) => {
-            const updatedBuses = snapshot.docs.map(doc => ({
-                _id: doc.id,
-                ...doc.data()
-            }));
-            setBuses(updatedBuses);
+        const refreshBuses = async () => {
+            try {
+                const response = await getStudentBuses();
+                const busData = Array.isArray(response) ? response : response.data || [];
+                setBuses(busData);
 
-            // Update assigned and substitute bus if they exist
-            if (user?.assignedBusId) {
-                const myBus = updatedBuses.find((b: any) => b._id === user.assignedBusId);
-                if (myBus) {
-                    setAssignedBus(myBus);
-                    if ((myBus as any).substituteBusId) {
-                        const sub = updatedBuses.find((b: any) => b._id === (myBus as any).substituteBusId);
-                        setSubstituteBus(sub);
-                    } else {
-                        setSubstituteBus(null);
+                if (user?.assignedBusId) {
+                    const myBus = busData.find((b: any) => b._id === user.assignedBusId);
+                    if (myBus) {
+                        setAssignedBus(myBus);
+                        if ((myBus as any).substituteBusId) {
+                            const sub = busData.find((b: any) => b._id === (myBus as any).substituteBusId);
+                            setSubstituteBus(sub);
+                        } else {
+                            setSubstituteBus(null);
+                        }
                     }
                 }
+            } catch (err) {
+                console.error('Failed to refresh buses:', err);
             }
-        });
+        };
 
-        return () => unsubscribe();
+        const interval = setInterval(refreshBuses, 30000); // Refresh every 30 seconds
+        return () => clearInterval(interval);
     }, [collegeId, user?.assignedBusId]);
 
     // 10-minute interval GPS tracking for student location (Battery efficient)
@@ -224,10 +226,12 @@ const StudentDashboard = () => {
                     setTrackedBus(updatedBus);
 
                     // Also update focused location if we are in tracking mode
-                    setFocusedBusLocation({
-                        lat: updatedBus.location.latitude,
-                        lng: updatedBus.location.longitude
-                    });
+                    if (updatedBus.location?.latitude && updatedBus.location?.longitude) {
+                        setFocusedBusLocation({
+                            lat: updatedBus.location.latitude,
+                            lng: updatedBus.location.longitude
+                        });
+                    }
                 }
             } else {
                 // Bus removed from list
@@ -235,6 +239,65 @@ const StudentDashboard = () => {
             }
         }
     }, [buses]);
+
+    // WebSocket connection for real-time tracked bus updates
+    const trackedBusRelayRef = useRef<RelayService | null>(null);
+    useEffect(() => {
+        if (!trackedBus?._id) {
+            // No bus being tracked — disconnect any existing WebSocket
+            if (trackedBusRelayRef.current) {
+                trackedBusRelayRef.current.disconnect();
+                trackedBusRelayRef.current = null;
+            }
+            return;
+        }
+
+        const busId = trackedBus._id;
+        const relay = new RelayService();
+        trackedBusRelayRef.current = relay;
+
+        const connectRelay = async () => {
+            try {
+                const tokenResp = await getRelayToken(busId, 'student');
+                relay.connect(tokenResp.wsUrl, {
+                    onMessage: (data: any) => {
+                        if (data.type === 'bus_location_update') {
+                            // Update bus in the buses array with new location
+                            setBuses(prev => prev.map(b => {
+                                if (b._id === busId) {
+                                    return {
+                                        ...b,
+                                        location: {
+                                            latitude: data.lat,
+                                            longitude: data.lng,
+                                            heading: data.heading || 0
+                                        },
+                                        speed: data.speedMph || 0,
+                                        lastUpdated: new Date().toISOString()
+                                    };
+                                }
+                                return b;
+                            }));
+
+                            // Also update focused location if still tracking
+                            setFocusedBusLocation({ lat: data.lat, lng: data.lng });
+                        }
+                    },
+                    onOpen: () => console.log('[Student] WS connected for bus', busId),
+                    onClose: () => console.log('[Student] WS disconnected for bus', busId),
+                });
+            } catch (err) {
+                console.error('[Student] Failed to connect relay for bus', busId, err);
+            }
+        };
+
+        connectRelay();
+
+        return () => {
+            relay.disconnect();
+            trackedBusRelayRef.current = null;
+        };
+    }, [trackedBus?._id]);
 
 
 

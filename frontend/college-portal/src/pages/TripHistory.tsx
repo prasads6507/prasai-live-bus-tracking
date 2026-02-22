@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Clock, Bus, Calendar, RefreshCw, Trash2, Download, Map } from 'lucide-react';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import * as XLSX from 'xlsx';
 import Layout from '../components/Layout';
@@ -63,18 +63,9 @@ const TripHistory = () => {
     useEffect(() => {
         fetchTrips();
 
-        // Set up real-time listener for buses collection to detect trip changes
-        const collegeId = localStorage.getItem('current_college_id');
-        if (collegeId) {
-            const busesRef = collection(db, 'buses');
-            const q = query(busesRef, where('collegeId', '==', collegeId));
-
-            const unsubscribe = onSnapshot(q, () => {
-                fetchTrips();
-            });
-
-            return () => unsubscribe();
-        }
+        // Periodic refresh instead of Firestore onSnapshot
+        const intervalId = setInterval(fetchTrips, 60000); // 60s
+        return () => clearInterval(intervalId);
     }, []);
 
     const formatDateTime = (isoString: string | null) => {

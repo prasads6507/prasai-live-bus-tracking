@@ -90,4 +90,39 @@ class ApiDataSource {
       return List<Map<String, dynamic>>.from(response.data);
     }
   }
+
+  /// Get a relay token for WebSocket connection.
+  Future<Map<String, dynamic>> getRelayToken(String busId, String role) async {
+    final response = await _dio.post(
+      '${Env.apiUrl}/api/relay/token',
+      data: {
+        'busId': busId,
+        'role': role,
+      },
+    );
+    return Map<String, dynamic>.from(response.data);
+  }
+
+  /// Upload trip history (polyline + summary) at trip end.
+  Future<void> uploadTripHistory(
+    String tripId, {
+    required String polyline,
+    required int distanceMeters,
+    required int durationSeconds,
+    required int maxSpeedMph,
+    required int avgSpeedMph,
+    required int pointsCount,
+  }) async {
+    await _dio.post(
+      '${Env.apiUrl}/api/driver/trips/$tripId/history-upload',
+      data: {
+        'polyline': polyline,
+        'distanceMeters': distanceMeters,
+        'durationSeconds': durationSeconds,
+        'maxSpeedMph': maxSpeedMph,
+        'avgSpeedMph': avgSpeedMph,
+        'pointsCount': pointsCount,
+      },
+    );
+  }
 }

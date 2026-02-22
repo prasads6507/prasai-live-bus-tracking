@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { getStudentTripHistory, getStudentTripPath } from '../services/api';
 import MapLibreMapComponent from '../components/MapLibreMapComponent';
+import { decodePolyline } from '../utils/polyline';
 
 interface Trip {
     _id: string;
@@ -62,17 +63,22 @@ const StudentTripHistory = () => {
         setActionLoading(true);
         try {
             const response = await getStudentTripPath(trip._id);
-            if (response.success && Array.isArray(response.data)) {
-                // Ensure robust mapping of either { lat, lng } or { latitude, longitude } to avoid empty parses
-                const pathPoints = response.data
-                    .map((p: any) => {
-                        const lat = Number(p.lat ?? p.latitude);
-                        const lng = Number(p.lng ?? p.longitude);
-                        return [lat, lng];
-                    })
-                    .filter((coords: number[]) => Number.isFinite(coords[0]) && Number.isFinite(coords[1])) as [number, number][];
+            if (response.success) {
+                if (response.polyline) {
+                    const decodedCoords = decodePolyline(response.polyline);
+                    setTripPath(decodedCoords);
+                } else if (Array.isArray(response.data)) {
+                    // Ensure robust mapping of either { lat, lng } or { latitude, longitude } to avoid empty parses
+                    const pathPoints = response.data
+                        .map((p: any) => {
+                            const lat = Number(p.lat ?? p.latitude);
+                            const lng = Number(p.lng ?? p.longitude);
+                            return [lat, lng];
+                        })
+                        .filter((coords: number[]) => Number.isFinite(coords[0]) && Number.isFinite(coords[1])) as [number, number][];
 
-                setTripPath(pathPoints);
+                    setTripPath(pathPoints);
+                }
             }
         } catch (err) {
             console.error("Failed to fetch trip path", err);

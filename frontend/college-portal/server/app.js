@@ -58,6 +58,7 @@ app.use('/api/admin/routes', require('./routes/bulkRoute.routes')); // Must be b
 app.use('/api/admin', require('./routes/collegeAdmin.routes'));
 app.use('/api/driver', require('./routes/driver.routes'));
 app.use('/api/student', require('./routes/student.routes'));
+app.use('/api/relay', require('./routes/relay.routes'));
 
 // Error Handler
 app.use(errorHandler);

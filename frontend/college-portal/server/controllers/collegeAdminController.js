@@ -520,6 +520,10 @@ const getTripHistory = async (req, res) => {
                 endTime: data.endTime,
                 status: data.status,
                 durationMinutes: data.durationMinutes || null,
+                distanceMeters: data.distanceMeters || null,
+                maxSpeedMph: data.maxSpeedMph || null,
+                avgSpeedMph: data.avgSpeedMph || null,
+                pointsCount: data.pointsCount || null,
                 source: 'root' // Track source for debugging
             });
         });
@@ -550,6 +554,10 @@ const getTripHistory = async (req, res) => {
                         endTime: tripData.endTime,
                         status: tripData.status,
                         durationMinutes: tripData.durationMinutes || null,
+                        distanceMeters: tripData.distanceMeters || null,
+                        maxSpeedMph: tripData.maxSpeedMph || null,
+                        avgSpeedMph: tripData.avgSpeedMph || null,
+                        pointsCount: tripData.pointsCount || null,
                         source: 'subcollection' // Track source for debugging
                     });
                 }
@@ -881,9 +889,14 @@ const getTripPath = async (req, res) => {
         const tripData = tripDoc.data();
 
         let path = [];
+        let polyline = tripData.polyline || null;
 
-        // PRIMARY: New implementation saves path as an array inside the document
-        if (tripData.path && Array.isArray(tripData.path) && tripData.path.length > 0) {
+        // PRIMARY: New implementation saves a polyline string or path array inside the document
+        if (polyline) {
+            console.log(`Found polyline string directly in trip document.`);
+            // We still send an empty path array for backward compatibility, 
+            // the frontend will decode the polyline.
+        } else if (tripData.path && Array.isArray(tripData.path) && tripData.path.length > 0) {
             console.log(`Found path array directly in trip document with ${tripData.path.length} points.`);
             path = tripData.path.map(data => ({
                 lat: data.lat ?? data.latitude ?? 0,
@@ -922,16 +935,18 @@ const getTripPath = async (req, res) => {
             }
         }
 
-        if (path.length === 0) {
-            console.log(`No path or history data found for trip ${tripId}`);
-            return res.json({ success: true, data: [] });
+        if (path.length === 0 && !polyline) {
+            console.log(`No path, polyline or history data found for trip ${tripId}`);
+            return res.json({ success: true, data: [], polyline: null });
         }
 
         // Sort in memory to avoid Firebase Composite Index requirements on subcollections/arrays
-        path.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+        if (path.length > 0) {
+            path.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+        }
 
-        console.log(`Returning ${path.length} path points for trip ${tripId}`);
-        res.json({ success: true, data: path });
+        console.log(`Returning polyline/path data for trip ${tripId}`);
+        res.json({ success: true, data: path, polyline });
     } catch (error) {
         console.error('Error fetching trip path:', error);
         res.status(500).json({ success: false, message: 'Server Error', error: error.message });

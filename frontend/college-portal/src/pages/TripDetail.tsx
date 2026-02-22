@@ -8,6 +8,7 @@ import {
 import Layout from '../components/Layout';
 import MapLibreMap from '../components/MapLibreMap';
 import { getTripPath, getTripHistory, adminEndTrip, bulkDeleteTrips } from '../services/api';
+import { decodePolyline } from '../utils/polyline';
 
 interface Trip {
     _id: string;
@@ -19,7 +20,10 @@ interface Trip {
     status: 'ACTIVE' | 'COMPLETED';
     durationMinutes: number | null;
     collegeId: string;
-    maxSpeed?: number;
+    distanceMeters?: number | null;
+    maxSpeedMph?: number | null;
+    avgSpeedMph?: number | null;
+    pointsCount?: number | null;
 }
 
 const TripDetail = () => {
@@ -34,18 +38,9 @@ const TripDetail = () => {
     const [actionLoading, setActionLoading] = useState(false);
     const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
-    // Haversine distance between two [lat,lng] points in miles
-    const haversineDistance = (p1: [number, number], p2: [number, number]) => {
-        const R = 3958.8; // Earth radius in miles
-        const dLat = (p2[0] - p1[0]) * Math.PI / 180;
-        const dLng = (p2[1] - p1[1]) * Math.PI / 180;
-        const a = Math.sin(dLat / 2) ** 2 + Math.cos(p1[0] * Math.PI / 180) * Math.cos(p2[0] * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
-        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    };
-
-    // Computed stats from raw path data
-    const maxSpeed = rawPathData.length > 0 ? Math.round(Math.max(...rawPathData.map((p: any) => Number(p.speed) || 0))) : 0;
-    const distanceMiles = path.length > 1 ? path.reduce((sum, point, i) => i === 0 ? 0 : sum + haversineDistance(path[i - 1], point), 0).toFixed(1) : '0';
+    // Use pre-computed stats from the trip document if available, otherwise 0
+    const maxSpeed = trip?.maxSpeedMph ?? (rawPathData.length > 0 ? Math.round(Math.max(...rawPathData.map((p: any) => Number(p.speed) || 0))) : 0);
+    const distanceMiles = trip?.distanceMeters ? (trip.distanceMeters / 1609.34).toFixed(1) : '0';
 
     const fetchData = async () => {
         if (!tripId) return;
@@ -67,16 +62,21 @@ const TripDetail = () => {
 
             // 2. Get Path Data
             const pathResponse = await getTripPath(tripId);
-            if (pathResponse.success && Array.isArray(pathResponse.data)) {
-                setRawPathData(pathResponse.data);
-                const pathPoints = pathResponse.data
-                    .map((p: any) => {
-                        const lat = Number(p.lat ?? p.latitude);
-                        const lng = Number(p.lng ?? p.longitude);
-                        return [lat, lng];
-                    })
-                    .filter((coords: number[]) => Number.isFinite(coords[0]) && Number.isFinite(coords[1])) as [number, number][];
-                setPath(pathPoints);
+            if (pathResponse.success) {
+                if (pathResponse.polyline) {
+                    const decoded = decodePolyline(pathResponse.polyline);
+                    setPath(decoded);
+                } else if (Array.isArray(pathResponse.data)) {
+                    setRawPathData(pathResponse.data);
+                    const pathPoints = pathResponse.data
+                        .map((p: any) => {
+                            const lat = Number(p.lat ?? p.latitude);
+                            const lng = Number(p.lng ?? p.longitude);
+                            return [lat, lng];
+                        })
+                        .filter((coords: number[]) => Number.isFinite(coords[0]) && Number.isFinite(coords[1])) as [number, number][];
+                    setPath(pathPoints);
+                }
             }
 
             setLastUpdated(new Date());

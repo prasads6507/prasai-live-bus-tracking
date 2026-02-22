@@ -1,10 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Navigation, LogOut, AlertCircle, Bus, Settings, Search, X, MapPin } from 'lucide-react';
-import { getDriverBuses, updateBusLocation, saveTripHistory, startNewTrip, searchDriverBuses, checkProximity, api } from '../services/api';
-import { doc, updateDoc, collection, addDoc, serverTimestamp, getDocs, query, where, setDoc } from 'firebase/firestore';
+import { getDriverBuses, searchDriverBuses, startNewTrip, checkProximity, getRelayToken, uploadTripHistory } from '../services/api';
+import { api } from '../services/api';
+import { doc, updateDoc, collection, getDocs, query, where, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { getStreetName } from '../services/geocoding';
+import relayService from '../services/relay';
+import { encodePolyline } from '../utils/polyline';
 
 const getDistanceFromLatLonInKm = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371;
@@ -215,6 +218,9 @@ const DriverDashboard = () => {
         }
     };
 
+    // In-memory buffer for trip history points (uploaded once at trip end)
+    const historyBufferRef = useRef<Array<{ lat: number; lng: number; speed: number; heading: number; timestamp: string }>>([]);
+
     const startTrackingLoop = async (busId: string, currentTripId: string) => {
         console.log("Starting tracking loop for trip:", currentTripId);
         if (!navigator.geolocation) {
@@ -224,24 +230,54 @@ const DriverDashboard = () => {
 
         setIsTracking(true);
         setLocationError(null);
+        historyBufferRef.current = [];
 
         // Update status to ON_ROUTE immediately
         await updateBusStatus('ON_ROUTE', busId);
 
+        // Connect to WebSocket relay
+        try {
+            const tokenResp = await getRelayToken(busId, 'driver');
+            console.log('[Relay] Got relay token, connecting WS...');
+            relayService.connect(tokenResp.wsUrl, {
+                onOpen: () => console.log('[Relay] Driver WS connected for bus', busId),
+                onClose: () => console.warn('[Relay] Driver WS disconnected'),
+                onMessage: (data: any) => {
+                    if (data.type === 'error') {
+                        console.error('[Relay] Server error:', data.message);
+                    }
+                },
+            });
+        } catch (err) {
+            console.error('[Relay] Failed to get relay token, falling back to API mode:', err);
+            // Continue without relay — GPS still buffers locally
+        }
+
         watchIdRef.current = navigator.geolocation.watchPosition(
             async (position) => {
                 const now = Date.now();
-                const { latitude, longitude, speed, heading } = position.coords;
+                const { latitude, longitude, speed, heading, accuracy } = position.coords;
 
-                // Store current position in ref for history saving
+                // Quality filter: drop inaccurate points
+                if (accuracy && accuracy > 25) {
+                    console.warn('Dropping low-accuracy GPS point:', accuracy, 'm');
+                    return;
+                }
+
+                // Clamp speed: negative values are invalid
+                const speedMps = Math.max(0, speed || 0);
+                const speedMph = Math.round(speedMps * 2.23694);
+                const headingVal = heading || 0;
+
+                // Store current position in ref
                 currentPositionRef.current = {
                     latitude,
                     longitude,
-                    speed: Math.round((speed || 0) * 2.23694),
-                    heading: heading || 0
+                    speed: speedMph,
+                    heading: headingVal
                 };
 
-                // Add to live trail buffer (limit to last ~20 points to be safe, though we clear every 5s)
+                // Add to live trail buffer
                 liveTrailBufferRef.current.push({
                     lat: latitude,
                     lng: longitude,
@@ -251,103 +287,55 @@ const DriverDashboard = () => {
                     liveTrailBufferRef.current.shift();
                 }
 
+                // Buffer point for trip history (uploaded once at trip end)
+                historyBufferRef.current.push({
+                    lat: latitude,
+                    lng: longitude,
+                    speed: speedMph,
+                    heading: headingVal,
+                    timestamp: new Date().toISOString()
+                });
+
                 // Update UI state
-                if (position.coords.speed !== null) {
-                    // Keep raw mph in state, it will be rounded via Math.round where displayed/sent
-                    setCurrentSpeed(Math.round((speed || 0) * 2.23694));
-                }
+                setCurrentSpeed(speedMph);
                 setCurrentCoords({ lat: latitude, lng: longitude });
                 setLocationError(null);
 
-                // Update reverse geocoded street name (throttled to avoid API spam)
+                // Update reverse geocoded street name (throttled)
                 if (now - lastUpdateRef.current > 4000) {
                     getStreetName(latitude, longitude).then(street => setCurrentStreetName(street));
                 }
 
-                if (now - lastUpdateRef.current > 5000) {
-                    try {
-                        console.log(`--- WRITING LOCATION TO BACKEND API FOR BUS ${busId} ---`);
-                        const speedMph = Math.round((speed || 0) * 2.23694);
-                        const headingVal = heading || 0;
+                // Send location via WebSocket relay every ~1 second
+                if (now - lastUpdateRef.current > 1000) {
+                    const sent = relayService.sendLocation({
+                        tripId: currentTripId,
+                        lat: latitude,
+                        lng: longitude,
+                        speedMps,
+                        heading: headingVal,
+                        accuracyM: accuracy || 0,
+                    });
 
-                        await updateBusLocation(busId, {
-                            latitude,
-                            longitude,
-                            speed: speedMph,
-                            heading: headingVal,
-                            status: currentTripId ? 'ON_ROUTE' : 'ACTIVE'
-                        });
-
-                        // Clear buffer after upload to prevent memory leak
-                        liveTrailBufferRef.current = [];
-
-                        // Check Stop Completion (Phase 5.1)
-                        if (currentTripId) {
-                            checkStopCompletion(latitude, longitude);
-                        }
-
+                    if (sent) {
                         lastUpdateRef.current = now;
                         setLastSentTime(new Date().toLocaleTimeString());
-                        console.log('API location update sent successfully');
-                    } catch (apiErr: any) {
-                        console.error("Failed to send location update to API", apiErr);
-                        if (apiErr.response?.status === 401) {
-                            setError('Session expired. Please log in again.');
-                            endTrip();
-                        }
-                    }
-                }
-
-                // Save to trip path history every 15 seconds
-                if (currentTripId && now - lastHistorySaveRef.current > 15000) {
-                    console.log('--- SAVING TRIP PATH POINT ---', currentTripId);
-
-                    // Validate coordinates
-                    if (latitude === 0 && longitude === 0) {
-                        console.warn('Skipping history save: Invalid coordinates (0,0)');
-                        return;
                     }
 
-                    // 1. Try Direct Firestore write (Real-time subcollection)
-                    try {
-                        const pathRef = collection(db, 'trips', currentTripId, 'path');
-                        await addDoc(pathRef, {
-                            lat: latitude,
-                            lng: longitude,
-                            heading: heading || 0,
-                            speed: Math.round((speed || 0) * 3.6),
-                            recordedAt: serverTimestamp()
-                        });
-                        console.log('Direct Firestore path write successful');
-                    } catch (err) {
-                        console.warn('Direct Firestore path write failed (likely permissions):', err);
+                    // Check Stop Completion
+                    if (currentTripId) {
+                        checkStopCompletion(latitude, longitude);
                     }
-
-                    // 2. Try API save (Legacy/Fallback)
-                    try {
-                        const result = await saveTripHistory(busId, currentTripId, {
-                            latitude,
-                            longitude,
-                            speed: Math.round((speed || 0) * 2.23694),
-                            heading: heading || 0,
-                            timestamp: new Date().toISOString()
-                        });
-                        console.log('API trip history save result:', result);
-                    } catch (err) {
-                        console.error('API trip history save failed:', err);
-                    }
-
-                    lastHistorySaveRef.current = now;
                 }
             },
             (error) => {
-                console.error("Location Error:", error);
+                console.error('Geolocation error:', error.message);
                 setLocationError(error.message);
             },
             {
                 enableHighAccuracy: true,
-                timeout: 30000,
-                maximumAge: 5000
+                timeout: 10000,
+                maximumAge: 0
             }
         );
     };
@@ -360,26 +348,76 @@ const DriverDashboard = () => {
             watchIdRef.current = null;
         }
 
-        // 2. Clear Persistence IMMEIDATELY (Critical to prevent auto-resume on reload)
+        // 2. Disconnect WebSocket relay
+        relayService.disconnect();
+
+        // 3. Clear Persistence IMMEDIATELY (Critical to prevent auto-resume on reload)
         localStorage.removeItem('driver_active_trip');
 
-        // 3. Reset Local State
+        // 4. Upload buffered trip history in a single write
+        if (tripId && historyBufferRef.current.length > 0) {
+            try {
+                const points = historyBufferRef.current;
+                let totalDistanceM = 0;
+                let maxSpeedMph = 0;
+                let sumSpeedMph = 0;
+
+                for (let i = 0; i < points.length; i++) {
+                    maxSpeedMph = Math.max(maxSpeedMph, points[i].speed);
+                    sumSpeedMph += points[i].speed;
+                    if (i > 0) {
+                        totalDistanceM += getDistanceFromLatLonInKm(
+                            points[i - 1].lat, points[i - 1].lng,
+                            points[i].lat, points[i].lng
+                        ) * 1000;
+                    }
+                }
+
+                const firstTs = new Date(points[0].timestamp).getTime();
+                const lastTs = new Date(points[points.length - 1].timestamp).getTime();
+                const durationSec = Math.round((lastTs - firstTs) / 1000);
+
+                console.log(`[History] Uploading ${points.length} buffered points for trip ${tripId}`);
+
+                const coords: [number, number][] = points.map((p: any) => [p.lat, p.lng]);
+                const polylineStr = encodePolyline(coords);
+
+                await uploadTripHistory(tripId, {
+                    distanceMeters: Math.round(totalDistanceM),
+                    durationSeconds: durationSec,
+                    maxSpeedMph: Math.round(maxSpeedMph),
+                    avgSpeedMph: Math.round(sumSpeedMph / points.length),
+                    pointsCount: points.length,
+                    polyline: polylineStr,
+                });
+                console.log('[History] Upload complete');
+            } catch (err) {
+                console.error('[History] Failed to upload trip history:', err);
+                // Save to localStorage as fallback
+                try {
+                    localStorage.setItem(`trip_history_${tripId}`, JSON.stringify(historyBufferRef.current));
+                    console.log('[History] Saved to localStorage as fallback');
+                } catch (_) { }
+            }
+        }
+
+        // 5. Reset Local State
         setIsTracking(false);
         setCurrentSpeed(0);
+        const endingTripId = tripId;
         setTripId(null);
         lastHistorySaveRef.current = 0;
         currentPositionRef.current = null;
         liveTrailBufferRef.current = [];
+        historyBufferRef.current = [];
 
-        // 4. End trip on backend (Atomic Transaction)
-        if (tripId && selectedBusId) {
+        // 6. End trip on backend (Atomic Transaction)
+        if (endingTripId && selectedBusId) {
             try {
-                // Call critical atomic endpoint
-                await api.post(`/driver/trips/${tripId}/end`, { busId: selectedBusId });
-                console.log('Trip ended atomically via API:', tripId);
+                await api.post(`/driver/trips/${endingTripId}/end`, { busId: selectedBusId });
+                console.log('Trip ended atomically via API:', endingTripId);
             } catch (err) {
                 console.error('Failed to end trip on backend', err);
-                // Even if backend fails, we have cleared local state, so we won't be stuck in "resume" loop.
             }
         }
 
@@ -389,16 +427,16 @@ const DriverDashboard = () => {
         setManualEntryMode(false);
     };
 
-
-
     const updateBusStatus = async (status: string, busId?: string) => {
         const targetBusId = busId || selectedBusId;
         if (!targetBusId) return;
         try {
-            await updateBusLocation(targetBusId, {
+            // Direct Firestore update for status changes (minimal writes)
+            const busRef = doc(db, 'buses', targetBusId);
+            await updateDoc(busRef, {
                 status,
-                speed: 0
-            } as any);
+                lastUpdated: new Date().toISOString()
+            });
         } catch (err) {
             console.error("Failed to update status", err);
         }

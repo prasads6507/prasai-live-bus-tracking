@@ -437,6 +437,61 @@ const saveTripHistory = async (req, res) => {
     }
 };
 
+// @desc    Upload complete trip history at trip end (replaces per-second writes)
+// @route   POST /api/driver/trips/:tripId/history-upload
+// @access  Private (Driver)
+const historyUpload = async (req, res) => {
+    try {
+        const { tripId } = req.params;
+        const { polyline, distanceMeters, durationSeconds, maxSpeedMph, avgSpeedMph, pointsCount, path } = req.body;
+
+        console.log(`--- HISTORY UPLOAD: ${tripId} (${pointsCount} points) ---`);
+
+        if (!tripId) {
+            return res.status(400).json({ success: false, message: 'tripId is required' });
+        }
+
+        const tripRef = db.collection('trips').doc(tripId);
+        const tripDoc = await tripRef.get();
+
+        if (!tripDoc.exists) {
+            return res.status(404).json({ success: false, message: 'Trip not found' });
+        }
+
+        const tripData = tripDoc.data();
+
+        // Verify driver owns this trip
+        if (tripData.driverId !== req.user.id) {
+            return res.status(403).json({ success: false, message: 'Not authorized to upload history for this trip' });
+        }
+
+        // Single Firestore write with polyline + summary
+        const updateData = {
+            polyline: polyline || '',
+            distanceMeters: distanceMeters || 0,
+            durationSeconds: durationSeconds || 0,
+            maxSpeedMph: maxSpeedMph || 0,
+            avgSpeedMph: avgSpeedMph || 0,
+            pointsCount: pointsCount || 0,
+            historyUploadedAt: admin.firestore.FieldValue.serverTimestamp(),
+        };
+
+        // Also store the path array if provided and not too large
+        if (path && Array.isArray(path) && path.length <= 5000) {
+            updateData.path = path;
+            updateData.totalPoints = path.length;
+        }
+
+        await tripRef.update(updateData);
+
+        console.log(`History uploaded for trip ${tripId}: ${pointsCount} points, ${distanceMeters}m`);
+        res.status(200).json({ success: true, message: 'Trip history uploaded' });
+    } catch (error) {
+        console.error('Error uploading trip history:', error);
+        res.status(500).json({ success: false, message: 'Failed to upload trip history', error: error.message });
+    }
+};
+
 // @desc    Trigger proximity check (Phase 4.3)
 // @route   POST /api/driver/notifications/proximity
 // @access  Private (Driver)
@@ -463,6 +518,7 @@ module.exports = {
     startTrip,
     endTrip,
     saveTripHistory,
+    historyUpload,
     checkProximity
 };
 
