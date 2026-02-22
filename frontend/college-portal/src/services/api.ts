@@ -345,4 +345,15 @@ export const deleteCollegeAdmin = async (userId: string) => {
     return response.data;
 };
 
+// Student Route/Stop Assignment
+export const assignStudentsToStop = async (assignments: { studentId: string; busId: string; routeId: string; stopId: string }[]) => {
+    const response = await api.post('/admin/students/assign-stop', { assignments });
+    return response.data;
+};
+
+export const getStudentAssignments = async () => {
+    const response = await api.get('/admin/students/assignments');
+    return response.data;
+};
+
 export default api;

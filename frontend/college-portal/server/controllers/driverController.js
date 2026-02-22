@@ -237,9 +237,10 @@ const endTrip = async (req, res) => {
 const startTrip = async (req, res) => {
     try {
         const { busId } = req.params;
-        const { tripId, routeId } = req.body;
+        const { tripId, routeId, direction } = req.body;
+        const tripDirection = direction || 'pickup'; // 'pickup' or 'dropoff'
 
-        console.log(`--- START TRIP: ${tripId} for Bus ${busId} (Route: ${routeId || 'Default'}) ---`);
+        console.log(`--- START TRIP: ${tripId} for Bus ${busId} (Route: ${routeId || 'Default'}, Direction: ${tripDirection}) ---`);
 
         // Verify bus exists and belongs to college
         const busRef = db.collection('buses').doc(busId);
@@ -258,15 +259,64 @@ const startTrip = async (req, res) => {
         const userDoc = await db.collection('users').doc(req.user.id).get();
         const driverName = userDoc.exists ? userDoc.data().name : 'Unknown Driver';
 
+        // Load route stops (ordered)
+        const effectiveRouteId = routeId || busData.assignedRouteId || null;
+        let stopsSnapshot = [];
+
+        if (effectiveRouteId) {
+            const stopsQuery = await db.collection('stops')
+                .where('routeId', '==', effectiveRouteId)
+                .get();
+
+            let stops = stopsQuery.docs
+                .map(doc => ({ stopId: doc.id, ...doc.data() }))
+                .sort((a, b) => (a.order || 0) - (b.order || 0));
+
+            // Reverse for dropoff
+            if (tripDirection === 'dropoff') {
+                stops = stops.reverse();
+            }
+
+            // Build stopsSnapshot with planned times
+            stopsSnapshot = stops.map((stop, idx) => ({
+                stopId: stop.stopId,
+                order: idx + 1,
+                name: stop.stopName || '',
+                address: stop.address || '',
+                lat: stop.latitude || 0,
+                lng: stop.longitude || 0,
+                radiusM: stop.radiusM || 100,
+                plannedTime: tripDirection === 'dropoff'
+                    ? (stop.dropoffPlannedTime || '')
+                    : (stop.pickupPlannedTime || ''),
+                enabled: stop.enabled !== false
+            }));
+        }
+
+        // Build initial stopProgress and eta
+        const firstStop = stopsSnapshot.length > 0 ? stopsSnapshot[0] : null;
+        const stopProgress = {
+            currentIndex: 0,
+            arrivedStopIds: [],
+            arrivals: {}
+        };
+        const eta = {
+            nextStopId: firstStop ? firstStop.stopId : null,
+            nextStopEta: null,
+            perStopEta: {},
+            delayMinutes: 0
+        };
+
         // Use a Batch for Atomic Operations
         const batch = db.batch();
         const tripRef = db.collection('trips').doc(tripId);
 
-        // 1. Create Trip Doc
+        // 1. Create Trip Doc with stopsSnapshot + stopProgress + eta
         batch.set(tripRef, {
             tripId,
             busId,
-            routeId: routeId || busData.assignedRouteId || null,
+            routeId: effectiveRouteId,
+            direction: tripDirection,
             busNumber: busData.busNumber || busData.number || 'Unknown',
             driverId: req.user.id,
             driverName: driverName,
@@ -274,14 +324,18 @@ const startTrip = async (req, res) => {
             startTime: new Date().toISOString(),
             endTime: null,
             status: 'ACTIVE',
-            totalPoints: 0
+            totalPoints: 0,
+            stopsSnapshot,
+            stopProgress,
+            eta,
+            path: []
         });
 
         // 2. Update Bus Doc (Canonical Source of Truth)
         batch.update(busRef, {
-            activeTripId: tripId, // Canonically set active trip
-            currentTripId: tripId, // Keep for legacy compatibility if needed
-            routeId: routeId || busData.assignedRouteId || null, // Persist current routeId
+            activeTripId: tripId,
+            currentTripId: tripId,
+            routeId: effectiveRouteId,
             status: 'ON_ROUTE',
             driverName: driverName,
             currentDriverId: req.user.id,
@@ -291,14 +345,13 @@ const startTrip = async (req, res) => {
 
         await batch.commit();
 
-        console.log('Trip started atomically:', tripId);
+        console.log('Trip started atomically:', tripId, `with ${stopsSnapshot.length} stops (${tripDirection})`);
 
         // Send 'Bus Started' Notification (Phase 4.2)
-        // Fire and forget - don't await/block response
-        sendBusStartedNotification(tripId, busId, req.collegeId, routeId || busData.assignedRouteId)
+        sendBusStartedNotification(tripId, busId, req.collegeId, effectiveRouteId)
             .catch(err => console.error('Failed to send bus start notification:', err));
 
-        res.status(201).json({ success: true, message: 'Trip started', tripId });
+        res.status(201).json({ success: true, message: 'Trip started', tripId, stopsCount: stopsSnapshot.length, direction: tripDirection });
     } catch (error) {
         console.error('Error starting trip:', error);
         res.status(500).json({ success: false, message: 'Server Error', error: error.message });

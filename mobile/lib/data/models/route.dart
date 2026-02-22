@@ -27,22 +27,55 @@ class BusRoute {
 class RouteStop {
   final String id;
   final String stopName;
+  final String address;
   final double latitude;
   final double longitude;
+  final int radiusM;
+  final String pickupPlannedTime;
+  final String dropoffPlannedTime;
+  final bool enabled;
+  final int order;
 
   RouteStop({
     required this.id,
     required this.stopName,
+    this.address = '',
     required this.latitude,
     required this.longitude,
+    this.radiusM = 100,
+    this.pickupPlannedTime = '',
+    this.dropoffPlannedTime = '',
+    this.enabled = true,
+    this.order = 0,
   });
 
   factory RouteStop.fromJson(Map<String, dynamic> json) {
     return RouteStop(
       id: json['stopId'] ?? json['_id'] ?? '',
-      stopName: json['stopName'] ?? '',
-      latitude: (json['latitude'] as num?)?.toDouble() ?? 0.0,
-      longitude: (json['longitude'] as num?)?.toDouble() ?? 0.0,
+      stopName: json['stopName'] ?? json['name'] ?? '',
+      address: json['address'] ?? '',
+      latitude: (json['latitude'] as num?)?.toDouble() ?? (json['lat'] as num?)?.toDouble() ?? 0.0,
+      longitude: (json['longitude'] as num?)?.toDouble() ?? (json['lng'] as num?)?.toDouble() ?? 0.0,
+      radiusM: (json['radiusM'] as num?)?.toInt() ?? 100,
+      pickupPlannedTime: json['pickupPlannedTime'] ?? '',
+      dropoffPlannedTime: json['dropoffPlannedTime'] ?? '',
+      enabled: json['enabled'] ?? true,
+      order: (json['order'] as num?)?.toInt() ?? 0,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'stopId': id,
+    'name': stopName,
+    'address': address,
+    'lat': latitude,
+    'lng': longitude,
+    'latitude': latitude,
+    'longitude': longitude,
+    'radiusM': radiusM,
+    'pickupPlannedTime': pickupPlannedTime,
+    'dropoffPlannedTime': dropoffPlannedTime,
+    'enabled': enabled,
+    'order': order,
+  };
 }

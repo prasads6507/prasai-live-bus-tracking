@@ -28,6 +28,7 @@ class DriverHomeScreen extends ConsumerStatefulWidget {
 class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
   String? _selectedBusId;
   String? _selectedRouteId;
+  String? _selectedDirection; // 'pickup' or 'dropoff'
   String _searchQuery = "";
   final TextEditingController _searchController = TextEditingController();
 
@@ -54,17 +55,24 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
             content = _buildBusSelection(collegeId, profile.id);
           } else if (_selectedRouteId == null) {
             content = _buildRouteSelection(collegeId);
+          } else if (_selectedDirection == null) {
+            content = _buildDirectionSelection();
           } else {
             content = _DriverContent(
               collegeId: collegeId,
               busId: _selectedBusId!,
               routeId: _selectedRouteId!,
               driverId: profile.id,
+              direction: _selectedDirection!,
               onBack: () => setState(() {
                 _selectedBusId = null;
                 _selectedRouteId = null;
+                _selectedDirection = null;
               }),
-              onChangeRoute: () => setState(() => _selectedRouteId = null),
+              onChangeRoute: () => setState(() {
+                _selectedRouteId = null;
+                _selectedDirection = null;
+              }),
             );
           }
 
@@ -354,6 +362,110 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
     );
   }
 
+  Widget _buildDirectionSelection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+          child: Row(
+            children: [
+              IconButton(
+                onPressed: () => setState(() => _selectedRouteId = null),
+                icon: const Icon(Icons.arrow_back),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                "Select Direction",
+                style: AppTypography.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+        ),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+          child: Text(
+            "Choose pickup or drop-off for this trip",
+            style: TextStyle(color: AppColors.textSecondary),
+          ),
+        ),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                InkWell(
+                  onTap: () => setState(() => _selectedDirection = 'pickup'),
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF2196F3), Color(0xFF1976D2)],
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(color: Colors.blue.withOpacity(0.3), blurRadius: 16, offset: const Offset(0, 8)),
+                      ],
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.upload_rounded, color: Colors.white, size: 48),
+                        SizedBox(width: 20),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text("Pickup (AM)", style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+                            SizedBox(height: 4),
+                            Text("Stops in normal order", style: TextStyle(color: Colors.white70, fontSize: 14)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                InkWell(
+                  onTap: () => setState(() => _selectedDirection = 'dropoff'),
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFFF9800), Color(0xFFE65100)],
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(color: Colors.orange.withOpacity(0.3), blurRadius: 16, offset: const Offset(0, 8)),
+                      ],
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.download_rounded, color: Colors.white, size: 48),
+                        SizedBox(width: 20),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text("Drop-off (PM)", style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+                            SizedBox(height: 4),
+                            Text("Stops in reverse order", style: TextStyle(color: Colors.white70, fontSize: 14)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildEmptyState({bool isSearching = false}) {
     return Center(
       child: Padding(
@@ -391,6 +503,7 @@ class _DriverContent extends ConsumerStatefulWidget {
   final String busId;
   final String routeId;
   final String driverId;
+  final String direction;
   final VoidCallback onBack;
   final VoidCallback onChangeRoute;
 
@@ -399,6 +512,7 @@ class _DriverContent extends ConsumerStatefulWidget {
     required this.busId,
     required this.routeId,
     required this.driverId,
+    required this.direction,
     required this.onBack,
     required this.onChangeRoute,
   });
@@ -645,6 +759,7 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
                       routeId: widget.routeId,
                       busNumber: bus.busNumber,
                       driverName: profile?.name,
+                      direction: widget.direction,
                     );
                     _startTracking();
                     if (mounted) {

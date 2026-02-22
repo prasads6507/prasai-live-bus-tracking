@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -47,6 +48,13 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
   Timer? _metricsTimer;
   bool _isUserInBus = false;
 
+  // Trip stop progress data (from Firestore trip doc)
+  StreamSubscription? _tripSubscription;
+  List<Map<String, dynamic>> _tripStopsSnapshot = [];
+  Map<String, dynamic> _tripStopProgress = {};
+  Map<String, dynamic> _tripEta = {};
+  String? _tripDirection;
+
   @override
   void initState() {
     super.initState();
@@ -59,6 +67,7 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
   void dispose() {
     _busSubscription?.cancel();
     _positionStream?.cancel();
+    _tripSubscription?.cancel();
     _metricsTimer?.cancel();
     super.dispose();
   }
@@ -139,6 +148,32 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
           if (bus.activeTripId != null && (_currentRoute == null || _currentRoute!.id != bus.assignedRouteId)) {
             _fetchRouteForTrip(collegeId, bus.id);
           }
+
+          // Subscribe to trip document for stopsSnapshot + stopProgress + eta
+          if (bus.activeTripId != null) {
+            _subscribeTripProgress(bus.activeTripId!);
+          }
+        });
+  }
+
+  void _subscribeTripProgress(String tripId) {
+    _tripSubscription?.cancel();
+    _tripSubscription = FirebaseFirestore.instance
+        .collection('trips')
+        .doc(tripId)
+        .snapshots()
+        .listen((snapshot) {
+          if (!snapshot.exists || !mounted) return;
+          final data = snapshot.data()!;
+          setState(() {
+            _tripStopsSnapshot = List<Map<String, dynamic>>.from(data['stopsSnapshot'] ?? []);
+            _tripStopProgress = Map<String, dynamic>.from(data['stopProgress'] ?? {});
+            _tripEta = Map<String, dynamic>.from(data['eta'] ?? {});
+            _tripDirection = data['direction'] as String?;
+            _totalStops = _tripStopsSnapshot.length;
+            final currentIdx = (_tripStopProgress['currentIndex'] as num?)?.toInt() ?? 0;
+            _stopsRemaining = _totalStops - currentIdx;
+          });
         });
   }
   
@@ -259,6 +294,44 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
   }
 
   List<DropOffItem> _buildDropOffItems() {
+    // Prefer trip stopsSnapshot + stopProgress (real-time from Firestore)
+    if (_tripStopsSnapshot.isNotEmpty) {
+      final arrivedIds = List<String>.from(_tripStopProgress['arrivedStopIds'] ?? []);
+      final currentIndex = (_tripStopProgress['currentIndex'] as num?)?.toInt() ?? 0;
+      final nextStopEta = _tripEta['nextStopEta'] as String?;
+
+      return List.generate(_tripStopsSnapshot.length, (index) {
+        final stop = _tripStopsSnapshot[index];
+        final stopId = stop['stopId'] as String? ?? '';
+        final isCompleted = arrivedIds.contains(stopId);
+        final isCurrent = index == currentIndex;
+
+        String timeLabel;
+        if (isCompleted) {
+          timeLabel = "✅ Done";
+        } else if (isCurrent && nextStopEta != null) {
+          try {
+            final etaTime = DateTime.parse(nextStopEta);
+            final diff = etaTime.difference(DateTime.now()).inMinutes;
+            timeLabel = diff > 0 ? "~${diff} min" : "Now";
+          } catch (_) {
+            timeLabel = "Next";
+          }
+        } else {
+          timeLabel = stop['plannedTime'] as String? ?? 'TBD';
+        }
+
+        return DropOffItem(
+          time: timeLabel,
+          location: stop['name'] as String? ?? stop['stopName'] as String? ?? '',
+          isCompleted: isCompleted,
+          isCurrent: isCurrent,
+          isNext: isCurrent,
+        );
+      });
+    }
+
+    // Fallback to legacy route-based logic
     if (_currentRoute == null || _currentBus == null) return [];
     
     final busLoc = _currentBus!.location;

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:isolate';
+import 'dart:math';
 import 'dart:ui';
 import 'package:background_location_tracker/background_location_tracker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -107,8 +108,68 @@ void backgroundCallback() {
             });
           }
         });
-      } catch (e) {
-        // Silent fail in background allowed to keep isolate running on network drops
+
+        // --- Geofence + ETA check (fire-and-forget, outside transaction) ---
+        // Read bus doc again to get activeTripId (variables from transaction are out of scope)
+        final busDocForGeofence = await busRef.get();
+        final geoData = busDocForGeofence.data();
+        if (geoData != null && geoData['activeTripId'] != null) {
+          try {
+            final String tripId = geoData['activeTripId'] as String;
+            final tripRef = db.collection('trips').doc(tripId);
+            final tripDoc = await tripRef.get();
+            if (tripDoc.exists) {
+              final tripData = tripDoc.data()!;
+              final stops = (tripData['stopsSnapshot'] as List<dynamic>?) ?? [];
+              final progress = tripData['stopProgress'] as Map<String, dynamic>? ?? {};
+              final currentIndex = (progress['currentIndex'] as num?)?.toInt() ?? 0;
+              final arrivedIds = List<String>.from(progress['arrivedStopIds'] ?? []);
+              final arrivals = Map<String, dynamic>.from(progress['arrivals'] ?? {});
+
+              if (currentIndex < stops.length) {
+                final nextStop = stops[currentIndex] as Map<String, dynamic>;
+                final stopLat = (nextStop['lat'] as num?)?.toDouble() ?? 0;
+                final stopLng = (nextStop['lng'] as num?)?.toDouble() ?? 0;
+                final radiusM = (nextStop['radiusM'] as num?)?.toDouble() ?? 100;
+                final stopId = nextStop['stopId'] as String? ?? '';
+
+                // Haversine distance in meters
+                final distM = _haversineMeters(data.lat, data.lon, stopLat, stopLng);
+
+                // Check geofence
+                if (distM <= radiusM && !arrivedIds.contains(stopId)) {
+                  arrivedIds.add(stopId);
+                  arrivals[stopId] = DateTime.now().toIso8601String();
+                  final newIndex = currentIndex + 1;
+                  final nextStopId = newIndex < stops.length
+                      ? (stops[newIndex] as Map<String, dynamic>)['stopId']
+                      : null;
+
+                  await tripRef.update({
+                    'stopProgress.currentIndex': newIndex,
+                    'stopProgress.arrivedStopIds': arrivedIds,
+                    'stopProgress.arrivals': arrivals,
+                    'eta.nextStopId': nextStopId,
+                  });
+                } else {
+                  // Compute ETA to next stop
+                  final speedMps = (data.speed > 1) ? data.speed * 0.44704 : 3.0; // mph to m/s, min 3 m/s
+                  final etaSeconds = distM / speedMps;
+                  final nextStopEta = DateTime.now().add(Duration(seconds: etaSeconds.round())).toIso8601String();
+
+                  await tripRef.update({
+                    'eta.nextStopEta': nextStopEta,
+                    'eta.delayMinutes': 0, // simplified for now
+                  });
+                }
+              }
+            }
+          } catch (_) {
+            // Silent fail — ETA/geofence is best-effort
+          }
+        }
+      } catch (_) {
+        // Silent fail in background for network drops or missing data
       }
       
       // Send data to foreground isolate if it's running
@@ -124,6 +185,18 @@ void backgroundCallback() {
       }
     },
   );
+}
+
+/// Haversine distance in meters between two lat/lng points
+double _haversineMeters(double lat1, double lon1, double lat2, double lon2) {
+  const R = 6371000.0; // Earth radius in meters
+  final dLat = (lat2 - lat1) * (pi / 180);
+  final dLon = (lon2 - lon1) * (pi / 180);
+  final a = sin(dLat / 2) * sin(dLat / 2) +
+      cos(lat1 * (pi / 180)) * cos(lat2 * (pi / 180)) *
+      sin(dLon / 2) * sin(dLon / 2);
+  final c = 2 * atan2(sqrt(a), sqrt(1 - a));
+  return R * c;
 }
 
 class DriverLocationService {

@@ -117,8 +117,13 @@ const createRoute = async (req, res) => {
                     collegeId: req.collegeId,
                     routeId,
                     stopName: stop.stopName,
+                    address: stop.address || '',
                     latitude: stop.latitude || 0,
                     longitude: stop.longitude || 0,
+                    radiusM: stop.radiusM || 100,
+                    pickupPlannedTime: stop.pickupPlannedTime || '',
+                    dropoffPlannedTime: stop.dropoffPlannedTime || '',
+                    enabled: stop.enabled !== false,
                     order: index + 1
                 };
                 batch.set(db.collection('stops').doc(stopId), stopData);
@@ -206,8 +211,13 @@ const updateRoute = async (req, res) => {
                         collegeId: req.collegeId,
                         routeId,
                         stopName: stop.stopName,
+                        address: stop.address || '',
                         latitude: stop.latitude || 0,
                         longitude: stop.longitude || 0,
+                        radiusM: stop.radiusM || 100,
+                        pickupPlannedTime: stop.pickupPlannedTime || '',
+                        dropoffPlannedTime: stop.dropoffPlannedTime || '',
+                        enabled: stop.enabled !== false,
                         order: index + 1
                     };
                     batch.set(db.collection('stops').doc(stopId), stopData);
@@ -1090,6 +1100,62 @@ const deleteCollegeAdmin = async (req, res) => {
     }
 };
 
+// @desc    Bulk assign students to bus/route/stop
+// @route   POST /api/admin/students/assign-stop
+// @access  Private (College Admin)
+const assignStudentsToStop = async (req, res) => {
+    try {
+        const { assignments } = req.body;
+        // assignments = [{ studentId, busId, routeId, stopId }]
+        if (!assignments || !Array.isArray(assignments) || assignments.length === 0) {
+            return res.status(400).json({ message: 'assignments array is required' });
+        }
+
+        const batch = db.batch();
+        for (const a of assignments) {
+            if (!a.studentId) continue;
+            const studentRef = db.collection('students').doc(a.studentId);
+            batch.update(studentRef, {
+                assignedBusId: a.busId || null,
+                assignedRouteId: a.routeId || null,
+                assignedStopId: a.stopId || null,
+                updatedAt: new Date().toISOString()
+            });
+        }
+
+        await batch.commit();
+        res.json({ success: true, message: `${assignments.length} student(s) assigned` });
+    } catch (error) {
+        console.error('Error assigning students to stop:', error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Get students with their route/stop assignments
+// @route   GET /api/admin/students/assignments
+// @access  Private (College Admin)
+const getStudentAssignments = async (req, res) => {
+    try {
+        const snapshot = await db.collection('students')
+            .where('collegeId', '==', req.collegeId)
+            .get();
+
+        const students = snapshot.docs.map(doc => ({
+            _id: doc.id,
+            name: doc.data().name || '',
+            studentId: doc.data().studentId || '',
+            assignedBusId: doc.data().assignedBusId || null,
+            assignedRouteId: doc.data().assignedRouteId || null,
+            assignedStopId: doc.data().assignedStopId || null,
+        }));
+
+        res.json({ success: true, data: students });
+    } catch (error) {
+        console.error('Error fetching student assignments:', error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
 module.exports = {
     createBus,
     getBuses,
@@ -1115,5 +1181,7 @@ module.exports = {
     createCollegeAdmin,
     updateCollegeAdmin,
     deleteCollegeAdmin,
-    bulkDeleteTrips
+    bulkDeleteTrips,
+    assignStudentsToStop,
+    getStudentAssignments
 };

@@ -333,15 +333,36 @@ class FirestoreDataSource {
     }
   }
 
-  /// Fetches all routes for a specific college
+  /// Fetches all routes for a specific college, including stops from the stops collection
   Future<List<BusRoute>> getCollegeRoutes(String collegeId) async {
-    final snapshot = await _firestore.collection('routes')
+    final routeSnapshot = await _firestore.collection('routes')
         .where('collegeId', isEqualTo: collegeId)
         .get();
-    return snapshot.docs.map((doc) => BusRoute.fromFirestore(doc)).toList();
+
+    final List<BusRoute> routes = [];
+    for (final doc in routeSnapshot.docs) {
+      // Load stops from the separate stops collection
+      final stopsSnapshot = await _firestore.collection('stops')
+          .where('routeId', isEqualTo: doc.id)
+          .get();
+
+      final stops = stopsSnapshot.docs
+          .map((s) => RouteStop.fromJson(s.data()))
+          .toList()
+        ..sort((a, b) => a.order.compareTo(b.order));
+
+      final data = doc.data();
+      routes.add(BusRoute(
+        id: doc.id,
+        routeName: data['routeName'] ?? '',
+        stops: stops,
+      ));
+    }
+    return routes;
   }
 
   /// Starts a new trip and updates the bus status.
+  /// [direction] is 'pickup' or 'dropoff'. Dropoff reverses stop order.
   Future<String> startTrip({
     required String collegeId,
     required String busId,
@@ -349,11 +370,61 @@ class FirestoreDataSource {
     required String routeId,
     String? busNumber,
     String? driverName,
+    String direction = 'pickup',
   }) async {
     final batch = _firestore.batch();
     
     // Generate trip ID
     final tripId = 'trip-${busId}-${DateTime.now().millisecondsSinceEpoch}';
+
+    // Load stops from Firestore
+    List<RouteStop> stops = [];
+    if (routeId.isNotEmpty) {
+      final stopsSnapshot = await _firestore.collection('stops')
+          .where('routeId', isEqualTo: routeId)
+          .get();
+      stops = stopsSnapshot.docs
+          .map((s) => RouteStop.fromJson(s.data()))
+          .toList()
+        ..sort((a, b) => a.order.compareTo(b.order));
+
+      if (direction == 'dropoff') {
+        stops = stops.reversed.toList();
+      }
+    }
+
+    // Build stopsSnapshot for the trip
+    final stopsSnapshot = stops.asMap().entries.map((entry) {
+      final idx = entry.key;
+      final stop = entry.value;
+      return {
+        'stopId': stop.id,
+        'order': idx + 1,
+        'name': stop.stopName,
+        'address': stop.address,
+        'lat': stop.latitude,
+        'lng': stop.longitude,
+        'latitude': stop.latitude,
+        'longitude': stop.longitude,
+        'radiusM': stop.radiusM,
+        'plannedTime': direction == 'dropoff' ? stop.dropoffPlannedTime : stop.pickupPlannedTime,
+        'enabled': stop.enabled,
+      };
+    }).toList();
+
+    // Build initial stopProgress and eta
+    final firstStopId = stopsSnapshot.isNotEmpty ? stopsSnapshot[0]['stopId'] : null;
+    final stopProgress = {
+      'currentIndex': 0,
+      'arrivedStopIds': <String>[],
+      'arrivals': <String, String>{},
+    };
+    final eta = {
+      'nextStopId': firstStopId,
+      'nextStopEta': null,
+      'perStopEta': <String, String>{},
+      'delayMinutes': 0,
+    };
     
     final tripData = {
       'tripId': tripId,
@@ -363,6 +434,7 @@ class FirestoreDataSource {
       'driverId': driverId,
       'driverName': driverName ?? 'Unknown Driver',
       'routeId': routeId,
+      'direction': direction,
       'status': 'ACTIVE',
       'isActive': true,
       'startedAt': FieldValue.serverTimestamp(),
@@ -370,6 +442,9 @@ class FirestoreDataSource {
       'createdAt': FieldValue.serverTimestamp(),
       'totalPoints': 0,
       'path': [],
+      'stopsSnapshot': stopsSnapshot,
+      'stopProgress': stopProgress,
+      'eta': eta,
     };
 
     // 1. Write to ROOT trips collection (canonical source for portal & path data)

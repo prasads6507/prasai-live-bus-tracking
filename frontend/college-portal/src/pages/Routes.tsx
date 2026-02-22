@@ -133,7 +133,7 @@ const Routes = () => {
     const addStop = () => {
         setNewRoute({
             ...newRoute,
-            stops: [...newRoute.stops, { stopName: '' }]
+            stops: [...newRoute.stops, { stopName: '', latitude: '', longitude: '', pickupPlannedTime: '', dropoffPlannedTime: '', address: '' }]
         });
     };
 
@@ -434,8 +434,9 @@ const Routes = () => {
                                     {newRoute.stops.length > 0 && (
                                         <div className="space-y-3 max-h-64 overflow-y-auto">
                                             {newRoute.stops.map((stop, index) => (
-                                                <div key={index} className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                                                <div key={index} className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
                                                     <div className="flex items-start gap-2 w-full">
+                                                        <span className="mt-2 text-xs font-bold text-slate-400 w-6">{index + 1}</span>
                                                         <input
                                                             type="text"
                                                             placeholder="Stop Name"
@@ -466,6 +467,29 @@ const Routes = () => {
                                                         >
                                                             <X size={18} />
                                                         </button>
+                                                    </div>
+                                                    <div className="flex gap-2 pl-8">
+                                                        <input
+                                                            type="text"
+                                                            placeholder="Address (optional)"
+                                                            className="flex-grow px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
+                                                            value={stop.address || ''}
+                                                            onChange={(e) => updateStop(index, 'address', e.target.value)}
+                                                        />
+                                                        <input
+                                                            type="text"
+                                                            placeholder="Pickup (HH:MM)"
+                                                            className="w-28 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
+                                                            value={stop.pickupPlannedTime || ''}
+                                                            onChange={(e) => updateStop(index, 'pickupPlannedTime', e.target.value)}
+                                                        />
+                                                        <input
+                                                            type="text"
+                                                            placeholder="Dropoff (HH:MM)"
+                                                            className="w-28 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
+                                                            value={stop.dropoffPlannedTime || ''}
+                                                            onChange={(e) => updateStop(index, 'dropoffPlannedTime', e.target.value)}
+                                                        />
                                                     </div>
                                                 </div>
                                             ))}
