@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Clock, Bus, Calendar, RefreshCw, Trash2, Download, Map } from 'lucide-react';
-import { collection, query, where } from 'firebase/firestore';
-import { db } from '../config/firebase';
 import * as XLSX from 'xlsx';
 import Layout from '../components/Layout';
 import { getTripHistory, bulkDeleteTrips } from '../services/api';
