@@ -32,12 +32,12 @@ class ApiDataSource {
     );
   }
 
-  Future<void> endTrip(String collegeId, String tripId) async {
+  Future<void> endTrip(String collegeId, String tripId, String busId) async {
     await _dio.post(
-      '${Env.apiUrl}/api/driver/trip/end',
+      '${Env.apiUrl}/api/driver/trips/$tripId/end',
       data: {
         'collegeId': collegeId,
-        'tripId': tripId,
+        'busId': busId,
       },
     );
   }
@@ -112,17 +112,21 @@ class ApiDataSource {
     required int maxSpeedMph,
     required int avgSpeedMph,
     required int pointsCount,
+    List<Map<String, dynamic>>? path,
   }) async {
+    final data = {
+      'polyline': polyline,
+      'distanceMeters': distanceMeters,
+      'durationSeconds': durationSeconds,
+      'maxSpeedMph': maxSpeedMph,
+      'avgSpeedMph': avgSpeedMph,
+      'pointsCount': pointsCount,
+    };
+    if (path != null) data['path'] = path;
+
     await _dio.post(
       '${Env.apiUrl}/api/driver/trips/$tripId/history-upload',
-      data: {
-        'polyline': polyline,
-        'distanceMeters': distanceMeters,
-        'durationSeconds': durationSeconds,
-        'maxSpeedMph': maxSpeedMph,
-        'avgSpeedMph': avgSpeedMph,
-        'pointsCount': pointsCount,
-      },
+      data: data,
     );
   }
 }

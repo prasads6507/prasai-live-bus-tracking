@@ -159,16 +159,21 @@ const Dashboard = () => {
                     relay.connect(tokenResp.wsUrl, {
                         onMessage: (data: any) => {
                             if (data.type === 'bus_location_update') {
+                                const lat = data.lat ?? data.latitude;
+                                const lng = data.lng ?? data.longitude;
+                                const speedMph = Math.max(0, data.speedMph ?? data.speed ?? 0);
+                                const heading = data.heading ?? 0;
+
                                 setBuses(prev => prev.map(b => {
                                     if (b._id === bus._id) {
                                         return {
                                             ...b,
                                             location: {
-                                                latitude: data.lat,
-                                                longitude: data.lng,
-                                                heading: data.heading || 0
+                                                latitude: lat,
+                                                longitude: lng,
+                                                heading: heading
                                             },
-                                            speed: data.speedMph || 0,
+                                            speed: speedMph,
                                             lastUpdated: new Date().toISOString()
                                         };
                                     }

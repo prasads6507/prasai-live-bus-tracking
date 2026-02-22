@@ -623,17 +623,31 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
       widget.busId, 
       (locationDto) {
         if (mounted) {
+          double rawSpeed = locationDto.speed ?? 0.0;
+          if (rawSpeed < 0 || !rawSpeed.isFinite) rawSpeed = 0.0;
+          double speedMph = rawSpeed * 2.23694;
+
+          // Jitter / stationary filter
+          if (_lastRecordedPoint != null) {
+            double dist = Geolocator.distanceBetween(
+              _lastRecordedPoint!.latitude, _lastRecordedPoint!.longitude,
+              locationDto.lat, locationDto.lon,
+            );
+            if (dist < 3.0 && speedMph < 1.0) {
+              return; // Ignore static jitter point
+            }
+          }
+
           final point = LocationPoint(
              latitude: locationDto.lat,
              longitude: locationDto.lon,
              timestamp: DateTime.now(),
-             speed: locationDto.speed,
+             speed: rawSpeed,
              heading: locationDto.course,
           );
+
           setState(() {
-            double rawSpeed = point.speed ?? 0.0;
-            if (rawSpeed < 0 || !rawSpeed.isFinite) rawSpeed = 0.0;
-            _currentSpeed = rawSpeed * 2.23694; // mph
+            _currentSpeed = speedMph;
             _lastUpdate = TimeOfDay.now().format(context);
             _lastRecordedPoint = point;
           });
@@ -650,7 +664,7 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
             );
           }
 
-          // Buffer point in memory for bulk upload at trip end (ZERO Firestore writes during trip)
+          // Buffer point in memory for compression at trip end
           _liveTrackBuffer.add(point);
         }
       }
@@ -831,17 +845,102 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
                   try {
                     final String? activeTripId = bus.activeTripId;
 
-                    // Bulk upload all buffered GPS points in ONE Firestore write
-                    if (activeTripId != null && activeTripId.isNotEmpty && _liveTrackBuffer.isNotEmpty) {
-                      await ref.read(firestoreDataSourceProvider).bulkSaveTripPath(
-                        activeTripId, List.from(_liveTrackBuffer),
-                      );
+                    // 1. Stop location stream immediately
+                    _stopTracking();
+
+                    if (activeTripId != null && activeTripId.isNotEmpty) {
+                      // 2. Call Backend API to end trip
+                      try {
+                        await ref.read(apiDataSourceProvider).endTrip(widget.collegeId, activeTripId, widget.busId);
+                      } catch (e) {
+                        debugPrint("API endTrip failed: $e. Falling back to firestore endTrip.");
+                        await ref.read(firestoreDataSourceProvider).endTrip(activeTripId, widget.busId);
+                      }
+
+                      // 3. Compress points and upload history
+                      if (_liveTrackBuffer.isNotEmpty) {
+                        List<LocationPoint> compressed = [];
+                        compressed.add(_liveTrackBuffer.first);
+
+                        for (int i = 1; i < _liveTrackBuffer.length - 1; i++) {
+                          final curr = _liveTrackBuffer[i];
+                          final prev = compressed.last;
+
+                          double dist = Geolocator.distanceBetween(
+                            prev.latitude, prev.longitude,
+                            curr.latitude, curr.longitude,
+                          );
+
+                          double headingDiff = ((curr.heading ?? 0) - (prev.heading ?? 0)).abs();
+                          if (headingDiff > 180) headingDiff = 360 - headingDiff;
+
+                          // Keep if moved >10m or turned >15deg
+                          if (dist > 10.0 || headingDiff > 15.0) {
+                            compressed.add(curr);
+                          }
+                        }
+
+                        if (_liveTrackBuffer.length > 1) {
+                          compressed.add(_liveTrackBuffer.last);
+                        }
+
+                        double totalDistanceM = 0;
+                        double maxSpeedMph = 0;
+                        double sumSpeedMph = 0;
+
+                        for (int i = 1; i < compressed.length; i++) {
+                          final prev = compressed[i - 1];
+                          final curr = compressed[i];
+                          totalDistanceM += Geolocator.distanceBetween(
+                            prev.latitude, prev.longitude,
+                            curr.latitude, curr.longitude,
+                          );
+                          double sMph = ((curr.speed ?? 0) * 2.23694);
+                          if (sMph > maxSpeedMph) maxSpeedMph = sMph;
+                          sumSpeedMph += sMph;
+                        }
+
+                        int avgSpeedMph = compressed.isNotEmpty ? (sumSpeedMph / compressed.length).round() : 0;
+                        int durationSeconds = 0;
+                        if (compressed.length > 1 && compressed.first.timestamp != null && compressed.last.timestamp != null) {
+                          durationSeconds = compressed.last.timestamp!.difference(compressed.first.timestamp!).inSeconds;
+                        }
+
+                        List<Map<String, dynamic>> pathPayload = compressed.map((p) => p.toJson()).toList();
+
+                        // Retry mechanism for API history upload
+                        int retries = 3;
+                        while (retries > 0) {
+                          try {
+                            await ref.read(apiDataSourceProvider).uploadTripHistory(
+                              activeTripId,
+                              polyline: '',
+                              distanceMeters: totalDistanceM.round(),
+                              durationSeconds: durationSeconds,
+                              maxSpeedMph: maxSpeedMph.round(),
+                              avgSpeedMph: avgSpeedMph,
+                              pointsCount: compressed.length,
+                              path: pathPayload,
+                            );
+                            break;
+                          } catch (e) {
+                            retries--;
+                            if (retries == 0) {
+                              debugPrint("History upload API failed: $e. Fallback to raw DB.");
+                              await ref.read(firestoreDataSourceProvider).bulkSaveTripPath(
+                                activeTripId, compressed,
+                              );
+                            } else {
+                              await Future.delayed(Duration(seconds: 4 - retries));
+                            }
+                          }
+                        }
+                      }
+                    } else {
+                      // Failsafe for stuck bus without active trip
+                      await ref.read(firestoreDataSourceProvider).endTrip(null, widget.busId);
                     }
                     _liveTrackBuffer.clear();
-
-                    // End the trip in Firestore (resets bus status)
-                    await ref.read(firestoreDataSourceProvider).endTrip(activeTripId, widget.busId);
-                    _stopTracking();
 
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(

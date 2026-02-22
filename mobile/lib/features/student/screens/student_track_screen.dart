@@ -186,12 +186,17 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
       _relay!.onMessage = (data) {
         if (!mounted || data['type'] != 'bus_location_update') return;
         setState(() {
-          _busSpeed = (data['speedMph'] as num?)?.toDouble() ?? 0.0;
+          double lat = (data['lat'] as num?)?.toDouble() ?? (data['latitude'] as num?)?.toDouble() ?? 0.0;
+          double lng = (data['lng'] as num?)?.toDouble() ?? (data['longitude'] as num?)?.toDouble() ?? 0.0;
+          double speed = (data['speedMph'] as num?)?.toDouble() ?? (data['speed'] as num?)?.toDouble() ?? 0.0;
+          speed = speed < 0 ? 0 : speed;
+
+          _busSpeed = speed;
           _liveBusLocation = LocationPoint(
-            latitude: (data['lat'] as num?)?.toDouble() ?? 0.0,
-            longitude: (data['lng'] as num?)?.toDouble() ?? 0.0,
+            latitude: lat,
+            longitude: lng,
             heading: (data['heading'] as num?)?.toDouble() ?? 0.0,
-            speed: (data['speedMps'] as num?)?.toDouble() ?? 0.0,
+            speed: speed, // pass normalized speed
             timestamp: DateTime.now(),
           );
           if (_followBus) _mapFocusLocation = _liveBusLocation;
