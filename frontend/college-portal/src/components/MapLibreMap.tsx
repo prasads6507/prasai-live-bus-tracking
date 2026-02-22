@@ -224,52 +224,44 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
 
         const animate = (_time: number) => {
             busesWithLoc.forEach(bus => {
-                const rawBuffer = bus.liveTrackBuffer || [];
                 const latLng = getBusLatLng(bus)!;
-
-                const currentPoint = {
-                    latitude: latLng[1],
-                    longitude: latLng[0],
-                    heading: bus.location?.heading || 0,
-                    timestamp: bus.lastUpdated
-                };
-
-                const combined = [...rawBuffer, currentPoint]
-                    .filter((v, i, a) => a.findIndex(t => t.timestamp === v.timestamp) === i)
-                    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-                    .slice(-5);
-
                 const moving = bus.status === 'ON_ROUTE' || bus.status === 'ACTIVE';
-                if (!moving || combined.length < 2) {
+
+                // If not moving, don't animate (handled in main useEffect)
+                if (!moving) {
                     animatedPositionsRef.current[bus._id] = { pos: latLng, bearing: bus.location?.heading || 0 };
                     return;
                 }
 
-                const targetPoint = combined[combined.length - 1];
-                const prevPoint = combined[combined.length - 2];
-                const targetLatLng = getBusLatLng({ location: targetPoint }) || latLng;
-                const prevLatLng = getBusLatLng({ location: prevPoint }) || latLng;
-
+                const targetLatLng = latLng;
                 const currentAnimated = animatedPositionsRef.current[bus._id];
+
                 if (!currentAnimated) {
-                    animatedPositionsRef.current[bus._id] = { pos: prevLatLng, bearing: targetPoint.heading || 0 };
+                    // Initialize first position
+                    animatedPositionsRef.current[bus._id] = { pos: targetLatLng, bearing: bus.location?.heading || 0 };
                 } else {
                     const dx = targetLatLng[0] - currentAnimated.pos[0];
                     const dy = targetLatLng[1] - currentAnimated.pos[1];
                     const dist = Math.sqrt(dx * dx + dy * dy);
 
                     if (dist > 0.00001) {
+                        // Move 5% of the distance per frame (~1/3 second to catch up)
                         currentAnimated.pos[0] += dx * 0.05;
                         currentAnimated.pos[1] += dy * 0.05;
-                        currentAnimated.bearing = targetPoint.heading ?? calculateBearing(
+                        currentAnimated.bearing = bus.location?.heading ?? calculateBearing(
                             { lat: currentAnimated.pos[1], lng: currentAnimated.pos[0] },
                             { lat: targetLatLng[1], lng: targetLatLng[0] }
                         );
                     } else {
-                        currentAnimated.pos = targetLatLng;
+                        // Snap exactly to target if very close
+                        currentAnimated.pos = [...targetLatLng] as [number, number];
+                        if (bus.location?.heading) {
+                            currentAnimated.bearing = bus.location.heading;
+                        }
                     }
                 }
 
+                // Actually update the marker on the map!
                 const markerData = markersRef.current[bus._id];
                 if (markerData?.marker) {
                     markerData.marker.setLngLat(currentAnimated.pos);
