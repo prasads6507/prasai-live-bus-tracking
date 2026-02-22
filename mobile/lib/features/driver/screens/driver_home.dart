@@ -582,7 +582,7 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
     }
   }
 
-  Future<void> _startTracking() async {
+  Future<void> _startTracking(String tripId) async {
     // Ensure permission before starting background service
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
@@ -625,6 +625,22 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
         if (mounted) {
           double rawSpeed = locationDto.speed ?? 0.0;
           if (rawSpeed < 0 || !rawSpeed.isFinite) rawSpeed = 0.0;
+          
+          DateTime now = DateTime.now();
+          
+          // Speed fallback calculation
+          if (rawSpeed <= 0 && _lastRecordedPoint != null && _lastRecordedPoint!.timestamp != null) {
+              double distMeters = Geolocator.distanceBetween(
+                  _lastRecordedPoint!.latitude, _lastRecordedPoint!.longitude,
+                  locationDto.lat, locationDto.lon
+              );
+              double seconds = now.difference(_lastRecordedPoint!.timestamp!).inSeconds.toDouble();
+              if (seconds > 0) {
+                  rawSpeed = distMeters / seconds; // m/s
+                  if (rawSpeed > 40) rawSpeed = 0; // Sanity check (90mph limit)
+              }
+          }
+
           double speedMph = rawSpeed * 2.23694;
 
           // Jitter / stationary filter
@@ -641,7 +657,7 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
           final point = LocationPoint(
              latitude: locationDto.lat,
              longitude: locationDto.lon,
-             timestamp: DateTime.now(),
+             timestamp: now,
              speed: rawSpeed,
              heading: locationDto.course,
           );
@@ -656,7 +672,7 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
           // Stream to Relay (Cloudflare) — primary real-time channel
           if (_relay != null && _relay!.isConnected) {
             _relay!.sendLocation(
-              tripId: 'active',
+              tripId: tripId,
               lat: point.latitude,
               lng: point.longitude,
               speedMps: point.speed ?? 0.0,
@@ -704,7 +720,7 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
 
         // Auto-resume logic
         if (isTripActive && _locationUpdateSubscription == null && !_isLoading) {
-          WidgetsBinding.instance.addPostFrameCallback((_) => _startTracking());
+          WidgetsBinding.instance.addPostFrameCallback((_) => _startTracking(bus.activeTripId!));
         }
 
         // Auto-stop logic if ended externally
@@ -801,7 +817,7 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
                   setState(() => _isLoading = true);
                   try {
                     final profile = ref.read(userProfileProvider).asData?.value;
-                    await ref.read(firestoreDataSourceProvider).startTrip(
+                    final tripId = await ref.read(firestoreDataSourceProvider).startTrip(
                       collegeId: widget.collegeId,
                       busId: widget.busId,
                       driverId: widget.driverId,
@@ -810,7 +826,7 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
                       driverName: profile?.name,
                       direction: widget.direction,
                     );
-                    _startTracking();
+                    _startTracking(tripId);
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text("Trip started successfully!")),
