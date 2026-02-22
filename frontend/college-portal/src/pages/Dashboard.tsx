@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Bus, MapPin, Navigation, Settings, User, Bell } from 'lucide-react';
 import { collection, query, where, onSnapshot, orderBy, limit } from 'firebase/firestore';
@@ -135,27 +135,38 @@ const Dashboard = () => {
             unsubscribeRoutes();
             unsubscribeNotifications();
         };
-
-        return () => {
-            console.log('Cleaning up real-time subscriptions for college:', currentCollegeId);
-            clearInterval(busInterval);
-            unsubscribeRoutes();
-        };
     }, [currentCollegeId]); // Depend on currentCollegeId state
 
-    // WebSocket connections for tracking ALL active buses in real-time
+    // ── Stable relay connection manager ─────────────────────────────────────
+    // Keeps one WebSocket open per live bus for the entire trip session.
+    // Does NOT reconnect when bus location/speed updates (would cause a loop).
+    const relaysRef = useRef<Map<string, RelayService>>(new Map());
+    const connectedBusIdsRef = useRef<Set<string>>(new Set());
+
+    // Only recompute when a bus becomes live or stops being live — NOT on location changes.
+    const liveBusIds = useMemo(
+        () => new Set(buses.filter(isLiveBus).map(b => b._id as string)),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [buses.map(b => `${b._id}:${b.activeTripId ?? ''}:${b.status ?? ''}`).join('|')]
+    );
+
     useEffect(() => {
-        // Find all live buses
-        const liveBuses = buses.filter(b => isLiveBus(b));
-        if (liveBuses.length === 0) return;
+        const currentLiveIds = liveBusIds;
+        const connected = connectedBusIdsRef.current;
 
-        const relays: { [busId: string]: RelayService } = {};
+        // Connect newly-live buses
+        const toConnect = [...currentLiveIds].filter(id => !connected.has(id));
+        for (const busId of toConnect) {
+            const relay = new RelayService();
+            relaysRef.current.set(busId, relay);
+            connected.add(busId);
 
-        const connectRelays = async () => {
-            for (const bus of liveBuses) {
+            // Capture stable refs for use inside the async callback
+            const stableBusId = busId;
+
+            (async () => {
                 try {
-                    const relay = new RelayService();
-                    const tokenResp = await getRelayToken(bus._id, 'admin');
+                    const tokenResp = await getRelayToken(stableBusId, 'admin');
                     relay.connect(tokenResp.wsUrl, {
                         onMessage: (data: any) => {
                             if (data.type === 'bus_location_update') {
@@ -164,15 +175,12 @@ const Dashboard = () => {
                                 const speedMph = Math.max(0, data.speedMph ?? data.speed ?? 0);
                                 const heading = data.heading ?? 0;
 
+                                // Update this bus's location in state — does NOT trigger relay effect re-run
                                 setBuses(prev => prev.map(b => {
-                                    if (b._id === bus._id) {
+                                    if (b._id === stableBusId) {
                                         return {
                                             ...b,
-                                            location: {
-                                                latitude: lat,
-                                                longitude: lng,
-                                                heading: heading
-                                            },
+                                            location: { latitude: lat, longitude: lng, heading },
                                             speed: speedMph,
                                             lastUpdated: new Date().toISOString()
                                         };
@@ -180,29 +188,39 @@ const Dashboard = () => {
                                     return b;
                                 }));
 
-                                // Only pan the map to the selected bus if follow is true
-                                if (followSelectedBus && selectedBusId === bus._id) {
-                                    setFocusedBusLocation({ lat: data.lat, lng: data.lng });
+                                // Pan map to selected bus if follow mode is on
+                                if (followSelectedBus && selectedBusId === stableBusId) {
+                                    setFocusedBusLocation({ lat, lng });
                                 }
                             }
                         },
-                        onOpen: () => console.log('[Admin] WS connected for bus', bus._id),
-                        onClose: () => console.log('[Admin] WS disconnected for bus', bus._id),
+                        onOpen: () => console.log('[Admin] WS connected for bus', stableBusId),
+                        onClose: () => console.log('[Admin] WS disconnected for bus', stableBusId),
                     });
-                    relays[bus._id] = relay;
                 } catch (err) {
-                    console.error('[Admin] Failed to connect relay for bus', bus._id, err);
+                    console.error('[Admin] Failed to connect relay for bus', stableBusId, err);
+                    // Remove from connected set so next effect run can retry
+                    connected.delete(stableBusId);
+                    relaysRef.current.delete(stableBusId);
                 }
-            }
-        };
+            })();
+        }
 
-        connectRelays();
+        // Disconnect buses that are no longer live
+        const toDisconnect = [...connected].filter(id => !currentLiveIds.has(id));
+        for (const busId of toDisconnect) {
+            relaysRef.current.get(busId)?.disconnect();
+            relaysRef.current.delete(busId);
+            connected.delete(busId);
+        }
 
+        // Cleanup on unmount: disconnect everything
         return () => {
-            // Disconnect all
-            Object.values(relays).forEach(r => r.disconnect());
+            relaysRef.current.forEach(r => r.disconnect());
+            relaysRef.current.clear();
+            connectedBusIdsRef.current.clear();
         };
-    }, [buses.map(b => isLiveBus(b) ? b._id : null).join(','), selectedBusId, followSelectedBus]);
+    }, [liveBusIds, selectedBusId, followSelectedBus]);
 
     // Resolve addresses for active buses - Smart bulk update
     useEffect(() => {

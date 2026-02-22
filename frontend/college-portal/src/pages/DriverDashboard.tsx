@@ -47,12 +47,12 @@ const DriverDashboard = () => {
     const [lastSentTime, setLastSentTime] = useState<string>('');
     const [currentStreetName, setCurrentStreetName] = useState<string>('');
 
-    // Refs for tracking
     const watchIdRef = useRef<number | null>(null);
     const lastUpdateRef = useRef<number>(0);
     const lastHistorySaveRef = useRef<number>(0); // Track when we last saved to history
     const currentPositionRef = useRef<{ latitude: number, longitude: number, speed: number, heading: number } | null>(null);
     const liveTrailBufferRef = useRef<{ lat: number; lng: number; timestamp: string }[]>([]); // Buffer for 1s interval points
+    const prevPositionRef = useRef<{ lat: number; lng: number; ts: number } | null>(null); // For dead-reckoning speed estimate
 
     // Proximity Check Interval (Phase 4.3)
     useEffect(() => {
@@ -264,8 +264,33 @@ const DriverDashboard = () => {
                     return;
                 }
 
-                // Clamp speed: negative values are invalid
-                const speedMps = Math.max(0, speed || 0);
+                // ── Speed: use browser value if available, otherwise dead-reckon ──────
+                // Most browsers report null for speed on desktop/iOS/Firefox.
+                // We estimate speed from distance between consecutive GPS points.
+                let speedMps: number;
+                if (speed !== null && speed > 0) {
+                    // Browser reported a real speed — trust it
+                    speedMps = Math.max(0, speed);
+                } else if (prevPositionRef.current) {
+                    const dtSeconds = (now - prevPositionRef.current.ts) / 1000;
+                    if (dtSeconds > 0.5) {
+                        const distM = getDistanceFromLatLonInKm(
+                            prevPositionRef.current.lat, prevPositionRef.current.lng,
+                            latitude, longitude
+                        ) * 1000;
+                        const rawMps = distM / dtSeconds;
+                        // Clamp at 36 m/s (~80 mph) to reject GPS position jumps
+                        speedMps = Math.min(36, Math.max(0, rawMps));
+                    } else {
+                        speedMps = 0;
+                    }
+                } else {
+                    speedMps = 0;
+                }
+
+                // Always update previous position for next estimate
+                prevPositionRef.current = { lat: latitude, lng: longitude, ts: now };
+
                 const speedMph = Math.round(speedMps * 2.23694);
                 const headingVal = heading || 0;
 
@@ -408,6 +433,7 @@ const DriverDashboard = () => {
         setTripId(null);
         lastHistorySaveRef.current = 0;
         currentPositionRef.current = null;
+        prevPositionRef.current = null; // Reset dead-reckoning state
         liveTrailBufferRef.current = [];
         historyBufferRef.current = [];
 
