@@ -35,8 +35,8 @@ export const getBusLatLng = (bus: any): [number, number] | null => {
     return [lng, lat];
 };
 
-// Helper to create a circle polygon (100m radius)
-const createCirclePolygon = (center: [number, number], radiusInMeters: number = 100, points: number = 64) => {
+// Helper to create a circle polygon (50m radius)
+const createCirclePolygon = (center: [number, number], radiusInMeters: number = 50, points: number = 64) => {
     const coords = {
         latitude: center[1],
         longitude: center[0]
@@ -474,7 +474,7 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
                     );
                 })}
 
-                {/* 100m Stop Circles (Geofence Preview - Exact Polygons) */}
+                {/* 50m Stop Circles (Geofence Preview - Exact Polygons) */}
                 {showStopCircles && stopMarkers && stopMarkers.length > 0 && (
                     <Source
                         id="stop-circles-source"
@@ -483,7 +483,7 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
                             type: 'FeatureCollection',
                             features: stopMarkers
                                 .filter(m => m.lat && m.lng)
-                                .map(m => createCirclePolygon([m.lng, m.lat], 100))
+                                .map(m => createCirclePolygon([m.lng, m.lat], 50))
                         }}
                     >
                         <Layer
