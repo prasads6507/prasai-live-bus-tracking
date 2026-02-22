@@ -880,13 +880,7 @@ const getTripPath = async (req, res) => {
 
         const tripData = tripDoc.data();
 
-        // NEW: Prefer single-doc path array if it exists and is not empty
-        if (tripData.path && Array.isArray(tripData.path) && tripData.path.length > 0) {
-            console.log(`Returning ${tripData.path.length} points from tripDoc.path array for trip ${tripId}`);
-            return res.json({ success: true, data: tripData.path });
-        }
-
-        // FALLBACK: Fetch path subcollection (Phase 1/3 implementation)
+        // FALLBACK/PRIMARY: Fetch path subcollection (Phase 1/3 implementation)
         let pathSnapshot = await tripRef.collection('path').get();
 
         console.log(`Path snapshot for ${tripId}: empty=${pathSnapshot.empty}, size=${pathSnapshot.size}`);

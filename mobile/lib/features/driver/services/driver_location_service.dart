@@ -5,12 +5,17 @@ import 'dart:ui';
 import 'package:background_location_tracker/background_location_tracker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:dio/dio.dart';
-import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../../data/models/location_point.dart';
-import '../../../core/config/env.dart';
+
+double _sanitizeSpeedMps(double? v) {
+  if (v == null) return 0;
+  if (!v.isFinite) return 0;
+  if (v < 0) return 0; // INVALID => clamp
+  return v;
+}
+
+int _speedMphRounded(double? mps) =>
+  (_sanitizeSpeedMps(mps) * 2.236936).round();
 
 @pragma('vm:entry-point')
 void backgroundCallback() {
@@ -28,8 +33,6 @@ void backgroundCallback() {
       if (collegeId == null || busId == null) return;
       
       try {
-        final speedMph = data.speed * 2.23694;
-        
         final db = FirebaseFirestore.instance;
         final busRef = db.collection('buses').doc(busId);
         
@@ -42,33 +45,69 @@ void backgroundCallback() {
           
           final isActiveTrip = dataMap['activeTripId'] != null;
           final newStatus = isActiveTrip ? 'ON_ROUTE' : (dataMap['status'] == 'MAINTENANCE' ? 'MAINTENANCE' : 'ACTIVE');
+
+          final rawLat = data.lat;
+          final rawLng = data.lon;
           
+          if (rawLat == 0.0 || rawLng == 0.0) return;
+
+          final prevLat = prefs.getDouble('prev_lat');
+          final prevLng = prefs.getDouble('prev_lng');
+          final prevTimeStr = prefs.getString('prev_time');
+          final nowTime = DateTime.now();
+
+          double estMps = 0.0;
+          double smoothedLat = rawLat;
+          double smoothedLng = rawLng;
+
+          if (prevLat != null && prevLng != null && prevTimeStr != null) {
+            final prevTime = DateTime.parse(prevTimeStr);
+            final dtSeconds = max(1, nowTime.difference(prevTime).inSeconds);
+            final distMeters = _haversineMeters(prevLat, prevLng, rawLat, rawLng);
+
+            estMps = distMeters / dtSeconds;
+            if (estMps > 60.0) return; // Drop bad point (jump > 134mph)
+
+            smoothedLat = 0.7 * rawLat + 0.3 * prevLat;
+            smoothedLng = 0.7 * rawLng + 0.3 * prevLng;
+          }
+
+          final pluginSpeed = _sanitizeSpeedMps(data.speed);
+          double finalSpeedMps = pluginSpeed > 0 ? pluginSpeed : estMps;
+          if (finalSpeedMps > 45.0) finalSpeedMps = 45.0; // clamp max ~100mph
+          final speedMph = _speedMphRounded(finalSpeedMps);
+
+          // Update prev point
+          await prefs.setDouble('prev_lat', smoothedLat);
+          await prefs.setDouble('prev_lng', smoothedLng);
+          await prefs.setString('prev_time', nowTime.toIso8601String());
+
           final currentBuffer = List.from(dataMap['liveTrackBuffer'] ?? []);
-          final newPoint = {
-            'latitude': data.lat,
-            'longitude': data.lon,
+          final newTracePoint = {
+            'latitude': smoothedLat,
+            'longitude': smoothedLng,
             'speed': speedMph,
             'heading': data.course,
-            'timestamp': DateTime.now().toIso8601String(),
+            'timestamp': nowTime.toIso8601String(),
           };
           
-          currentBuffer.add(newPoint);
+          currentBuffer.add(newTracePoint);
           if (currentBuffer.length > 5) {
             currentBuffer.removeRange(0, currentBuffer.length - 5);
           }
           
           transaction.update(busRef, {
             'status': newStatus,
-            'lastUpdated': DateTime.now().toIso8601String(),
+            'lastUpdated': nowTime.toIso8601String(),
             'lastLocationUpdate': FieldValue.serverTimestamp(),
             'location': {
-              'latitude': data.lat,
-              'longitude': data.lon,
+              'latitude': smoothedLat,
+              'longitude': smoothedLng,
               'heading': data.course,
             },
             'currentLocation': {
-              'lat': data.lat,
-              'lng': data.lon,
+              'lat': smoothedLat,
+              'lng': smoothedLng,
             },
             'speed': speedMph,
             'currentSpeed': speedMph,
@@ -78,34 +117,28 @@ void backgroundCallback() {
 
           if (isActiveTrip) {
             final String tripId = dataMap['activeTripId'] as String;
-            final int roundedSpeed = speedMph.round();
             
-            // Append GPS point to path array on root trip doc (1 trip = 1 doc)
             final rootTripRef = db.collection('trips').doc(tripId);
             
-            final newPoint = {
-              'lat': data.lat,
-              'lng': data.lon,
-              'latitude': data.lat,
-              'longitude': data.lon,
-              'speed': roundedSpeed,
+            final newPathPoint = {
+              'lat': smoothedLat,
+              'lng': smoothedLng,
+              'latitude': smoothedLat,
+              'longitude': smoothedLng,
+              'speed': speedMph,
               'heading': data.course,
-              'recordedAt': DateTime.now().toIso8601String(),
-              'timestamp': DateTime.now().toIso8601String(),
+              'recordedAt': FieldValue.serverTimestamp(),
+              'timestamp': nowTime.toIso8601String(),
             };
 
-            // Ensure root trip doc exists with metadata, then append to path array
+            // Ensure root trip doc exists with metadata, update metrics
             transaction.set(rootTripRef, {
-              'tripId': tripId,
-              'busId': busId,
-              'collegeId': collegeId,
               'updatedAt': FieldValue.serverTimestamp(),
+              'totalPoints': FieldValue.increment(1),
             }, SetOptions(merge: true));
 
-            transaction.update(rootTripRef, {
-              'path': FieldValue.arrayUnion([newPoint]),
-              'totalPoints': FieldValue.increment(1),
-            });
+            // Write point into subcollection
+            transaction.set(rootTripRef.collection('path').doc(), newPathPoint);
           }
         });
 
@@ -151,6 +184,19 @@ void backgroundCallback() {
                     'stopProgress.arrivals': arrivals,
                     'eta.nextStopId': nextStopId,
                   });
+
+                  // F1: Auto End Trip when reaching the final stop
+                  if (newIndex >= stops.length) {
+                    await tripRef.update({
+                      'status': 'COMPLETED',
+                      'endTime': DateTime.now().toIso8601String(),
+                    });
+                    
+                    await busRef.update({
+                      'status': 'ACTIVE',
+                      'activeTripId': FieldValue.delete(),
+                    });
+                  }
 
                   // Write arrival event for push notification trigger
                   await db.collection('stopArrivals').add({

@@ -188,7 +188,12 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
                           onTap: isMaintenance ? null : () {
                             setState(() {
                               _selectedBusId = bus.id;
-                              _selectedRouteId = bus.assignedRouteId;
+                              if (bus.activeTripId != null || bus.status == 'ON_ROUTE') {
+                                _selectedRouteId = bus.assignedRouteId ?? 'unknown';
+                                _selectedDirection = 'active';
+                              } else {
+                                _selectedRouteId = bus.assignedRouteId;
+                              }
                             });
                           },
                           borderRadius: BorderRadius.circular(24),
@@ -607,7 +612,9 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
              heading: locationDto.course,
           );
           setState(() {
-            _currentSpeed = (point.speed ?? 0.0) * 2.23694; // mph
+            double rawSpeed = point.speed ?? 0.0;
+            if (rawSpeed < 0 || !rawSpeed.isFinite) rawSpeed = 0.0;
+            _currentSpeed = rawSpeed * 2.23694; // mph
             _lastUpdate = TimeOfDay.now().format(context);
             _lastRecordedPoint = point;
           });

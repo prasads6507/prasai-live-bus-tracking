@@ -379,7 +379,39 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
     final collegeId = ref.watch(selectedCollegeIdProvider);
 
     return AppScaffold(
-      body: Stack(
+      body: _currentBus == null || _currentBus?.activeTripId == null || _currentBus!.activeTripId!.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.directions_bus_filled, size: 72, color: AppColors.textTertiary.withOpacity(0.4)),
+                  const SizedBox(height: 16),
+                  Text(
+                    "Bus not started yet",
+                    style: AppTypography.textTheme.titleMedium?.copyWith(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    "Check back later when the driver starts the trip.",
+                    style: AppTypography.textTheme.bodyMedium?.copyWith(color: AppColors.textTertiary),
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: () => context.pop(),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    ),
+                    child: const Text("Go Back", style: TextStyle(color: Colors.white)),
+                  ),
+                ],
+              ),
+            )
+          : Stack(
         children: [
           if (collegeId != null)
             MobileMapLibre(

@@ -5,6 +5,8 @@ import { getRoutes, createRoute, updateRoute, deleteRoute, validateSlug, bulkCre
 import { motion, AnimatePresence } from 'framer-motion';
 import * as XLSX from 'xlsx';
 import Layout from '../components/Layout';
+import AddressAutocomplete from '../components/AddressAutocomplete';
+import MapLibreMap from '../components/MapLibreMap';
 
 const Routes = () => {
     const { orgSlug } = useParams<{ orgSlug: string }>();
@@ -390,7 +392,7 @@ const Routes = () => {
                             animate={{ scale: 1, opacity: 1 }}
                             exit={{ scale: 0.95, opacity: 0 }}
                             onClick={(e) => e.stopPropagation()}
-                            className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto"
+                            className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl p-6 max-h-[90vh] overflow-y-auto"
                         >
                             <div className="flex items-center justify-between mb-6">
                                 <h2 className="text-2xl font-bold text-slate-800">
@@ -418,120 +420,141 @@ const Routes = () => {
                                 </div>
                             )}
 
-                            <form onSubmit={handleCreateRoute} className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-semibold text-slate-700 mb-2">Route Name</label>
-                                    <input
-                                        type="text"
-                                        required
-                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all"
-                                        placeholder="e.g., Route A - City Center"
-                                        value={newRoute.routeName}
-                                        onChange={(e) => setNewRoute({ ...newRoute, routeName: e.target.value })}
-                                    />
-                                </div>
-
-                                {/* Stops Section */}
-                                <div>
-                                    <div className="flex items-center justify-between mb-3">
-                                        <label className="block text-sm font-semibold text-slate-700">Stops (Optional)</label>
-                                        <button
-                                            type="button"
-                                            onClick={addStop}
-                                            className="text-sm text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1"
-                                        >
-                                            <Plus size={16} />
-                                            Add Stop
-                                        </button>
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                <form onSubmit={handleCreateRoute} className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-semibold text-slate-700 mb-2">Route Name</label>
+                                        <input
+                                            type="text"
+                                            required
+                                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all"
+                                            placeholder="e.g., Route A - City Center"
+                                            value={newRoute.routeName}
+                                            onChange={(e) => setNewRoute({ ...newRoute, routeName: e.target.value })}
+                                        />
                                     </div>
 
-                                    {newRoute.stops.length > 0 && (
-                                        <div className="space-y-3 max-h-64 overflow-y-auto">
-                                            {newRoute.stops.map((stop, index) => (
-                                                <div key={index} className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-                                                    <div className="flex items-start gap-2 w-full">
-                                                        <div className="flex flex-col items-center gap-0.5 mt-1">
-                                                            <button type="button" onClick={() => moveStopUp(index)} className="p-0.5 text-slate-400 hover:text-blue-600 disabled:opacity-30" disabled={index === 0}>
-                                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="18 15 12 9 6 15" /></svg>
-                                                            </button>
-                                                            <span className="text-xs font-bold text-slate-400 w-4 text-center">{index + 1}</span>
-                                                            <button type="button" onClick={() => moveStopDown(index)} className="p-0.5 text-slate-400 hover:text-blue-600 disabled:opacity-30" disabled={index === newRoute.stops.length - 1}>
-                                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9" /></svg>
+                                    {/* Stops Section */}
+                                    <div>
+                                        <div className="flex items-center justify-between mb-3">
+                                            <label className="block text-sm font-semibold text-slate-700">Stops (Optional)</label>
+                                            <button
+                                                type="button"
+                                                onClick={addStop}
+                                                className="text-sm text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1"
+                                            >
+                                                <Plus size={16} />
+                                                Add Stop
+                                            </button>
+                                        </div>
+
+                                        {newRoute.stops.length > 0 && (
+                                            <div className="space-y-3 max-h-64 overflow-y-auto">
+                                                {newRoute.stops.map((stop, index) => (
+                                                    <div key={index} className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                                                        <div className="flex items-start gap-2 w-full">
+                                                            <div className="flex flex-col items-center gap-0.5 mt-1">
+                                                                <button type="button" onClick={() => moveStopUp(index)} className="p-0.5 text-slate-400 hover:text-blue-600 disabled:opacity-30" disabled={index === 0}>
+                                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="18 15 12 9 6 15" /></svg>
+                                                                </button>
+                                                                <span className="text-xs font-bold text-slate-400 w-4 text-center">{index + 1}</span>
+                                                                <button type="button" onClick={() => moveStopDown(index)} className="p-0.5 text-slate-400 hover:text-blue-600 disabled:opacity-30" disabled={index === newRoute.stops.length - 1}>
+                                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9" /></svg>
+                                                                </button>
+                                                            </div>
+                                                            <input
+                                                                type="text"
+                                                                placeholder="Stop Name"
+                                                                className="flex-grow px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
+                                                                value={stop.stopName}
+                                                                onChange={(e) => updateStop(index, 'stopName', e.target.value)}
+                                                            />
+                                                            <input
+                                                                type="number"
+                                                                placeholder="Lat"
+                                                                className="w-24 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
+                                                                value={stop.latitude || ''}
+                                                                onChange={(e) => updateStop(index, 'latitude', e.target.value)}
+                                                                step="any"
+                                                            />
+                                                            <input
+                                                                type="number"
+                                                                placeholder="Lng"
+                                                                className="w-24 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
+                                                                value={stop.longitude || ''}
+                                                                onChange={(e) => updateStop(index, 'longitude', e.target.value)}
+                                                                step="any"
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => removeStop(index)}
+                                                                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                            >
+                                                                <X size={18} />
                                                             </button>
                                                         </div>
-                                                        <input
-                                                            type="text"
-                                                            placeholder="Stop Name"
-                                                            className="flex-grow px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
-                                                            value={stop.stopName}
-                                                            onChange={(e) => updateStop(index, 'stopName', e.target.value)}
-                                                        />
-                                                        <input
-                                                            type="number"
-                                                            placeholder="Lat"
-                                                            className="w-24 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
-                                                            value={stop.latitude || ''}
-                                                            onChange={(e) => updateStop(index, 'latitude', e.target.value)}
-                                                            step="any"
-                                                        />
-                                                        <input
-                                                            type="number"
-                                                            placeholder="Lng"
-                                                            className="w-24 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
-                                                            value={stop.longitude || ''}
-                                                            onChange={(e) => updateStop(index, 'longitude', e.target.value)}
-                                                            step="any"
-                                                        />
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => removeStop(index)}
-                                                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                                        >
-                                                            <X size={18} />
-                                                        </button>
+                                                        <div className="flex gap-2 pl-8 items-start relative z-[100]">
+                                                            <div className="flex-grow z-50">
+                                                                <AddressAutocomplete
+                                                                    initialAddress={stop.address || ''}
+                                                                    onSelect={(data) => {
+                                                                        const newStops = [...newRoute.stops];
+                                                                        newStops[index].address = data.address;
+                                                                        newStops[index].latitude = data.lat.toString();
+                                                                        newStops[index].longitude = data.lng.toString();
+                                                                        setNewRoute({ ...newRoute, stops: newStops });
+                                                                    }}
+                                                                    className="w-full bg-white border border-slate-200 rounded-lg text-xs"
+                                                                />
+                                                            </div>
+                                                            <input
+                                                                type="text"
+                                                                placeholder="Pickup (HH:MM)"
+                                                                className="w-28 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
+                                                                value={stop.pickupPlannedTime || ''}
+                                                                onChange={(e) => updateStop(index, 'pickupPlannedTime', e.target.value)}
+                                                            />
+                                                            <input
+                                                                type="text"
+                                                                placeholder="Dropoff (HH:MM)"
+                                                                className="w-28 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
+                                                                value={stop.dropoffPlannedTime || ''}
+                                                                onChange={(e) => updateStop(index, 'dropoffPlannedTime', e.target.value)}
+                                                            />
+                                                        </div>
                                                     </div>
-                                                    <div className="flex gap-2 pl-8">
-                                                        <input
-                                                            type="text"
-                                                            placeholder="Address (optional)"
-                                                            className="flex-grow px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
-                                                            value={stop.address || ''}
-                                                            onChange={(e) => updateStop(index, 'address', e.target.value)}
-                                                        />
-                                                        <input
-                                                            type="text"
-                                                            placeholder="Pickup (HH:MM)"
-                                                            className="w-28 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
-                                                            value={stop.pickupPlannedTime || ''}
-                                                            onChange={(e) => updateStop(index, 'pickupPlannedTime', e.target.value)}
-                                                        />
-                                                        <input
-                                                            type="text"
-                                                            placeholder="Dropoff (HH:MM)"
-                                                            className="w-28 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
-                                                            value={stop.dropoffPlannedTime || ''}
-                                                            onChange={(e) => updateStop(index, 'dropoffPlannedTime', e.target.value)}
-                                                        />
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
 
-                                <motion.button
-                                    whileHover={{ scale: 1.02 }}
-                                    whileTap={{ scale: 0.98 }}
-                                    type="submit"
-                                    disabled={formLoading}
-                                    className={`w-full py-3 rounded-xl font-semibold text-white transition-all ${formLoading
-                                        ? 'bg-slate-400 cursor-not-allowed'
-                                        : 'bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-200'
-                                        }`}
-                                >
-                                    {formLoading ? 'Processing...' : (isEditMode ? 'Update Route' : 'Create Route')}
-                                </motion.button>
-                            </form>
+                                    <motion.button
+                                        whileHover={{ scale: 1.02 }}
+                                        whileTap={{ scale: 0.98 }}
+                                        type="submit"
+                                        disabled={formLoading}
+                                        className={`w-full py-3 rounded-xl font-semibold text-white transition-all ${formLoading
+                                            ? 'bg-slate-400 cursor-not-allowed'
+                                            : 'bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-200'
+                                            }`}
+                                    >
+                                        {formLoading ? 'Processing...' : (isEditMode ? 'Update Route' : 'Create Route')}
+                                    </motion.button>
+                                </form>
+
+                                {/* Map Visualization */}
+                                <div className="h-[400px] lg:h-[600px] bg-slate-100 rounded-xl overflow-hidden border border-slate-200 relative z-0">
+                                    <MapLibreMap
+                                        buses={[]}
+                                        stopMarkers={newRoute.stops.map(s => ({
+                                            lat: parseFloat(s.latitude) || 0,
+                                            lng: parseFloat(s.longitude) || 0,
+                                            name: s.stopName || 'Stop'
+                                        }))}
+                                        showStopCircles={true}
+                                    />
+                                </div>
+                            </div>
                         </motion.div>
                     </motion.div>
                 )}

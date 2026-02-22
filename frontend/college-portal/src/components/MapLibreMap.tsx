@@ -18,6 +18,7 @@ interface MapLibreMapProps {
     routes?: any[];
     selectedRouteId?: string | null;
     onBusClick?: (busId: string) => void;
+    showStopCircles?: boolean;
 }
 
 // 1. Universal Coordinate Normalizer (Fix 2 & Mismatch Fix)
@@ -34,7 +35,7 @@ export const getBusLatLng = (bus: any): [number, number] | null => {
     return [lng, lat];
 };
 
-const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, path, selectedBusId, routes, selectedRouteId, onBusClick }: MapLibreMapProps) => {
+const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, path, selectedBusId, routes, selectedRouteId, onBusClick, stopMarkers, showStopCircles }: MapLibreMapProps) => {
     const mapRef = useRef<MapRef | null>(null);
 
     // Type definition for DOM Marker State
@@ -424,6 +425,41 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
                         </Marker>
                     );
                 })}
+
+                {/* 100m Stop Circles (Geofence Preview) */}
+                {showStopCircles && stopMarkers && stopMarkers.length > 0 && (
+                    <Source
+                        id="stop-circles-source"
+                        type="geojson"
+                        data={{
+                            type: 'FeatureCollection',
+                            features: stopMarkers.filter(m => m.lat && m.lng).map((m, idx) => ({
+                                type: 'Feature',
+                                geometry: { type: 'Point', coordinates: [m.lng, m.lat] },
+                                properties: { idx }
+                            }))
+                        }}
+                    >
+                        <Layer
+                            id="stop-circles-fill"
+                            type="circle"
+                            paint={{
+                                'circle-radius': [
+                                    'interpolate',
+                                    ['exponential', 2],
+                                    ['zoom'],
+                                    0, 0,
+                                    20, 100
+                                ],
+                                'circle-color': '#f97316',
+                                'circle-opacity': 0.15,
+                                'circle-stroke-color': '#f97316',
+                                'circle-stroke-width': 2,
+                                'circle-pitch-alignment': 'map'
+                            }}
+                        />
+                    </Source>
+                )}
             </Map>
         </div>
     );
