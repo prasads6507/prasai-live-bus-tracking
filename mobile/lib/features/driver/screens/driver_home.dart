@@ -642,7 +642,7 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
           // Stream to Relay (Cloudflare) — primary real-time channel
           if (_relay != null && _relay!.isConnected) {
             _relay!.sendLocation(
-              tripId: 'active', // The relay uses busId from the token path, tripId is advisory
+              tripId: 'active',
               lat: point.latitude,
               lng: point.longitude,
               speedMps: point.speed ?? 0.0,
@@ -650,17 +650,8 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
             );
           }
 
-          // Also update Firestore bus doc (for map subscriptions to animate markers)
-          ref.read(firestoreDataSourceProvider).updateDriverLocation(
-              widget.collegeId, widget.busId, [point]);
-
-          // Persist point to trip path history (for post-trip route playback)
-          final busStream = ref.read(firestoreDataSourceProvider).getBus(widget.collegeId, widget.busId);
-          busStream.first.then((bus) {
-            if (bus.activeTripId != null && bus.activeTripId!.isNotEmpty) {
-              ref.read(firestoreDataSourceProvider).saveTripPathPoint(bus.activeTripId!, point, widget.busId);
-            }
-          }).catchError((_) {});
+          // Buffer point in memory for bulk upload at trip end (ZERO Firestore writes during trip)
+          _liveTrackBuffer.add(point);
         }
       }
     );
@@ -839,13 +830,18 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
                   setState(() => _isLoading = true);
                   try {
                     final String? activeTripId = bus.activeTripId;
-                    // Always call endTrip to ensure the bus is reset in Firestore
+
+                    // Bulk upload all buffered GPS points in ONE Firestore write
+                    if (activeTripId != null && activeTripId.isNotEmpty && _liveTrackBuffer.isNotEmpty) {
+                      await ref.read(firestoreDataSourceProvider).bulkSaveTripPath(
+                        activeTripId, List.from(_liveTrackBuffer),
+                      );
+                    }
+                    _liveTrackBuffer.clear();
+
+                    // End the trip in Firestore (resets bus status)
                     await ref.read(firestoreDataSourceProvider).endTrip(activeTripId, widget.busId);
                     _stopTracking();
-
-                    if (activeTripId != null && activeTripId.isNotEmpty) {
-                      await DriverLocationService.uploadBufferedHistory(activeTripId);
-                    }
 
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(

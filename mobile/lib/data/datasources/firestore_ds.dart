@@ -227,6 +227,62 @@ class FirestoreDataSource {
     }
   }
 
+  /// Bulk-writes all GPS points to a trip doc in ONE Firestore update.
+  /// Called at trip end — zero writes during the trip.
+  Future<void> bulkSaveTripPath(String tripId, List<LocationPoint> points) async {
+    if (points.isEmpty) return;
+    try {
+      final tripRef = _firestore.collection('trips').doc(tripId);
+
+      final pathData = points.map((p) {
+        final speedMph = ((p.speed ?? 0.0) * 2.23694).round();
+        return {
+          'lat': p.latitude,
+          'lng': p.longitude,
+          'latitude': p.latitude,
+          'longitude': p.longitude,
+          'heading': p.heading ?? 0.0,
+          'speed': speedMph,
+          'timestamp': p.timestamp?.toIso8601String() ?? DateTime.now().toIso8601String(),
+          'recordedAt': p.timestamp?.toIso8601String() ?? DateTime.now().toIso8601String(),
+        };
+      }).toList();
+
+      // Calculate distance and max speed
+      double totalDistanceM = 0.0;
+      double maxSpeedMph = 0.0;
+      for (int i = 1; i < points.length; i++) {
+        final prev = points[i - 1];
+        final curr = points[i];
+        final dLat = (curr.latitude - prev.latitude) * 111320;
+        final cosLat = _cosRad(prev.latitude * 3.14159265 / 180.0);
+        final dLng = (curr.longitude - prev.longitude) * 111320 * cosLat;
+        totalDistanceM += _sqrtNewton(dLat * dLat + dLng * dLng);
+        final sMph = (curr.speed ?? 0.0) * 2.23694;
+        if (sMph > maxSpeedMph) maxSpeedMph = sMph;
+      }
+
+      await tripRef.update({
+        'path': pathData,
+        'totalPoints': points.length,
+        'distanceMeters': totalDistanceM.round(),
+        'maxSpeedMph': maxSpeedMph.round(),
+      });
+
+      print('[BulkSave] ${points.length} pts → trip $tripId (${totalDistanceM.round()}m, max ${maxSpeedMph.round()} mph)');
+    } catch (e) {
+      print('Error bulk saving trip path: $e');
+    }
+  }
+
+  static double _cosRad(double x) => 1.0 - (x * x / 2.0) + (x * x * x * x / 24.0);
+  static double _sqrtNewton(double x) {
+    if (x <= 0) return 0;
+    double g = x / 2;
+    for (int i = 0; i < 10; i++) g = (g + x / g) / 2;
+    return g;
+  }
+
   /// Searches for buses by bus number within a college.
   Future<List<Bus>> searchBusesByNumber(String collegeId, String query) async {
     // Search by busNumber
