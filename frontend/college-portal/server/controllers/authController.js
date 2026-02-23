@@ -32,16 +32,29 @@ const loginUser = async (req, res) => {
         if (!userSnapshot.empty) {
             const userDoc = userSnapshot.docs[0];
             const userData = userDoc.data();
+            console.log(`[Login] Found user in users collection: ${userData.email} (Role: ${userData.role})`);
 
             // Security Check: College Status
             if (userData.role !== 'OWNER' && userData.collegeId !== 'OWNER_GLOBAL') {
                 const collegeDoc = await db.collection('colleges').doc(userData.collegeId).get();
                 if (collegeDoc.exists && collegeDoc.data().status === 'SUSPENDED') {
+                    console.warn(`[Login] Blocking login for ${userData.email}: College ${userData.collegeId} is SUSPENDED`);
                     return res.status(403).json({ message: 'Your organization account is suspended.' });
+                }
+
+                // If orgSlug is provided (Mobile App), verify it matches the user's collegeId/slug
+                if (orgSlug && userData.role === 'DRIVER') {
+                    const collegeData = collegeDoc.exists ? collegeDoc.data() : null;
+                    const matches = userData.collegeId === orgSlug || (collegeData && collegeData.slug === orgSlug);
+                    if (!matches) {
+                        console.warn(`[Login] Org Mismatch for driver ${userData.email}: Expected ${orgSlug}, got ${userData.collegeId}`);
+                        return res.status(401).json({ message: 'Invalid Organization for this driver account.' });
+                    }
                 }
             }
 
             if (await matchPassword(password, userData.passwordHash)) {
+                console.log(`[Login] Password verified for ${userData.email}`);
                 // Generate Firebase Custom Token for Mobile/Direct Auth
                 const firebaseCustomToken = await auth.createCustomToken(userData.userId, {
                     role: userData.role,
@@ -58,6 +71,7 @@ const loginUser = async (req, res) => {
                     firebaseCustomToken
                 });
             } else {
+                console.warn(`[Login] Invalid password for ${userData.email}`);
                 return res.status(401).json({ message: 'Invalid email or password' });
             }
         }

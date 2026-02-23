@@ -23,12 +23,12 @@ class AuthRepository {
 
   Future<UserCredential> signIn(String email, String password, String orgSlug) async {
     try {
-      // 1. Try direct Firebase Auth (Faster and works globally)
-      return await _authDataSource.signInDirect(email, password);
-    } catch (e) {
-      print('Direct login failed: $e. Falling back to API login (for custom tokens).');
-      // 2. Fallback to API login (just in case)
+      // 1. Try API login first (Crucial for Custom Tokens and UID parity)
       return await _authDataSource.signInWithApi(email, password, orgSlug);
+    } catch (e) {
+      print('API login failed: $e. Falling back to Direct login...');
+      // 2. Fallback to direct Firebase Auth
+      return await _authDataSource.signInDirect(email, password);
     }
   }
 
