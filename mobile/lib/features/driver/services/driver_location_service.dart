@@ -136,18 +136,23 @@ void backgroundCallback() {
               'heading': data.course,
             },
             'currentLocation': {
+              'latitude': smoothedLat,
+              'longitude': smoothedLng,
               'lat': smoothedLat,
               'lng': smoothedLng,
+              'heading': data.course,
             },
             'speed': speedMph,        // Primary field
             'speedMph': speedMph,     // Compatibility field 1
-            'currentSpeed': speedMph, // Compatibility field 2
+            'speedMPH': speedMph,     // Compatibility field 2
+            'currentSpeed': speedMph, // Compatibility field 3
             'heading': data.course,
             'currentHeading': data.course,
             'status': 'ON_ROUTE',
           });
-        } catch (_) {
-          // Best effort for Firestore write in background
+          debugPrint("[Background] Pushing tracking for bus $busId, speed: $speedMph mph");
+        } catch (e) {
+          debugPrint("[Background] Firestore update failed: $e");
         }
 
         // --- Geofence + ETA check (fire-and-forget, reads only) ---
