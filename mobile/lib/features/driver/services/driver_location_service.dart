@@ -166,7 +166,6 @@ void backgroundCallback() {
         }
 
         // --- Geofence + ETA check (fire-and-forget, reads only) ---
-        final db = FirebaseFirestore.instance;
         final busRef = db.collection('buses').doc(busId);
         final busDocForGeofence = await busRef.get();
         final geoData = busDocForGeofence.data();
