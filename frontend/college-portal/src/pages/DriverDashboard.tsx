@@ -342,6 +342,8 @@ const DriverDashboard = () => {
                         accuracyM: accuracy || 0,
                     });
 
+                    console.log(`[Driver] ${sent ? 'Sent' : 'Queued'} location: lat=${latitude.toFixed(5)} lng=${longitude.toFixed(5)} speedMps=${speedMps.toFixed(1)}`);
+
                     if (sent) {
                         lastUpdateRef.current = now;
                         setLastSentTime(new Date().toLocaleTimeString());

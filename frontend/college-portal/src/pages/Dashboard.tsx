@@ -112,6 +112,8 @@ const Dashboard = () => {
                 ...doc.data()
             }));
             setRoutes(updatedRoutes);
+        }, (err) => {
+            console.error('[Dashboard] Routes snapshot listener failed:', err);
         });
 
         // Listen for real-time notifications (Phase 4.4)
@@ -127,6 +129,8 @@ const Dashboard = () => {
                 ...doc.data()
             }));
             setNotifications(notes);
+        }, (err) => {
+            console.error('[Dashboard] Notifications snapshot listener failed (likely needs composite index):', err);
         });
 
         return () => {

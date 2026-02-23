@@ -69,6 +69,35 @@ export default {
             return room.fetch(request);
         }
 
+        // Route: GET /geo/reverse?lat=..&lon=.. → proxy Nominatim (CORS-safe)
+        if (path === '/geo/reverse') {
+            const lat = url.searchParams.get('lat');
+            const lon = url.searchParams.get('lon');
+            if (!lat || !lon) {
+                return jsonResponse({ error: 'Missing lat/lon query params' }, 400);
+            }
+
+            try {
+                const nominatimUrl = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=16`;
+                const resp = await fetch(nominatimUrl, {
+                    headers: {
+                        'User-Agent': 'PrasaiBusTracker/1.0 (live-bus-tracking)',
+                    },
+                });
+                const data = await resp.text();
+
+                return new Response(data, {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Cache-Control': 'public, max-age=3600',
+                        ...corsHeaders(),
+                    },
+                });
+            } catch (err) {
+                return jsonResponse({ error: 'Geocoding failed' }, 502);
+            }
+        }
+
         // 404 for unknown routes
         return jsonResponse(
             {
@@ -77,6 +106,7 @@ export default {
                     'GET /health',
                     'GET /live/bus/:busId',
                     'GET /ws/bus/:busId?token=...',
+                    'GET /geo/reverse?lat=..&lon=..',
                 ],
             },
             404
