@@ -54,6 +54,12 @@ service cloud.firestore {
       }
     }
 
+    // ─── Stop Arrivals ───────────────────────────────────────────────
+    match /stopArrivals/{arrivalId} {
+      // Drivers record arrivals; server/admins read to trigger notifications
+      allow read, write: if isAuthenticated();
+    }
+
     // ─── Routes ──────────────────────────────────────────────────────
     match /routes/{routeId} {
       allow read: if isAuthenticated();
