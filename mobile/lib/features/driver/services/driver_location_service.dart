@@ -139,6 +139,9 @@ void backgroundCallback() {
               speedMps: finalSpeedMps,
               heading: data.course,
             );
+          } else {
+            // Keep trying to connect if disconnected
+            _backgroundRelay!.connect(wsUrl);
           }
         }
 
@@ -306,13 +309,15 @@ class DriverLocationService {
     _initialized = true;
   }
 
-  static Future<void> startTracking(String collegeId, String busId, Function(BackgroundLocationUpdateData) onLocationUpdate) async {
+  static Future<void> startTracking(String collegeId, String busId, String tripId, String wsUrl, Function(BackgroundLocationUpdateData) onLocationUpdate) async {
     if (!_initialized) await initialize();
     
     // Save IDs for the background isolate
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('track_college_id', collegeId);
     await prefs.setString('track_bus_id', busId);
+    await prefs.setString('track_trip_id', tripId);
+    await prefs.setString('track_ws_url', wsUrl);
 
     _port?.close();
     _port = ReceivePort();

@@ -203,6 +203,18 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
         });
         _updateRoadName(_liveBusLocation!.latitude, _liveBusLocation!.longitude);
       };
+
+      _relay!.onError = (err) {
+        debugPrint('[StudentTrack] Relay error: $err');
+      };
+
+      _relay!.onClose = () {
+        debugPrint('[StudentTrack] Relay closed. Checking if needs reconnect...');
+        if (mounted && _currentBus?.activeTripId != null) {
+          // RelayService handles internal backoff reconnect, but we can log it
+        }
+      };
+
       _relay!.connect(wsUrl);
       debugPrint('[StudentTrack] Relay connected for bus $busId');
     } catch (e) {

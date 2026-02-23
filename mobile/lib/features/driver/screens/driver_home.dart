@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
@@ -7,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/driver_location_service.dart';
+import 'permission_setup_screen.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/typography.dart';
@@ -606,18 +608,21 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
     } catch (_) {}
 
     // 4. Initialize Relay
+    String? wsUrl;
     try {
       final tokenData = await ApiDataSource(Dio(), FirebaseFirestore.instance).getRelayToken(widget.busId, 'driver');
-      final wsUrl = tokenData['wsUrl'];
+      wsUrl = tokenData['wsUrl'];
       
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('track_ws_url', wsUrl);
-      await prefs.setString('track_trip_id', tripId);
+      if (wsUrl != null) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('track_ws_url', wsUrl);
+        await prefs.setString('track_trip_id', tripId);
 
-      _relay?.dispose();
-      _relay = RelayService();
-      _relay!.connect(wsUrl);
-      debugPrint("Connected to Relay: $wsUrl");
+        _relay?.dispose();
+        _relay = RelayService();
+        _relay!.connect(wsUrl);
+        debugPrint("Connected to Relay: $wsUrl");
+      }
     } catch (e) {
       debugPrint("Failed to connect to relay: $e");
     }
@@ -626,6 +631,8 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
     await DriverLocationService.startTracking(
       widget.collegeId, 
       widget.busId, 
+      tripId,
+      wsUrl ?? "",
       (locationDto) {
         if (mounted) {
           double rawSpeed = locationDto.speed ?? 0.0;
@@ -768,6 +775,7 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
                 ],
               ),
               const SizedBox(height: 20),
+              _buildPermissionWarning(),
               DriverStatusCard(
                 speed: _currentSpeed.roundToDouble(),
                 isTracking: isTripActive,
@@ -994,5 +1002,77 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
       },
     );
   }
-}
 
+  Widget _buildPermissionWarning() {
+    return FutureBuilder<bool>(
+      future: _checkPermissionsOptimal(),
+      builder: (context, snapshot) {
+        if (snapshot.data == true) return const SizedBox.shrink();
+        
+        return Container(
+          padding: const EdgeInsets.all(16),
+          margin: const EdgeInsets.only(bottom: 16),
+          decoration: BoxDecoration(
+            color: Colors.orange.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.orange.withOpacity(0.3)),
+          ),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 32),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "Tracking optimization needed",
+                          style: AppTypography.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                        const Text(
+                          "Allow 'Always' location for reliable background tracking.",
+                          style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const PermissionSetupScreen()),
+                  ).then((_) => setState(() {})),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text("Fix Now"),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<bool> _checkPermissionsOptimal() async {
+    final status = await Permission.locationAlways.status;
+    if (!status.isGranted) return false;
+    
+    if (Platform.isAndroid) {
+      final batteryStatus = await Permission.ignoreBatteryOptimizations.status;
+      if (!batteryStatus.isGranted) return false;
+    }
+    
+    return true;
+  }
+}
