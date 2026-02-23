@@ -310,42 +310,84 @@ const getCollegeBySlug = async (req, res) => {
     }
 };
 
+// @desc    Diagnostic: Check Firebase Backend Health
+// @route   GET /api/auth/health/firebase
+// @access  Public
+const getFirebaseHealth = async (req, res) => {
+    const { initializationError, db } = require('../config/firebase');
+    if (initializationError) {
+        return res.status(500).json({
+            ok: false,
+            message: 'Firebase Initialization Failed',
+            error: initializationError.message
+        });
+    }
+
+    if (!db) {
+        return res.status(500).json({
+            ok: false,
+            message: 'Firebase not initialized (db is null)'
+        });
+    }
+
+    return res.json({
+        ok: true,
+        message: 'Firebase Admin initialized and DB available'
+    });
+};
+
 // @desc    Search colleges by name
 // @route   GET /api/auth/colleges/search?q=query
 // @access  Public
 const searchColleges = async (req, res) => {
     try {
-        const query = req.query.q || '';
+        const { initializationError, db } = require('../config/firebase');
+        const query = (req.query.q || '').trim();
 
-        if (query.trim().length < 1) {
-            return res.json([]);
+        if (!query) {
+            return res.json({ colleges: [] });
+        }
+
+        if (initializationError || !db) {
+            console.error("[Search] Firebase unavailable:", initializationError?.message || 'DB is null');
+            return res.status(500).json({
+                success: false,
+                message: 'Database Configuration Error',
+                details: initializationError?.message || 'Firebase DB connection failed'
+            });
         }
 
         const collegesRef = db.collection('colleges');
 
-        // Firestore doesn't support full-text search, so we fetch all and filter
-        // For production, consider using Algolia or similar for better performance
+        // Fetch ACTIVE colleges and filter in-memory for case-insensitive robust matching
         const snapshot = await collegesRef.where('status', '==', 'ACTIVE').get();
 
-        const results = [];
-        snapshot.forEach(doc => {
-            const data = doc.data();
-            // Case-insensitive partial match
-            if (data.collegeName && data.collegeName.toLowerCase().includes(query.toLowerCase())) {
-                results.push({
+        const colleges = snapshot.docs
+            .map(doc => {
+                const data = doc.data();
+                return {
                     collegeId: data.collegeId,
-                    collegeName: data.collegeName,
+                    collegeName: data.collegeName || data.name,
                     slug: data.slug,
                     status: data.status
-                });
-            }
-        });
+                };
+            })
+            .filter(c => {
+                const name = (c.collegeName || '').toLowerCase();
+                const slug = (c.slug || '').toLowerCase();
+                const q = query.toLowerCase();
+                return name.includes(q) || slug.includes(q);
+            })
+            .slice(0, 15);
 
-        // Limit to 10 results
-        res.json(results.slice(0, 10));
+        // Standardized response shape: { colleges: [...] }
+        return res.json({ colleges });
     } catch (error) {
-        console.error("Search Colleges Error:", error);
-        res.status(500).json({ message: error.message });
+        console.error("[searchColleges error]", error);
+        return res.status(500).json({
+            success: false,
+            message: "Search failed: " + error.message
+        });
     }
 };
 
@@ -461,4 +503,4 @@ const studentSetPassword = async (req, res) => {
     }
 };
 
-module.exports = { loginUser, getMe, registerOwner, googleLogin, getCollegeBySlug, searchColleges, studentLogin, studentSetPassword };
+module.exports = { loginUser, getMe, registerOwner, googleLogin, getCollegeBySlug, searchColleges, studentLogin, studentSetPassword, getFirebaseHealth };

@@ -1,4 +1,17 @@
-const { db } = require('../config/firebase');
+const { db, initializationError } = require('../config/firebase');
+
+// Early check middleware-like guard for this controller
+const checkInit = (res) => {
+    if (initializationError || !db) {
+        res.status(500).json({
+            success: false,
+            message: "Database Configuration Error",
+            details: initializationError?.message || 'Firebase not initialized'
+        });
+        return false;
+    }
+    return true;
+};
 
 // Models are gone, we use Collections directly
 // Collections: 'colleges', 'users', 'buses', 'routes', etc.

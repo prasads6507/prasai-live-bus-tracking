@@ -22,7 +22,9 @@ const FindOrganization = () => {
             setLoading(true);
             try {
                 const data = await searchOrganizations(query);
-                setResults(Array.isArray(data) ? data : []);
+                // Robust parsing: handle both { colleges: [] } and raw array []
+                const colleges = data.colleges || data || [];
+                setResults(Array.isArray(colleges) ? colleges : []);
             } catch (err: any) {
                 console.error('Search Error:', err);
                 const debugInfo = {

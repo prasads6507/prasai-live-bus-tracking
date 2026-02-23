@@ -1,58 +1,61 @@
 const admin = require('firebase-admin');
-const path = require('path');
 
-let initializationError = null;
 let db = null;
 let auth = null;
+let initializationError = null;
 
-// Load environment variables
+// Helper to provide clear missing var reports for diagnostics
+const getMissingReport = () => {
+    return {
+        projectId: !!process.env.FIREBASE_PROJECT_ID,
+        clientEmail: !!process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: !!process.env.FIREBASE_PRIVATE_KEY
+    };
+};
+
 try {
-    require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
-} catch (e) { }
+    const projectId = (process.env.FIREBASE_PROJECT_ID || '').trim();
+    const clientEmail = (process.env.FIREBASE_CLIENT_EMAIL || '').trim();
+    let privateKeyRaw = (process.env.FIREBASE_PRIVATE_KEY || '').trim();
 
-// Singleton pattern
-if (!admin.apps.length) {
-    try {
-        let projectId = process.env.FIREBASE_PROJECT_ID;
-        let privateKey = process.env.FIREBASE_PRIVATE_KEY;
-        let clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+    if (!projectId || !clientEmail || !privateKeyRaw) {
+        const report = getMissingReport();
+        throw new Error(`Missing configuration: ${Object.keys(report).filter(k => !report[k]).join(', ')}`);
+    }
 
-        if (!projectId || !privateKey || !clientEmail) {
-            throw new Error(`Missing vars: ProjectId=${!!projectId}, Email=${!!clientEmail}, Key=${!!privateKey}`);
-        }
+    // Robust stripping: remove leading/trailing double or single quotes that might be copy-pasted
+    if ((privateKeyRaw.startsWith('"') && privateKeyRaw.endsWith('"')) ||
+        (privateKeyRaw.startsWith("'") && privateKeyRaw.endsWith("'"))) {
+        console.log("[Firebase] Stripping wrapper quotes from PRIVATE_KEY");
+        privateKeyRaw = privateKeyRaw.slice(1, -1);
+    }
 
-        // Clean keys (remove quotes if user added them)
-        if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
-            privateKey = privateKey.slice(1, -1);
-        }
+    // Convert mangled newlines (common in Vercel/CI envs)
+    const privateKey = privateKeyRaw.replace(/\\n/g, '\n').trim();
 
-        // Handle newlines
-        const formattedPrivateKey = privateKey.replace(/\\n/g, '\n');
-
+    if (!admin.apps.length) {
         admin.initializeApp({
             credential: admin.credential.cert({
                 projectId,
-                privateKey: formattedPrivateKey,
-                clientEmail
+                clientEmail,
+                privateKey
             })
         });
-
-        console.log(`Firebase Admin Initialized: ${projectId}`);
-    } catch (error) {
-        console.error("Firebase Init Failed:", error.message);
-        initializationError = error;
+        console.log(`[Firebase] Successfully initialized for project: ${projectId}`);
     }
+
+    db = admin.firestore();
+    auth = admin.auth();
+} catch (error) {
+    initializationError = error;
+    console.error('[Firebase Init Error]', error.message);
 }
 
-// Only initialize services if no error
-if (!initializationError && admin.apps.length) {
-    try {
-        db = admin.firestore();
-        auth = admin.auth();
-    } catch (e) {
-        initializationError = e;
-    }
-}
-
-module.exports = { admin, db, auth, messaging: admin.messaging(), initializationError };
+module.exports = {
+    admin,
+    db,
+    auth,
+    initializationError,
+    messaging: admin.apps.length ? admin.messaging() : null
+};
 

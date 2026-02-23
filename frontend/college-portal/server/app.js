@@ -24,14 +24,24 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Basic Health Check (No DB required)
+app.get('/api/health', (req, res) => {
+    res.json({ ok: true, timestamp: new Date().toISOString() });
+});
+
 // Critical Error Check Middleware
 app.use((req, res, next) => {
     if (initializationError) {
         console.error("Blocking request due to Init Error:", initializationError.message);
         return res.status(500).json({
             success: false,
-            message: 'Server Configuration Error',
-            error: `Firebase Init Failed: ${initializationError.message}`
+            message: 'Server Configuration Error (Firebase)',
+            error: initializationError.message,
+            check: {
+                FIREBASE_PROJECT_ID: !!process.env.FIREBASE_PROJECT_ID,
+                FIREBASE_CLIENT_EMAIL: !!process.env.FIREBASE_CLIENT_EMAIL,
+                FIREBASE_PRIVATE_KEY: !!process.env.FIREBASE_PRIVATE_KEY
+            }
         });
     }
     next();
@@ -60,8 +70,15 @@ app.use('/api/driver', require('./routes/driver.routes'));
 app.use('/api/student', require('./routes/student.routes'));
 app.use('/api/geocode', require('./controllers/geocodeController').reverseGeocode);
 
-// Error Handler
-app.use(errorHandler);
+// Global Error Handler
+app.use((err, req, res, next) => {
+    console.error(`[API ERROR] ${req.method} ${req.originalUrl}:`, err);
+    res.status(err.status || 500).json({
+        success: false,
+        message: err.message || "Internal Server Error",
+        details: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    });
+});
 
 // Init Socket.IO
 // initSocket(server); // Disabled for Firebase Migration

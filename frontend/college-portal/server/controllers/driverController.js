@@ -1,4 +1,17 @@
-const { db, admin } = require('../config/firebase');
+const { db, admin, initializationError } = require('../config/firebase');
+
+// Early check middleware-like guard for this controller
+const checkInit = (res) => {
+    if (initializationError || !db) {
+        res.status(500).json({
+            success: false,
+            message: "Database Configuration Error",
+            details: initializationError?.message || 'Firebase not initialized'
+        });
+        return false;
+    }
+    return true;
+};
 const { sendBusStartedNotification, checkProximityAndNotify } = require('./notificationController');
 
 // @desc    Get available buses for the driver's college
