@@ -126,36 +126,10 @@ const StudentDashboard = () => {
         if (collegeId) fetchBuses();
     }, [collegeId, user?.assignedBusId]);
 
-    // Periodic bus list refresh (every 30s instead of Firestore onSnapshot)
-    useEffect(() => {
-        if (!collegeId) return;
-
-        const refreshBuses = async () => {
-            try {
-                const response = await getStudentBuses();
-                const busData = Array.isArray(response) ? response : response.data || [];
-                setBuses(busData);
-
-                if (user?.assignedBusId) {
-                    const myBus = busData.find((b: any) => b._id === user.assignedBusId);
-                    if (myBus) {
-                        setAssignedBus(myBus);
-                        if ((myBus as any).substituteBusId) {
-                            const sub = busData.find((b: any) => b._id === (myBus as any).substituteBusId);
-                            setSubstituteBus(sub);
-                        } else {
-                            setSubstituteBus(null);
-                        }
-                    }
-                }
-            } catch (err) {
-                console.error('Failed to refresh buses:', err);
-            }
-        };
-
-        const interval = setInterval(refreshBuses, 30000); // Refresh every 30 seconds
-        return () => clearInterval(interval);
-    }, [collegeId, user?.assignedBusId]);
+    // We are no longer polling every 30s. The initial fetch loads the buses,
+    // and when a student tracks a specific bus, the WebSocket (RelayService) handles live movement.
+    // If the student stays on the dashboard, they can manually refresh or we can add a Firestore listener later.
+    // For now, removing the 30s polling prevents jarring re-renders during live tracking.
 
     // 10-minute interval GPS tracking for student location (Battery efficient)
     useEffect(() => {

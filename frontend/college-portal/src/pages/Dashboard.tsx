@@ -92,17 +92,17 @@ const Dashboard = () => {
 
         console.log('Setting up real-time bus subscription for college:', currentCollegeId);
 
-        // Periodic bus list refresh (every 30s)
-        const refreshBuses = async () => {
-            try {
-                const response = await getBuses();
-                setBuses(Array.isArray(response) ? response : response.data || []);
-            } catch (err) {
-                console.error('Failed to refresh buses:', err);
-            }
-        };
-
-        const busInterval = setInterval(refreshBuses, 30000);
+        // Real-time listener for buses (Replaces 30s polling)
+        const qBuses = query(collection(db, 'buses'), where('collegeId', '==', currentCollegeId));
+        const unsubscribeBuses = onSnapshot(qBuses, (snapshot) => {
+            const updatedBuses = snapshot.docs.map(doc => ({
+                _id: doc.id,
+                ...doc.data()
+            }));
+            setBuses(updatedBuses);
+        }, (err) => {
+            console.error('[Dashboard] Buses snapshot listener failed:', err);
+        });
 
         // Listen for real-time updates to 'routes' collection
         const qRoutes = query(collection(db, 'routes'), where('collegeId', '==', currentCollegeId));
@@ -135,10 +135,11 @@ const Dashboard = () => {
 
         return () => {
             console.log('Cleaning up real-time subscriptions for college:', currentCollegeId);
-            clearInterval(busInterval);
+            unsubscribeBuses();
             unsubscribeRoutes();
             unsubscribeNotifications();
         };
+
     }, [currentCollegeId]); // Depend on currentCollegeId state
 
     // ── Stable relay connection manager ─────────────────────────────────────
