@@ -47,6 +47,11 @@ service cloud.firestore {
       // Drivers update bus location/status; allow any authenticated write
       // (server-side validation handles authorization)
       allow write: if isAuthenticated();
+
+      // Trips subcollection (used by mobile app for trip management)
+      match /trips/{tripId} {
+        allow read, write: if isAuthenticated();
+      }
     }
 
     // ─── Routes ──────────────────────────────────────────────────────
