@@ -19,7 +19,6 @@ import '../widgets/driver_header.dart';
 import '../widgets/assigned_bus_card.dart';
 import '../widgets/trip_control_panel.dart';
 import '../widgets/telemetry_card.dart';
-import '../../../core/services/relay_service.dart';
 import '../../../data/datasources/api_ds.dart';
 import 'package:dio/dio.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -543,7 +542,6 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
   BusRoute? _currentRoute; 
   LocationPoint? _lastRecordedPoint;
   String _lastUpdate = "--:--:--";
-  RelayService? _relay;
   
   @override
   void initState() {
@@ -560,7 +558,6 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
   
   @override
   void dispose() {
-    _relay?.dispose();
     _locationUpdateSubscription?.cancel();
     _pathHistoryTimer?.cancel();
     super.dispose();
@@ -613,32 +610,11 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
       }
     } catch (_) {}
 
-    // 4. Initialize Relay
-    String? wsUrl;
-    try {
-      final tokenData = await ApiDataSource(Dio(), FirebaseFirestore.instance).getRelayToken(widget.busId, 'driver');
-      wsUrl = tokenData['wsUrl'];
-      
-      if (wsUrl != null) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('track_ws_url', wsUrl);
-        await prefs.setString('track_trip_id', tripId);
-
-        _relay?.dispose();
-        _relay = RelayService();
-        _relay!.connect(wsUrl);
-        debugPrint("Connected to Relay: $wsUrl");
-      }
-    } catch (e) {
-      debugPrint("Failed to connect to relay: $e");
-    }
-
     // Initialize DriverLocationService with background_location_tracker
     await DriverLocationService.startTracking(
       widget.collegeId, 
       widget.busId, 
       tripId,
-      wsUrl ?? "",
       (locationDto) {
         if (mounted) {
           double rawSpeed = locationDto.speed ?? 0.0;
@@ -687,18 +663,7 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
           });
           _updateRoadName(point.latitude, point.longitude);
           
-          // Stream to Relay (Cloudflare) — primary real-time channel
-          if (_relay != null && _relay!.isConnected) {
-            _relay!.sendLocation(
-              tripId: tripId,
-              lat: point.latitude,
-              lng: point.longitude,
-              speedMps: point.speed ?? 0.0,
-              heading: point.heading ?? 0.0,
-            );
-          }
-
-          // Buffer point in memory for compression at trip end
+          // Buffer point in memory for real-time display UI
           _liveTrackBuffer.add(point);
         }
       }
@@ -706,9 +671,6 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
   }
 
   void _stopTracking() {
-    _relay?.disconnect();
-    _relay = null;
-
     DriverLocationService.stopTracking();
     
     _locationUpdateSubscription?.cancel();
@@ -891,85 +853,8 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
                         await ref.read(firestoreDataSourceProvider).endTrip(activeTripId, widget.busId);
                       }
 
-                      // 3. Compress points and upload history
-                      if (_liveTrackBuffer.isNotEmpty) {
-                        List<LocationPoint> compressed = [];
-                        compressed.add(_liveTrackBuffer.first);
-
-                        for (int i = 1; i < _liveTrackBuffer.length - 1; i++) {
-                          final curr = _liveTrackBuffer[i];
-                          final prev = compressed.last;
-
-                          double dist = Geolocator.distanceBetween(
-                            prev.latitude, prev.longitude,
-                            curr.latitude, curr.longitude,
-                          );
-
-                          double headingDiff = ((curr.heading ?? 0) - (prev.heading ?? 0)).abs();
-                          if (headingDiff > 180) headingDiff = 360 - headingDiff;
-
-                          // Keep if moved >10m or turned >15deg
-                          if (dist > 10.0 || headingDiff > 15.0) {
-                            compressed.add(curr);
-                          }
-                        }
-
-                        if (_liveTrackBuffer.length > 1) {
-                          compressed.add(_liveTrackBuffer.last);
-                        }
-
-                        double totalDistanceM = 0;
-                        double maxSpeedMph = 0;
-                        double sumSpeedMph = 0;
-
-                        for (int i = 1; i < compressed.length; i++) {
-                          final prev = compressed[i - 1];
-                          final curr = compressed[i];
-                          totalDistanceM += Geolocator.distanceBetween(
-                            prev.latitude, prev.longitude,
-                            curr.latitude, curr.longitude,
-                          );
-                          double sMph = ((curr.speed ?? 0) * 2.23694);
-                          if (sMph > maxSpeedMph) maxSpeedMph = sMph;
-                          sumSpeedMph += sMph;
-                        }
-
-                        int avgSpeedMph = compressed.isNotEmpty ? (sumSpeedMph / compressed.length).round() : 0;
-                        int durationSeconds = 0;
-                        if (compressed.length > 1 && compressed.first.timestamp != null && compressed.last.timestamp != null) {
-                          durationSeconds = compressed.last.timestamp!.difference(compressed.first.timestamp!).inSeconds;
-                        }
-
-                        List<Map<String, dynamic>> pathPayload = compressed.map((p) => p.toJson()).toList();
-
-                        // Retry mechanism for API history upload
-                        int retries = 3;
-                        while (retries > 0) {
-                          try {
-                            await ref.read(apiDataSourceProvider).uploadTripHistory(
-                              activeTripId,
-                              polyline: '',
-                              distanceMeters: totalDistanceM.round(),
-                              durationSeconds: durationSeconds,
-                              maxSpeedMph: maxSpeedMph.round(),
-                              avgSpeedMph: avgSpeedMph,
-                              pointsCount: compressed.length,
-                              path: pathPayload,
-                            );
-                            break;
-                          } catch (e) {
-                            retries--;
-                            if (retries == 0) {
-                              debugPrint("History upload API failed: $e. Fallback to raw DB.");
-                              await ref.read(firestoreDataSourceProvider).bulkSaveTripPath(
-                                activeTripId, compressed,
-                              );
-                            } else {
-                              await Future.delayed(Duration(seconds: 4 - retries));
-                            }
-                          }
-                        }
-                      }
+                      // 3. Upload history batch from background service (handles compression internally)
+                      await DriverLocationService.uploadBufferedHistory(activeTripId);
                     } else {
                       // Failsafe for stuck bus without active trip
                       await ref.read(firestoreDataSourceProvider).endTrip(null, widget.busId);

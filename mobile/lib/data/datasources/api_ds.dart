@@ -91,18 +91,6 @@ class ApiDataSource {
     }
   }
 
-  /// Get a relay token for WebSocket connection.
-  Future<Map<String, dynamic>> getRelayToken(String busId, String role) async {
-    final response = await _dio.post(
-      '${Env.apiUrl}/api/relay/token',
-      data: {
-        'busId': busId,
-        'role': role,
-      },
-    );
-    return Map<String, dynamic>.from(response.data);
-  }
-
   /// Upload trip history (polyline + summary) at trip end.
   Future<void> uploadTripHistory(
     String tripId, {

@@ -357,13 +357,6 @@ export const getStudentAssignments = async () => {
     return response.data;
 };
 
-// ─── Relay WebSocket ──────────────────────────────────────────
-
-/** Get a relay token for WebSocket connection */
-export const getRelayToken = async (busId: string, role: 'driver' | 'admin' | 'student') => {
-    const response = await api.post('/relay/token', { busId, role });
-    return response.data;
-};
 
 /** Upload trip history (polyline + summary) at trip end */
 export const uploadTripHistory = async (tripId: string, data: {

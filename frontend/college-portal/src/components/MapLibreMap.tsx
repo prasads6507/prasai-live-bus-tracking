@@ -24,19 +24,27 @@ interface MapLibreMapProps {
 export const getBusLatLng = (bus: any): [number, number] | null => {
     if (!bus) return null;
 
-    // Check all possible field structures
-    const lat = bus.location?.latitude ?? bus.location?.lat ??
-        bus.currentLocation?.latitude ?? bus.currentLocation?.lat ??
-        bus.current_location?.lat ?? bus.latitude;
+    const src =
+        bus.location ||
+        bus.currentLocation ||
+        bus.current_location ||
+        null;
 
-    const lng = bus.location?.longitude ?? bus.location?.lng ??
-        bus.currentLocation?.longitude ?? bus.currentLocation?.lng ??
-        bus.current_location?.lng ?? bus.longitude;
+    const lat =
+        src?.latitude ??
+        src?.lat ??
+        bus.latitude ??
+        null;
 
-    if (lat === undefined || lng === undefined) return null;
+    const lng =
+        src?.longitude ??
+        src?.lng ??
+        bus.longitude ??
+        null;
 
-    // Always return MapLibre standard [lng, lat]
-    return [lng, lat];
+    if (lat === null || lng === null) return null;
+
+    return [Number(lng), Number(lat)];
 };
 
 // Helper to create a circle polygon (50m radius)
@@ -193,8 +201,10 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
                     <div className={`absolute top-10 whitespace-nowrap bg-dashboard-surface text-dashboard-text border border-dashboard-border shadow-soft text-[11px] font-bold px-3 py-1.5 rounded-lg pointer-events-none transition-opacity z-50 flex flex-col gap-0.5 ${selectedBusId === bus._id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                         <div className="flex items-center gap-2">
                             <span>Bus {bus.busNumber || 'Unknown'} • {bus.driverName || 'No Driver'}</span>
-                            {(bus.status === 'ON_ROUTE' || bus.status === 'ACTIVE') && typeof bus.speed === 'number' && (
-                                <span className="text-dashboard-primary">{Math.round(bus.speed)} mph</span>
+                            {(bus.status === 'ON_ROUTE' || bus.status === 'ACTIVE') && (
+                                <span className="text-dashboard-primary">
+                                    {Math.round(bus.speed ?? bus.speedMph ?? bus.speedMPH ?? 0)} mph
+                                </span>
                             )}
                         </div>
                         {bus.routeName && <span className="text-[10px] text-dashboard-muted font-medium">{bus.routeName}</span>}

@@ -13,8 +13,6 @@ import 'package:flutter/foundation.dart';
 import '../../../data/datasources/api_ds.dart';
 import '../../../core/utils/polyline_encoder.dart';
 
-import '../../../core/services/relay_service.dart';
-
 double _sanitizeSpeedMps(double? v) {
   if (v == null) return 0;
   if (!v.isFinite) return 0;
@@ -24,10 +22,6 @@ double _sanitizeSpeedMps(double? v) {
 
 int _speedMphRounded(double? mps) =>
   (_sanitizeSpeedMps(mps) * 2.236936).round();
-
-// Separate relay for the background isolate
-RelayService? _backgroundRelay;
-String? _currentBackgroundWsUrl;
 
 @pragma('vm:entry-point')
 void backgroundCallback() {
@@ -42,7 +36,6 @@ void backgroundCallback() {
       final collegeId = prefs.getString('track_college_id');
       final busId = prefs.getString('track_bus_id');
       final tripId = prefs.getString('track_trip_id');
-      final wsUrl = prefs.getString('track_ws_url');
       
       if (collegeId == null || busId == null) return;
       
@@ -122,31 +115,7 @@ void backgroundCallback() {
 
         final db = FirebaseFirestore.instance;
 
-        // 1. Update Real-time Relay (WebSocket)
-        if (wsUrl != null && tripId != null) {
-          if (_backgroundRelay == null || _currentBackgroundWsUrl != wsUrl) {
-            _backgroundRelay?.dispose();
-            _backgroundRelay = RelayService();
-            _backgroundRelay!.connect(wsUrl);
-            _currentBackgroundWsUrl = wsUrl;
-          }
-
-          if (_backgroundRelay!.isConnected) {
-            _backgroundRelay!.sendLocation(
-              tripId: tripId,
-              lat: smoothedLat,
-              lng: smoothedLng,
-              speedMps: finalSpeedMps,
-              heading: data.course,
-            );
-          } else {
-            // Keep trying to connect if disconnected
-            _backgroundRelay!.connect(wsUrl);
-          }
-        }
-
-        // 2. Update Firestore Bus document directly
-        // We only update the core location fields so it shows up on the "Live" map
+        // 1. Update Firestore Bus document directly (Real-time tracking for maps)
         try {
           await db.collection('buses').doc(busId).update({
             'lastUpdated': DateTime.now().toIso8601String(),
@@ -309,7 +278,7 @@ class DriverLocationService {
     _initialized = true;
   }
 
-  static Future<void> startTracking(String collegeId, String busId, String tripId, String wsUrl, Function(BackgroundLocationUpdateData) onLocationUpdate) async {
+  static Future<void> startTracking(String collegeId, String busId, String tripId, Function(BackgroundLocationUpdateData) onLocationUpdate) async {
     if (!_initialized) await initialize();
     
     // Save IDs for the background isolate
@@ -317,7 +286,6 @@ class DriverLocationService {
     await prefs.setString('track_college_id', collegeId);
     await prefs.setString('track_bus_id', busId);
     await prefs.setString('track_trip_id', tripId);
-    await prefs.setString('track_ws_url', wsUrl);
 
     _port?.close();
     _port = ReceivePort();
@@ -362,15 +330,43 @@ class DriverLocationService {
     try {
       final existingBuffer = prefs.getString('trip_history_buffer');
       if (existingBuffer != null && existingBuffer.isNotEmpty) {
-        final buffer = List<dynamic>.from(jsonDecode(existingBuffer));
-        if (buffer.isNotEmpty) {
+        final rawBuffer = List<Map<String, dynamic>>.from(jsonDecode(existingBuffer));
+        if (rawBuffer.isNotEmpty) {
+          // 1. Compression logic (Filter points to stay under Firestore 1MB limit)
+          final List<Map<String, dynamic>> compressed = [];
+          compressed.add(rawBuffer.first);
+
+          for (int i = 1; i < rawBuffer.length - 1; i++) {
+            final curr = rawBuffer[i];
+            final prev = compressed.last;
+
+            double dist = _haversineMeters(
+              (prev['lat'] as num).toDouble(), (prev['lng'] as num).toDouble(),
+              (curr['lat'] as num).toDouble(), (curr['lng'] as num).toDouble(),
+            );
+
+            double headingDiff = (((curr['heading'] as num?)?.toDouble() ?? 0) - 
+                                 ((prev['heading'] as num?)?.toDouble() ?? 0)).abs();
+            if (headingDiff > 180) headingDiff = 360 - headingDiff;
+
+            // Keep if moved > 10m, or turned > 15deg, or it's been > 30 seconds since last kept point
+            if (dist > 10.0 || headingDiff > 15.0) {
+              compressed.add(curr);
+            }
+          }
+
+          if (rawBuffer.length > 1) {
+            compressed.add(rawBuffer.last);
+          }
+
+          // 2. Metrics Calculation
           double totalDistM = 0;
           double maxSpeedMph = 0;
           double sumSpeedMph = 0;
           final coords = <List<double>>[];
 
-          for (int i = 0; i < buffer.length; i++) {
-            final point = buffer[i];
+          for (int i = 0; i < compressed.length; i++) {
+            final point = compressed[i];
             final lat = (point['lat'] as num).toDouble();
             final lng = (point['lng'] as num).toDouble();
             final speed = (point['speed'] as num).toDouble();
@@ -380,7 +376,7 @@ class DriverLocationService {
             sumSpeedMph += speed;
 
             if (i > 0) {
-              final prev = buffer[i - 1];
+              final prev = compressed[i - 1];
               totalDistM += _haversineMeters(
                 (prev['lat'] as num).toDouble(), (prev['lng'] as num).toDouble(),
                 lat, lng,
@@ -388,23 +384,25 @@ class DriverLocationService {
             }
           }
 
-          final firstTs = DateTime.parse(buffer.first['timestamp']);
-          final lastTs = DateTime.parse(buffer.last['timestamp']);
+          final firstTs = DateTime.parse(compressed.first['timestamp']);
+          final lastTs = DateTime.parse(compressed.last['timestamp']);
           final durationSec = lastTs.difference(firstTs).inSeconds.abs();
 
           final String polyline = PolylineEncoder.encode(coords);
 
+          // 3. Upload to API
           await ApiDataSource(Dio(), FirebaseFirestore.instance).uploadTripHistory(
             tripId,
             polyline: polyline,
             distanceMeters: totalDistM.round(),
             durationSeconds: durationSec,
             maxSpeedMph: maxSpeedMph.round(),
-            avgSpeedMph: (sumSpeedMph / buffer.length).round(),
-            pointsCount: buffer.length,
+            avgSpeedMph: compressed.isNotEmpty ? (sumSpeedMph / compressed.length).round() : 0,
+            pointsCount: compressed.length,
+            path: compressed, // Send full path array for high-detail view
           );
           
-          debugPrint("Successfully uploaded trip history for $tripId (${buffer.length} points, compressed to polyline)");
+          debugPrint("Successfully uploaded trip history for $tripId (${compressed.length} compressed points)");
         }
       }
     } catch (e) {
@@ -412,6 +410,9 @@ class DriverLocationService {
     } finally {
       await prefs.remove('trip_history_buffer');
       await prefs.remove('trip_buffer_count');
+      await prefs.remove('prev_lat');
+      await prefs.remove('prev_lng');
+      await prefs.remove('prev_time');
     }
   }
 }

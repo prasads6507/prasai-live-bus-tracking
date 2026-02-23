@@ -1,17 +1,16 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Bus, LogOut, User, MapPin, Search, Star, X, Crosshair, AlertCircle, ArrowLeft, Clock } from 'lucide-react';
-import { validateSlug, getStudentBuses, getStudentRoutes, getRelayToken } from '../services/api';
+import { validateSlug, getStudentBuses, getStudentRoutes } from '../services/api';
 import { getStreetName } from '../services/geocoding';
-import { RelayService } from '../services/relay';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp, collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import MapLibreMapComponent from '../components/MapLibreMapComponent';
 import useNotification from '../hooks/useNotification';
 
 const isLiveBus = (bus: any) => {
-    // If the bus has an active trip ID, it's live (relay is handling movement)
+    // If the bus has an active trip ID, it's live (Firestore is handling movement)
     if (!bus || !bus.activeTripId) return false;
 
     // Status can be ON_ROUTE (set by backend start) or ACTIVE (legacy/alternate)
@@ -90,46 +89,53 @@ const StudentDashboard = () => {
         loadCollege();
     }, [orgSlug, navigate]);
 
-    // Initial data fetch
+    // Listen to buses in real-time via Firestore
     useEffect(() => {
-        const fetchBuses = async () => {
-            try {
-                const response = await getStudentBuses();
-                const busData = Array.isArray(response) ? response : response.data || [];
-                const fetchedBuses = busData;
-                setBuses(fetchedBuses);
+        if (!collegeId) return;
 
-                const routeResp = await getStudentRoutes();
-                setRoutes(Array.isArray(routeResp) ? routeResp : routeResp.data || []);
+        setLoading(true);
+        const qBuses = query(collection(db, 'buses'), where('collegeId', '==', collegeId));
 
-                // Check for assigned bus and substitute (Phase 5.3)
-                if (user?.assignedBusId) {
-                    const myBus = fetchedBuses.find((b: any) => b._id === user.assignedBusId);
-                    if (myBus) {
-                        setAssignedBus(myBus);
+        const unsubscribeBuses = onSnapshot(qBuses, async (snapshot) => {
+            const updatedBuses = snapshot.docs.map(doc => ({
+                _id: doc.id,
+                ...doc.data()
+            }));
 
-                        // Check for substitute (Phase 5.3)
-                        if ((myBus as any).substituteBusId) {
-                            const sub = fetchedBuses.find((b: any) => b._id === (myBus as any).substituteBusId);
-                            setSubstituteBus(sub);
-                        } else {
-                            setSubstituteBus(null);
-                        }
+            setBuses(updatedBuses);
+
+            // Fetch routes only once or if they haven't been fetched
+            if (routes.length === 0) {
+                try {
+                    const routeResp = await getStudentRoutes();
+                    setRoutes(Array.isArray(routeResp) ? routeResp : routeResp.data || []);
+                } catch (err) {
+                    console.error('Failed to fetch routes', err);
+                }
+            }
+
+            // Check for assigned bus and substitute (Phase 5.3)
+            if (user?.assignedBusId) {
+                const myBus = updatedBuses.find((b: any) => b._id === user.assignedBusId);
+                if (myBus) {
+                    setAssignedBus(myBus);
+                    if ((myBus as any).substituteBusId) {
+                        const sub = updatedBuses.find((b: any) => b._id === (myBus as any).substituteBusId);
+                        setSubstituteBus(sub);
+                    } else {
+                        setSubstituteBus(null);
                     }
                 }
-            } catch (err) {
-                console.error('Failed to fetch buses:', err);
-            } finally {
-                setLoading(false);
             }
-        };
-        if (collegeId) fetchBuses();
-    }, [collegeId, user?.assignedBusId]);
 
-    // We are no longer polling every 30s. The initial fetch loads the buses,
-    // and when a student tracks a specific bus, the WebSocket (RelayService) handles live movement.
-    // If the student stays on the dashboard, they can manually refresh or we can add a Firestore listener later.
-    // For now, removing the 30s polling prevents jarring re-renders during live tracking.
+            setLoading(false);
+        }, (err) => {
+            console.error('[Student Dashboard] Buses snapshot listener failed:', err);
+            setLoading(false);
+        });
+
+        return () => unsubscribeBuses();
+    }, [collegeId, user?.assignedBusId, routes.length]);
 
     // 10-minute interval GPS tracking for student location (Battery efficient)
     useEffect(() => {
@@ -223,78 +229,7 @@ const StudentDashboard = () => {
         }
     }, [buses]);
 
-    // WebSocket connection for real-time tracked bus updates
-    const trackedBusRelayRef = useRef<RelayService | null>(null);
-    useEffect(() => {
-        if (!trackedBus?._id) {
-            // No bus being tracked — disconnect any existing WebSocket
-            if (trackedBusRelayRef.current) {
-                trackedBusRelayRef.current.disconnect();
-                trackedBusRelayRef.current = null;
-            }
-            return;
-        }
 
-        const busId = trackedBus._id;
-        const relay = new RelayService();
-        trackedBusRelayRef.current = relay;
-
-        const connectRelay = async () => {
-            try {
-                const tokenResp = await getRelayToken(busId, 'student');
-                relay.connect(tokenResp.wsUrl, {
-                    onMessage: (data: any) => {
-                        if (data.type === 'bus_location_update') {
-                            const lat = data.lat ?? data.latitude;
-                            const lng = data.lng ?? data.longitude;
-
-                            // Robust speed parsing
-                            let rawSpeed = data.speedMph ?? data.speed_mph ?? data.speedMPH ?? data.speed ?? 0;
-                            if (data.speedMps !== undefined) {
-                                rawSpeed = data.speedMps * 2.236936;
-                            }
-                            const speedMph = Math.max(0, rawSpeed);
-
-                            const heading = data.heading ?? 0;
-
-                            // Update bus in the buses array with new location
-                            setBuses(prev => prev.map(b => {
-                                if (b._id === busId) {
-                                    const newLoc = {
-                                        latitude: lat,
-                                        longitude: lng,
-                                        heading: heading
-                                    };
-                                    return {
-                                        ...b,
-                                        location: newLoc,
-                                        currentLocation: newLoc,
-                                        speed: speedMph,
-                                        lastUpdated: new Date().toISOString()
-                                    };
-                                }
-                                return b;
-                            }));
-
-                            // Also update focused location if still tracking
-                            setFocusedBusLocation({ lat, lng });
-                        }
-                    },
-                    onOpen: () => console.log('[Student] WS connected for bus', busId),
-                    onClose: () => console.log('[Student] WS disconnected for bus', busId),
-                });
-            } catch (err) {
-                console.error('[Student] Failed to connect relay for bus', busId, err);
-            }
-        };
-
-        connectRelay();
-
-        return () => {
-            relay.disconnect();
-            trackedBusRelayRef.current = null;
-        };
-    }, [trackedBus?._id]);
 
 
 
@@ -794,7 +729,9 @@ const StudentDashboard = () => {
                                 {selectedBus.speed != null && isLiveBus(selectedBus) && (
                                     <div className="flex items-center justify-between p-3 bg-slate-700/50 rounded-xl">
                                         <span className="text-slate-400">Speed</span>
-                                        <span className="font-bold text-white">{Math.round(selectedBus.speed || 0)} mph</span>
+                                        <span className="font-bold text-white">
+                                            {Math.round(selectedBus.speed ?? selectedBus.speedMph ?? selectedBus.speedMPH ?? 0)} mph
+                                        </span>
                                     </div>
                                 )}
                             </div>

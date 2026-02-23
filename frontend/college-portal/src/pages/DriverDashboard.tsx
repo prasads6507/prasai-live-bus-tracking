@@ -1,12 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Navigation, LogOut, AlertCircle, Bus, Settings, Search, X, MapPin } from 'lucide-react';
-import { getDriverBuses, searchDriverBuses, startNewTrip, checkProximity, getRelayToken, uploadTripHistory } from '../services/api';
+import { getDriverBuses, searchDriverBuses, startNewTrip, checkProximity, uploadTripHistory } from '../services/api';
 import { api } from '../services/api';
 import { doc, updateDoc, collection, getDocs, query, where, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { getStreetName } from '../services/geocoding';
-import relayService from '../services/relay';
 import { encodePolyline } from '../utils/polyline';
 
 const getDistanceFromLatLonInKm = (lat1: number, lon1: number, lat2: number, lon2: number) => {
@@ -235,24 +234,6 @@ const DriverDashboard = () => {
         // Update status to ON_ROUTE immediately
         await updateBusStatus('ON_ROUTE', busId);
 
-        // Connect to WebSocket relay
-        try {
-            const tokenResp = await getRelayToken(busId, 'driver');
-            console.log('[Relay] Got relay token, connecting WS...');
-            relayService.connect(tokenResp.wsUrl, {
-                onOpen: () => console.log('[Relay] Driver WS connected for bus', busId),
-                onClose: () => console.warn('[Relay] Driver WS disconnected'),
-                onMessage: (data: any) => {
-                    if (data.type === 'error') {
-                        console.error('[Relay] Server error:', data.message);
-                    }
-                },
-            });
-        } catch (err) {
-            console.error('[Relay] Failed to get relay token, falling back to API mode:', err);
-            // Continue without relay — GPS still buffers locally
-        }
-
         watchIdRef.current = navigator.geolocation.watchPosition(
             async (position) => {
                 const now = Date.now();
@@ -331,23 +312,24 @@ const DriverDashboard = () => {
                     getStreetName(latitude, longitude).then(street => setCurrentStreetName(street));
                 }
 
-                // Send location via WebSocket relay every ~1 second
-                if (now - lastUpdateRef.current > 1000) {
-                    const sent = relayService.sendLocation({
-                        tripId: currentTripId,
-                        lat: latitude,
-                        lng: longitude,
-                        speedMps,
-                        heading: headingVal,
-                        accuracyM: accuracy || 0,
-                    });
-
-                    console.log(`[Driver] ${sent ? 'Sent' : 'Queued'} location: lat=${latitude.toFixed(5)} lng=${longitude.toFixed(5)} speedMps=${speedMps.toFixed(1)}`);
-
-                    if (sent) {
+                // Update location in Firestore every ~3 seconds
+                if (now - lastUpdateRef.current > 3000) {
+                    const busRef = doc(db, 'buses', busId);
+                    updateDoc(busRef, {
+                        status: 'ON_ROUTE',
+                        activeTripId: currentTripId,
+                        location: {
+                            latitude,
+                            longitude,
+                            heading: headingVal
+                        },
+                        speed: speedMph,
+                        lastUpdated: new Date().toISOString()
+                    }).then(() => {
+                        console.log(`[Driver] Updated Firestore: lat=${latitude.toFixed(5)} lng=${longitude.toFixed(5)} speedMph=${speedMph}`);
                         lastUpdateRef.current = now;
                         setLastSentTime(new Date().toLocaleTimeString());
-                    }
+                    }).catch(err => console.error('[Driver] Failed to update Firestore:', err));
 
                     // Check Stop Completion
                     if (currentTripId) {
@@ -375,9 +357,6 @@ const DriverDashboard = () => {
             navigator.geolocation.clearWatch(watchIdRef.current);
             watchIdRef.current = null;
         }
-
-        // 2. Disconnect WebSocket relay
-        relayService.disconnect();
 
         // 3. Clear Persistence IMMEDIATELY (Critical to prevent auto-resume on reload)
         localStorage.removeItem('driver_active_trip');

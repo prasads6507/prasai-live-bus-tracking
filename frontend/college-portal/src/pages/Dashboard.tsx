@@ -1,10 +1,9 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Bus, MapPin, Navigation, Settings, User, Bell } from 'lucide-react';
 import { collection, query, where, onSnapshot, orderBy, limit } from 'firebase/firestore';
 import { db } from '../config/firebase'; // Import Firestore instance
-import { validateSlug, getBuses, getRoutes, getRelayToken } from '../services/api';
-import { RelayService } from '../services/relay';
+import { validateSlug, getBuses, getRoutes } from '../services/api';
 import { getStreetName } from '../services/geocoding';
 import Layout from '../components/Layout';
 import MapLibreMap, { getBusLatLng } from '../components/MapLibreMap';
@@ -142,99 +141,7 @@ const Dashboard = () => {
 
     }, [currentCollegeId]); // Depend on currentCollegeId state
 
-    // ── Stable relay connection manager ─────────────────────────────────────
-    // Keeps one WebSocket open per live bus for the entire trip session.
-    // Does NOT reconnect when bus location/speed updates (would cause a loop).
-    const relaysRef = useRef<Map<string, RelayService>>(new Map());
-    const connectedBusIdsRef = useRef<Set<string>>(new Set());
 
-    // Only recompute when a bus becomes live or stops being live — NOT on location changes.
-    const liveBusIds = useMemo(
-        () => new Set(buses.filter(isLiveBus).map(b => b._id as string)),
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-        [buses.map(b => `${b._id}:${b.activeTripId ?? ''}:${b.status ?? ''}`).join('|')]
-    );
-
-    useEffect(() => {
-        const currentLiveIds = liveBusIds;
-        const connected = connectedBusIdsRef.current;
-
-        // Connect newly-live buses
-        const toConnect = [...currentLiveIds].filter(id => !connected.has(id));
-        for (const busId of toConnect) {
-            const relay = new RelayService();
-            relaysRef.current.set(busId, relay);
-            connected.add(busId);
-
-            // Capture stable refs for use inside the async callback
-            const stableBusId = busId;
-
-            (async () => {
-                try {
-                    const tokenResp = await getRelayToken(stableBusId, 'admin');
-                    relay.connect(tokenResp.wsUrl, {
-                        onMessage: (data: any) => {
-                            if (data.type === 'bus_location_update') {
-                                const lat = data.lat ?? data.latitude;
-                                const lng = data.lng ?? data.longitude;
-
-                                // Robust speed parsing
-                                let rawSpeed = data.speedMph ?? data.speed_mph ?? data.speedMPH ?? data.speed ?? 0;
-                                if (data.speedMps !== undefined) {
-                                    rawSpeed = data.speedMps * 2.236936;
-                                }
-                                const speedMph = Math.max(0, rawSpeed);
-
-                                const heading = data.heading ?? 0;
-
-                                // Update this bus's location in state — does NOT trigger relay effect re-run
-                                setBuses(prev => prev.map(b => {
-                                    if (b._id === stableBusId) {
-                                        const newLoc = { latitude: lat, longitude: lng, heading };
-                                        return {
-                                            ...b,
-                                            location: newLoc,
-                                            currentLocation: newLoc,
-                                            speed: speedMph,
-                                            lastUpdated: new Date().toISOString()
-                                        };
-                                    }
-                                    return b;
-                                }));
-
-                                // Pan map to selected bus if follow mode is on
-                                if (followSelectedBus && selectedBusId === stableBusId) {
-                                    setFocusedBusLocation({ lat, lng });
-                                }
-                            }
-                        },
-                        onOpen: () => console.log('[Admin] WS connected for bus', stableBusId),
-                        onClose: () => console.log('[Admin] WS disconnected for bus', stableBusId),
-                    });
-                } catch (err) {
-                    console.error('[Admin] Failed to connect relay for bus', stableBusId, err);
-                    // Remove from connected set so next effect run can retry
-                    connected.delete(stableBusId);
-                    relaysRef.current.delete(stableBusId);
-                }
-            })();
-        }
-
-        // Disconnect buses that are no longer live
-        const toDisconnect = [...connected].filter(id => !currentLiveIds.has(id));
-        for (const busId of toDisconnect) {
-            relaysRef.current.get(busId)?.disconnect();
-            relaysRef.current.delete(busId);
-            connected.delete(busId);
-        }
-
-        // Cleanup on unmount: disconnect everything
-        return () => {
-            relaysRef.current.forEach(r => r.disconnect());
-            relaysRef.current.clear();
-            connectedBusIdsRef.current.clear();
-        };
-    }, [liveBusIds, selectedBusId, followSelectedBus]);
 
     // Resolve addresses for active buses - Smart bulk update
     useEffect(() => {
@@ -482,7 +389,9 @@ const BusCard = ({ bus, address }: { bus: any, address?: string }) => (
                 <div className="flex flex-col gap-2 text-sm bg-green-50 p-2 rounded-lg">
                     <div className="flex justify-between items-center pb-2 border-b border-slate-100">
                         <span className="text-slate-500 font-medium">Speed</span>
-                        <span className="font-semibold text-green-700">{Math.round(bus.speed || 0)} mph</span>
+                        <span className="font-semibold text-green-700">
+                            {Math.round(bus.speed ?? bus.speedMph ?? bus.speedMPH ?? 0)} mph
+                        </span>
                     </div>
                     <div className="flex items-center gap-2">
                         <MapPin size={14} className="text-green-500" />

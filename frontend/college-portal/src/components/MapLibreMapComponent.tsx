@@ -13,19 +13,27 @@ interface MapLibreMapComponentProps {
 export const getBusLatLng = (bus: any): [number, number] | null => {
     if (!bus) return null;
 
-    // Check all possible field structures
-    const lat = bus.location?.latitude ?? bus.location?.lat ??
-        bus.currentLocation?.latitude ?? bus.currentLocation?.lat ??
-        bus.current_location?.lat ?? bus.latitude;
+    const src =
+        bus.location ||
+        bus.currentLocation ||
+        bus.current_location ||
+        null;
 
-    const lng = bus.location?.longitude ?? bus.location?.lng ??
-        bus.currentLocation?.longitude ?? bus.currentLocation?.lng ??
-        bus.current_location?.lng ?? bus.longitude;
+    const lat =
+        src?.latitude ??
+        src?.lat ??
+        bus.latitude ??
+        null;
 
-    if (lat === undefined || lng === undefined) return null;
+    const lng =
+        src?.longitude ??
+        src?.lng ??
+        bus.longitude ??
+        null;
 
-    // Always return MapLibre standard [lng, lat]
-    return [lng, lat]; // Lng, Lat for MapLibre
+    if (lat === null || lng === null) return null;
+
+    return [Number(lng), Number(lat)];
 };
 
 const MapLibreMapComponent = ({ path, buses, followBus, focusedLocation, stops }: MapLibreMapComponentProps) => {

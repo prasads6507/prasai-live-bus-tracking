@@ -8,7 +8,6 @@ import 'package:geolocator/geolocator.dart';
 import '../../../../core/theme/colors.dart';
 import '../../../../core/theme/typography.dart';
 import '../../../../core/widgets/app_scaffold.dart';
-import '../../../../core/services/relay_service.dart';
 import '../../../../data/datasources/api_ds.dart';
 import 'package:dio/dio.dart';
 import '../../../../data/providers.dart';
@@ -51,8 +50,7 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
   Timer? _metricsTimer;
   bool _isUserInBus = false;
 
-  // Relay state for live tracking
-  RelayService? _relay;
+  // No longer using relay for live tracking - using Firestore onSnapshot (5s updates)
   LocationPoint? _liveBusLocation;
 
   // Trip stop progress data (from Firestore trip doc)
@@ -72,7 +70,6 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
 
   @override
   void dispose() {
-    _relay?.dispose();
     _busSubscription?.cancel();
     _positionStream?.cancel();
     _tripSubscription?.cancel();
@@ -143,19 +140,25 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
           if (mounted) {
             setState(() {
               _currentBus = bus;
-              // Only use Firestore speed if relay is not connected
-              if (_relay == null || !_relay!.isConnected) {
-                _busSpeed = bus.currentSpeed ?? (bus.location?.speed ?? 0.0) * 2.23694;
+              _busSpeed = bus.currentSpeed ?? (bus.location?.speed ?? 0.0) * 2.23694;
+              
+              if (bus.location != null) {
+                _liveBusLocation = LocationPoint(
+                  latitude: bus.location!.latitude,
+                  longitude: bus.location!.longitude,
+                  heading: (bus.location!.heading ?? bus.currentHeading ?? 0.0).toDouble(),
+                  speed: _busSpeed,
+                  timestamp: DateTime.now(),
+                );
+                if (_followBus) _mapFocusLocation = _liveBusLocation;
               }
-            });
-            
-            if (_relay == null || !_relay!.isConnected) {
+              
               if (bus.currentRoadName != null && bus.currentRoadName!.isNotEmpty) {
-                 if (mounted) setState(() => _currentRoadName = bus.currentRoadName!);
+                 _currentRoadName = bus.currentRoadName!;
               } else if (bus.location != null) {
                 _updateRoadName(bus.location!.latitude, bus.location!.longitude);
               }
-            }
+            });
           }
           
           if (bus.activeTripId != null && (_currentRoute == null || _currentRoute!.id != bus.assignedRouteId)) {
@@ -165,62 +168,14 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
           // Subscribe to trip document for stopsSnapshot + stopProgress + eta
           if (bus.activeTripId != null) {
             _subscribeTripProgress(bus.activeTripId!);
-            // Connect to relay for live tracking if not already connected
-            if (_relay == null) _connectRelay(bus.id);
           } else {
-            // Trip ended — disconnect relay
-            _relay?.dispose();
-            _relay = null;
+            // Trip ended
             _liveBusLocation = null;
           }
         });
   }
 
-  Future<void> _connectRelay(String busId) async {
-    try {
-      final tokenData = await ApiDataSource(Dio(), FirebaseFirestore.instance)
-          .getRelayToken(busId, 'student');
-      final wsUrl = tokenData['wsUrl'];
 
-      _relay = RelayService();
-      _relay!.onMessage = (data) {
-        if (!mounted || data['type'] != 'bus_location_update') return;
-        setState(() {
-          double lat = (data['lat'] as num?)?.toDouble() ?? (data['latitude'] as num?)?.toDouble() ?? 0.0;
-          double lng = (data['lng'] as num?)?.toDouble() ?? (data['longitude'] as num?)?.toDouble() ?? 0.0;
-          double speed = (data['speedMph'] as num?)?.toDouble() ?? (data['speed'] as num?)?.toDouble() ?? 0.0;
-          speed = speed < 0 ? 0 : speed;
-
-          _busSpeed = speed;
-          _liveBusLocation = LocationPoint(
-            latitude: lat,
-            longitude: lng,
-            heading: (data['heading'] as num?)?.toDouble() ?? 0.0,
-            speed: speed, // pass normalized speed
-            timestamp: DateTime.now(),
-          );
-          if (_followBus) _mapFocusLocation = _liveBusLocation;
-        });
-        _updateRoadName(_liveBusLocation!.latitude, _liveBusLocation!.longitude);
-      };
-
-      _relay!.onError = (err) {
-        debugPrint('[StudentTrack] Relay error: $err');
-      };
-
-      _relay!.onClose = () {
-        debugPrint('[StudentTrack] Relay closed. Checking if needs reconnect...');
-        if (mounted && _currentBus?.activeTripId != null) {
-          // RelayService handles internal backoff reconnect, but we can log it
-        }
-      };
-
-      _relay!.connect(wsUrl);
-      debugPrint('[StudentTrack] Relay connected for bus $busId');
-    } catch (e) {
-      debugPrint('[StudentTrack] Relay connect error: $e');
-    }
-  }
 
   void _subscribeTripProgress(String tripId) {
     _tripSubscription?.cancel();
