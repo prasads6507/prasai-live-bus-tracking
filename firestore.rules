@@ -13,9 +13,9 @@ service cloud.firestore {
     }
 
     // ─── Colleges ────────────────────────────────────────────────────
-    // Any authenticated user can read colleges (needed for login/slug lookup)
+    // Any user can read colleges (needed for login/slug lookup before auth)
     match /colleges/{collegeId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow write: if false; // Admin SDK only
     }
 
