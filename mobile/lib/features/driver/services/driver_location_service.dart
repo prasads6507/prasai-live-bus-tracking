@@ -69,9 +69,19 @@ void backgroundCallback() {
         }
 
         final pluginSpeed = _sanitizeSpeedMps(data.speed);
-        double finalSpeedMps = pluginSpeed > 0 ? pluginSpeed : estMps;
+        
+        // Manual Speed Fallback if plugin speed is 0 or unavailable
+        double finalSpeedMps = pluginSpeed;
+        if (pluginSpeed <= 0.05 && prevLat != null && prevTimeStr != null) {
+          finalSpeedMps = estMps;
+        }
+
         if (finalSpeedMps > 45.0) finalSpeedMps = 45.0; // clamp max ~100mph
+        
         final speedMph = _speedMphRounded(finalSpeedMps);
+
+        // Debug log for troubleshooting (visible in adb logcat)
+        debugPrint("[Background] GPS speed m/s=$pluginSpeed, est m/s=$estMps -> Final speedMph=$speedMph");
 
         // Update prev point
         await prefs.setDouble('prev_lat', smoothedLat);
@@ -129,7 +139,10 @@ void backgroundCallback() {
               'lat': smoothedLat,
               'lng': smoothedLng,
             },
-            'currentSpeed': speedMph,
+            'speed': speedMph,        // Primary field
+            'speedMph': speedMph,     // Compatibility field 1
+            'currentSpeed': speedMph, // Compatibility field 2
+            'heading': data.course,
             'currentHeading': data.course,
             'status': 'ON_ROUTE',
           });
