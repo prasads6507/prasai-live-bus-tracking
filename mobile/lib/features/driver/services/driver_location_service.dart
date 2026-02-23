@@ -13,15 +13,61 @@ import 'package:flutter/foundation.dart';
 import '../../../data/datasources/api_ds.dart';
 import '../../../core/utils/polyline_encoder.dart';
 
+// ─── ADAPTIVE TRACKING CONSTANTS ───
+const double _ARRIVING_DISTANCE_M = 804.0;   // 0.5 mile
+const double _ARRIVED_RADIUS_M = 100.0;       // Mark stop as reached
+const double _ARRIVED_EXIT_M = 175.0;         // Hysteresis exit
+const int _FAR_UPDATE_SEC = 20;               // Write interval in FAR mode
+const int _NEAR_UPDATE_SEC = 5;               // Write interval in NEAR_STOP mode
+
 double _sanitizeSpeedMps(double? v) {
   if (v == null) return 0;
   if (!v.isFinite) return 0;
-  if (v < 0) return 0; // INVALID => clamp
+  if (v < 0) return 0;
   return v;
 }
 
 int _speedMphRounded(double? mps) =>
   (_sanitizeSpeedMps(mps) * 2.236936).round();
+
+/// Haversine distance in meters between two lat/lng points
+double _haversineMeters(double lat1, double lon1, double lat2, double lon2) {
+  const R = 6371000.0;
+  final dLat = (lat2 - lat1) * (pi / 180);
+  final dLon = (lon2 - lon1) * (pi / 180);
+  final a = sin(dLat / 2) * sin(dLat / 2) +
+      cos(lat1 * (pi / 180)) * cos(lat2 * (pi / 180)) *
+      sin(dLon / 2) * sin(dLon / 2);
+  final c = 2 * atan2(sqrt(a), sqrt(1 - a));
+  return R * c;
+}
+
+/// Computes the adaptive mode and status based on distance to next stop.
+/// Returns [mode, status] and respects hysteresis for ARRIVED.
+Map<String, String> _computeAdaptiveState(
+  double distToNextStopM,
+  String currentStatus,
+) {
+  // Hysteresis: if currently ARRIVED, stay until bus exits 175m
+  if (currentStatus == 'ARRIVED') {
+    if (distToNextStopM <= _ARRIVED_EXIT_M) {
+      return {'mode': 'NEAR_STOP', 'status': 'ARRIVED'};
+    }
+    // Exiting ARRIVED zone
+  }
+
+  if (distToNextStopM <= _ARRIVED_RADIUS_M) {
+    return {'mode': 'NEAR_STOP', 'status': 'ARRIVED'};
+  } else if (distToNextStopM <= _ARRIVING_DISTANCE_M) {
+    return {'mode': 'NEAR_STOP', 'status': 'ARRIVING'};
+  } else {
+    return {'mode': 'FAR', 'status': 'ON_ROUTE'};
+  }
+}
+
+int _getIntervalForMode(String mode) {
+  return mode == 'NEAR_STOP' ? _NEAR_UPDATE_SEC : _FAR_UPDATE_SEC;
+}
 
 @pragma('vm:entry-point')
 void backgroundCallback() {
@@ -62,36 +108,26 @@ void backgroundCallback() {
           estMps = distMeters / dtSeconds;
           if (estMps > 60.0) return; // Drop bad point (jump > 134mph)
 
-          // Only smooth if we have some movement, but avoid sticking if moving fast
           final double alpha = (estMps > 2.0) ? 0.9 : 0.7; 
           smoothedLat = alpha * rawLat + (1 - alpha) * prevLat;
           smoothedLng = alpha * rawLng + (1 - alpha) * prevLng;
         }
 
         final pluginSpeed = _sanitizeSpeedMps(data.speed);
-        
-        // Manual Speed Fallback if plugin speed is 0 or unavailable
         double finalSpeedMps = pluginSpeed;
         if (pluginSpeed <= 0.05 && prevLat != null && prevTimeStr != null) {
           finalSpeedMps = estMps;
         }
-
-        if (finalSpeedMps > 45.0) finalSpeedMps = 45.0; // clamp max ~100mph
+        if (finalSpeedMps > 45.0) finalSpeedMps = 45.0;
         
         final speedMph = _speedMphRounded(finalSpeedMps);
-
-        // Debug log for troubleshooting (visible in adb logcat)
-        debugPrint("[Background] GPS speed m/s=$pluginSpeed, est m/s=$estMps -> Final speedMph=$speedMph");
 
         // Update prev point
         await prefs.setDouble('prev_lat', smoothedLat);
         await prefs.setDouble('prev_lng', smoothedLng);
         await prefs.setString('prev_time', nowTime.toIso8601String());
 
-        // ─── LOCAL BUFFER instead of Firestore writes ───
-        // Buffer GPS points locally; they'll be uploaded in one batch at trip end.
-        // This eliminates ALL Firestore writes from background tracking.
-
+        // ─── LOCAL BUFFER for trip history (unchanged — single upload at trip end) ───
         final newPoint = {
           'lat': smoothedLat,
           'lng': smoothedLng,
@@ -100,7 +136,6 @@ void backgroundCallback() {
           'timestamp': nowTime.toIso8601String(),
         };
 
-        // Append to SharedPreferences buffer
         final existingBuffer = prefs.getString('trip_history_buffer') ?? '[]';
         List<dynamic> buffer;
         try {
@@ -111,24 +146,64 @@ void backgroundCallback() {
           buffer = [];
         }
         buffer.add(newPoint);
-
-        // Cap at 10,000 points (~3 hour trip at 1 point/5sec)
         if (buffer.length > 10000) {
           buffer.removeRange(0, buffer.length - 10000);
         }
-
         await prefs.setString('trip_history_buffer', jsonEncode(buffer));
         await prefs.setInt('trip_buffer_count', buffer.length);
 
-        // ─── BACKGROUND UPDATES (Autonomous) ───
-        // These run even when the screen is locked because they are in the background isolate.
+        // ─── ADAPTIVE MODE STATE MACHINE ───
+        // Load previous state
+        String prevMode = prefs.getString('adaptive_mode') ?? 'FAR';
+        String prevStatus = prefs.getString('adaptive_status') ?? 'ON_ROUTE';
+        String prevNextStopId = prefs.getString('adaptive_next_stop_id') ?? '';
+        final lastWriteMs = prefs.getInt('last_firestore_write_ms') ?? 0;
 
+        // Load cached next stop coordinates
+        final nextStopLat = prefs.getDouble('next_stop_lat');
+        final nextStopLng = prefs.getDouble('next_stop_lng');
+        final nextStopId = prefs.getString('next_stop_id') ?? '';
+
+        // Compute distance to next stop
+        double distToNextStop = double.infinity;
+        if (nextStopLat != null && nextStopLng != null && nextStopLat != 0.0) {
+          distToNextStop = _haversineMeters(smoothedLat, smoothedLng, nextStopLat, nextStopLng);
+        }
+
+        // Compute new mode and status
+        final newState = _computeAdaptiveState(distToNextStop, prevStatus);
+        final newMode = newState['mode']!;
+        final newStatus = newState['status']!;
+
+        // Determine if we should write to Firestore
+        final elapsedMs = nowTime.millisecondsSinceEpoch - lastWriteMs;
+        final intervalMs = _getIntervalForMode(newMode) * 1000;
+
+        final modeChanged = newMode != prevMode;
+        final statusChanged = newStatus != prevStatus;
+        final nextStopChanged = nextStopId != prevNextStopId;
+        final intervalElapsed = elapsedMs >= intervalMs;
+
+        final shouldWrite = modeChanged || statusChanged || nextStopChanged || intervalElapsed;
+
+        // Save state regardless
+        await prefs.setString('adaptive_mode', newMode);
+        await prefs.setString('adaptive_status', newStatus);
+        await prefs.setString('adaptive_next_stop_id', nextStopId);
+
+        if (!shouldWrite) {
+          debugPrint("[Adaptive] SKIP write | mode=$newMode status=$newStatus elapsed=${elapsedMs}ms < ${intervalMs}ms");
+          // Still send to foreground isolate for UI updates
+          _sendToForeground(data);
+          return;
+        }
+
+        // ─── FIRESTORE WRITE (adaptive-gated) ───
         final db = FirebaseFirestore.instance;
 
-        // 1. Update Firestore Bus document directly (Real-time tracking for maps)
         try {
           await db.collection('buses').doc(busId).update({
-            'lastUpdated': DateTime.now().toIso8601String(),
+            'lastUpdated': nowTime.toIso8601String(),
             'lastLocationUpdate': FieldValue.serverTimestamp(),
             'location': {
               'latitude': smoothedLat,
@@ -142,133 +217,147 @@ void backgroundCallback() {
               'lng': smoothedLng,
               'heading': data.course,
             },
-            'speed': speedMph,        // Primary field
-            'speedMph': speedMph,     // Compatibility field 1
-            'speedMPH': speedMph,     // Compatibility field 2
-            'currentSpeed': speedMph, // Compatibility field 3
+            'speed': speedMph,
+            'speedMph': speedMph,
+            'speedMPH': speedMph,
+            'currentSpeed': speedMph,
             'heading': data.course,
             'currentHeading': data.course,
-            'status': 'ON_ROUTE',
+            'status': newStatus,
+            'trackingMode': newMode,
+            'nextStopId': nextStopId,
           });
-          debugPrint("[Background] Pushing tracking for bus $busId, speed: $speedMph mph");
+
+          await prefs.setInt('last_firestore_write_ms', nowTime.millisecondsSinceEpoch);
+
+          debugPrint("[Adaptive] WRITE | mode=$newMode status=$newStatus speed=${speedMph}mph "
+              "dist=${distToNextStop.round()}m reason=${modeChanged ? 'MODE_CHANGE' : statusChanged ? 'STATUS_CHANGE' : nextStopChanged ? 'STOP_CHANGE' : 'INTERVAL'}");
         } catch (e) {
-          debugPrint("[Background] Firestore update failed: $e");
+          debugPrint("[Adaptive] Firestore write failed: $e");
         }
 
-        // --- Geofence + ETA check (fire-and-forget, reads only) ---
-        final busRef = db.collection('buses').doc(busId);
-        final busDocForGeofence = await busRef.get();
-        final geoData = busDocForGeofence.data();
-        if (geoData != null && geoData['activeTripId'] != null) {
+        // ─── GEOFENCE + STOP ARRIVAL DETECTION ───
+        if (tripId != null && tripId.isNotEmpty) {
           try {
-            final String tripId = geoData['activeTripId'] as String;
-            final tripRef = db.collection('trips').doc(tripId);
-            final tripDoc = await tripRef.get();
-            if (tripDoc.exists) {
-              final tripData = tripDoc.data()!;
-              final stops = (tripData['stopsSnapshot'] as List<dynamic>?) ?? [];
-              final progress = tripData['stopProgress'] as Map<String, dynamic>? ?? {};
-              final currentIndex = (progress['currentIndex'] as num?)?.toInt() ?? 0;
-              final arrivedIds = List<String>.from(progress['arrivedStopIds'] ?? []);
-              final arrivals = Map<String, dynamic>.from(progress['arrivals'] ?? {});
+            final busRef = db.collection('buses').doc(busId);
+            final busDoc = await busRef.get();
+            final geoData = busDoc.data();
 
-              if (currentIndex < stops.length) {
-                final nextStop = stops[currentIndex] as Map<String, dynamic>;
-                final stopLat = (nextStop['lat'] as num?)?.toDouble() ?? 0;
-                final stopLng = (nextStop['lng'] as num?)?.toDouble() ?? 0;
-                final radiusM = (nextStop['radiusM'] as num?)?.toDouble() ?? 100;
-                final stopId = nextStop['stopId'] as String? ?? '';
+            if (geoData != null && geoData['activeTripId'] != null) {
+              final String activeTripId = geoData['activeTripId'] as String;
+              final tripRef = db.collection('trips').doc(activeTripId);
+              final tripDoc = await tripRef.get();
 
-                // Haversine distance in meters
-                final distM = _haversineMeters(data.lat, data.lon, stopLat, stopLng);
+              if (tripDoc.exists) {
+                final tripData = tripDoc.data()!;
+                final stops = (tripData['stopsSnapshot'] as List<dynamic>?) ?? [];
+                final progress = tripData['stopProgress'] as Map<String, dynamic>? ?? {};
+                final currentIndex = (progress['currentIndex'] as num?)?.toInt() ?? 0;
+                final arrivedIds = List<String>.from(progress['arrivedStopIds'] ?? []);
+                final arrivals = Map<String, dynamic>.from(progress['arrivals'] ?? {});
 
-                // Check geofence
-                if (distM <= radiusM && !arrivedIds.contains(stopId)) {
-                  arrivedIds.add(stopId);
-                  arrivals[stopId] = DateTime.now().toIso8601String();
-                  final newIndex = currentIndex + 1;
-                  final nextStopId = newIndex < stops.length
-                      ? (stops[newIndex] as Map<String, dynamic>)['stopId']
-                      : null;
+                if (currentIndex < stops.length) {
+                  final nextStop = stops[currentIndex] as Map<String, dynamic>;
+                  final stopLat = (nextStop['lat'] as num?)?.toDouble() ?? 0;
+                  final stopLng = (nextStop['lng'] as num?)?.toDouble() ?? 0;
+                  final stopId = nextStop['stopId'] as String? ?? '';
 
-                  await tripRef.update({
-                    'stopProgress.currentIndex': newIndex,
-                    'stopProgress.arrivedStopIds': arrivedIds,
-                    'stopProgress.arrivals': arrivals,
-                    'eta.nextStopId': nextStopId,
-                  });
+                  // Cache next stop coordinates for adaptive mode computation
+                  await prefs.setDouble('next_stop_lat', stopLat);
+                  await prefs.setDouble('next_stop_lng', stopLng);
+                  await prefs.setString('next_stop_id', stopId);
 
-                  // F1: Auto End Trip when reaching the final stop
-                  if (newIndex >= stops.length) {
+                  final distM = _haversineMeters(smoothedLat, smoothedLng, stopLat, stopLng);
+
+                  // Check geofence with updated 100m radius
+                  if (distM <= _ARRIVED_RADIUS_M && !arrivedIds.contains(stopId)) {
+                    arrivedIds.add(stopId);
+                    arrivals[stopId] = nowTime.toIso8601String();
+                    final newIndex = currentIndex + 1;
+                    final newNextStopId = newIndex < stops.length
+                        ? (stops[newIndex] as Map<String, dynamic>)['stopId']
+                        : null;
+
                     await tripRef.update({
-                      'status': 'COMPLETED',
-                      'endTime': DateTime.now().toIso8601String(),
+                      'stopProgress.currentIndex': newIndex,
+                      'stopProgress.arrivedStopIds': arrivedIds,
+                      'stopProgress.arrivals': arrivals,
+                      'eta.nextStopId': newNextStopId,
                     });
-                    
-                    await busRef.update({
-                      'status': 'ACTIVE',
-                      'activeTripId': FieldValue.delete(),
+
+                    // Update cached next stop to the NEW next stop
+                    if (newIndex < stops.length) {
+                      final newNextStop = stops[newIndex] as Map<String, dynamic>;
+                      await prefs.setDouble('next_stop_lat', (newNextStop['lat'] as num?)?.toDouble() ?? 0);
+                      await prefs.setDouble('next_stop_lng', (newNextStop['lng'] as num?)?.toDouble() ?? 0);
+                      await prefs.setString('next_stop_id', newNextStop['stopId'] as String? ?? '');
+                    }
+
+                    // Auto End Trip at final stop
+                    if (newIndex >= stops.length) {
+                      await tripRef.update({
+                        'status': 'COMPLETED',
+                        'endTime': nowTime.toIso8601String(),
+                      });
+                      await busRef.update({
+                        'status': 'ACTIVE',
+                        'activeTripId': FieldValue.delete(),
+                        'trackingMode': FieldValue.delete(),
+                        'nextStopId': FieldValue.delete(),
+                      });
+                    }
+
+                    // Write arrival event for push notification trigger
+                    await db.collection('stopArrivals').add({
+                      'tripId': activeTripId,
+                      'busId': busId,
+                      'collegeId': collegeId,
+                      'routeId': geoData['routeId'] ?? '',
+                      'stopId': stopId,
+                      'stopName': nextStop['name'] ?? '',
+                      'arrivedAt': nowTime.toIso8601String(),
+                      'processed': false,
+                    });
+
+                    debugPrint("[Adaptive] ARRIVED at stop: $stopId (${nextStop['name']})");
+                  } else if (!arrivedIds.contains(stopId)) {
+                    // ETA computation
+                    final currentSpeedMps = (data.speed > 1.5) ? data.speed : 3.0;
+                    final etaSeconds = distM / currentSpeedMps;
+                    final nextStopEta = nowTime.add(Duration(seconds: etaSeconds.round())).toIso8601String();
+
+                    await tripRef.update({
+                      'eta.nextStopEta': nextStopEta,
+                      'eta.delayMinutes': 0,
                     });
                   }
-
-                  // Write arrival event for push notification trigger
-                  await db.collection('stopArrivals').add({
-                    'tripId': tripId,
-                    'busId': busId,
-                    'collegeId': collegeId,
-                    'routeId': geoData['routeId'] ?? '',
-                    'stopId': stopId,
-                    'stopName': nextStop['name'] ?? '',
-                    'arrivedAt': DateTime.now().toIso8601String(),
-                    'processed': false,
-                  });
-                } else {
-                  // Compute ETA to next stop
-                  // data.speed is in meters per second (plugin standard)
-                  final currentSpeedMps = (data.speed > 1.5) ? data.speed : 3.0; // min 3 m/s (~6.7mph)
-                  final etaSeconds = distM / currentSpeedMps;
-                  final nextStopEta = DateTime.now().add(Duration(seconds: etaSeconds.round())).toIso8601String();
-
-                  await tripRef.update({
-                    'eta.nextStopEta': nextStopEta,
-                    'eta.delayMinutes': 0, // simplified for now
-                  });
                 }
               }
             }
-          } catch (_) {
-            // Silent fail — ETA/geofence is best-effort
+          } catch (e) {
+            debugPrint("[Adaptive] Geofence check error: $e");
           }
         }
-      } catch (_) {
-        // Silent fail in background for network drops or missing data
+      } catch (e) {
+        debugPrint("[Adaptive] Background callback error: $e");
       }
       
-      // Send data to foreground isolate if it's running
-      final SendPort? sendPort = IsolateNameServer.lookupPortByName("LocatorIsolate");
-      if (sendPort != null) {
-        // Pass map to avoid passing complex object types across isolates if they fail
-        sendPort.send({
-          'lat': data.lat,
-          'lon': data.lon,
-          'speed': data.speed,
-          'course': data.course,
-        });
-      }
+      // Send data to foreground isolate
+      _sendToForeground(data);
     },
   );
 }
 
-/// Haversine distance in meters between two lat/lng points
-double _haversineMeters(double lat1, double lon1, double lat2, double lon2) {
-  const R = 6371000.0; // Earth radius in meters
-  final dLat = (lat2 - lat1) * (pi / 180);
-  final dLon = (lon2 - lon1) * (pi / 180);
-  final a = sin(dLat / 2) * sin(dLat / 2) +
-      cos(lat1 * (pi / 180)) * cos(lat2 * (pi / 180)) *
-      sin(dLon / 2) * sin(dLon / 2);
-  final c = 2 * atan2(sqrt(a), sqrt(1 - a));
-  return R * c;
+void _sendToForeground(BackgroundLocationUpdateData data) {
+  final SendPort? sendPort = IsolateNameServer.lookupPortByName("LocatorIsolate");
+  if (sendPort != null) {
+    sendPort.send({
+      'lat': data.lat,
+      'lon': data.lon,
+      'speed': data.speed,
+      'course': data.course,
+    });
+  }
 }
 
 class DriverLocationService {
@@ -305,6 +394,34 @@ class DriverLocationService {
     await prefs.setString('track_bus_id', busId);
     await prefs.setString('track_trip_id', tripId);
 
+    // Initialize adaptive state
+    await prefs.setString('adaptive_mode', 'FAR');
+    await prefs.setString('adaptive_status', 'ON_ROUTE');
+    await prefs.setString('adaptive_next_stop_id', '');
+    await prefs.setInt('last_firestore_write_ms', 0);
+
+    // Cache next stop from trip document
+    try {
+      final db = FirebaseFirestore.instance;
+      final tripDoc = await db.collection('trips').doc(tripId).get();
+      if (tripDoc.exists) {
+        final tripData = tripDoc.data()!;
+        final stops = (tripData['stopsSnapshot'] as List<dynamic>?) ?? [];
+        final progress = tripData['stopProgress'] as Map<String, dynamic>? ?? {};
+        final currentIndex = (progress['currentIndex'] as num?)?.toInt() ?? 0;
+
+        if (currentIndex < stops.length) {
+          final nextStop = stops[currentIndex] as Map<String, dynamic>;
+          await prefs.setDouble('next_stop_lat', (nextStop['lat'] as num?)?.toDouble() ?? 0);
+          await prefs.setDouble('next_stop_lng', (nextStop['lng'] as num?)?.toDouble() ?? 0);
+          await prefs.setString('next_stop_id', nextStop['stopId'] as String? ?? '');
+          debugPrint("[Adaptive] Cached next stop: ${nextStop['name']} at index $currentIndex");
+        }
+      }
+    } catch (e) {
+      debugPrint("[Adaptive] Failed to cache trip stops: $e");
+    }
+
     _port?.close();
     _port = ReceivePort();
     IsolateNameServer.removePortNameMapping("LocatorIsolate");
@@ -340,6 +457,14 @@ class DriverLocationService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('track_college_id');
     await prefs.remove('track_bus_id');
+    // Clean adaptive state
+    await prefs.remove('adaptive_mode');
+    await prefs.remove('adaptive_status');
+    await prefs.remove('adaptive_next_stop_id');
+    await prefs.remove('last_firestore_write_ms');
+    await prefs.remove('next_stop_lat');
+    await prefs.remove('next_stop_lng');
+    await prefs.remove('next_stop_id');
   }
 
   static Future<void> uploadBufferedHistory(String tripId) async {
@@ -350,7 +475,7 @@ class DriverLocationService {
       if (existingBuffer != null && existingBuffer.isNotEmpty) {
         final rawBuffer = List<Map<String, dynamic>>.from(jsonDecode(existingBuffer));
         if (rawBuffer.isNotEmpty) {
-          // 1. Compression logic (Filter points to stay under Firestore 1MB limit)
+          // 1. Compression logic
           final List<Map<String, dynamic>> compressed = [];
           compressed.add(rawBuffer.first);
 
@@ -367,7 +492,6 @@ class DriverLocationService {
                                  ((prev['heading'] as num?)?.toDouble() ?? 0)).abs();
             if (headingDiff > 180) headingDiff = 360 - headingDiff;
 
-            // Keep if moved > 10m, or turned > 15deg, or it's been > 30 seconds since last kept point
             if (dist > 10.0 || headingDiff > 15.0) {
               compressed.add(curr);
             }
@@ -417,7 +541,7 @@ class DriverLocationService {
             maxSpeedMph: maxSpeedMph.round(),
             avgSpeedMph: compressed.isNotEmpty ? (sumSpeedMph / compressed.length).round() : 0,
             pointsCount: compressed.length,
-            path: compressed, // Send full path array for high-detail view
+            path: compressed,
           );
           
           debugPrint("Successfully uploaded trip history for $tripId (${compressed.length} compressed points)");

@@ -69,6 +69,7 @@ class FirestoreDataSource {
         'currentHeading': lastPoint.heading ?? 0.0,
         'liveTrackBuffer': trimmedBuffer,
         'status': 'ON_ROUTE',
+        'trackingMode': 'NEAR_STOP',
       };
 
       transaction.update(docRef, updateData);
@@ -203,7 +204,8 @@ class FirestoreDataSource {
       'heading': lastPoint.heading ?? 0.0,
       'currentHeading': lastPoint.heading ?? 0.0,
       'lastUpdated': DateTime.now().toIso8601String(),
-      'status': 'ON_ROUTE', // Ensure it stays ON_ROUTE while tracking
+      'status': 'ON_ROUTE',
+      'trackingMode': 'NEAR_STOP',
     });
   }
   /// Updates the bus's road/street name

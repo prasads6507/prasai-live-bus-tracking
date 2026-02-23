@@ -50,8 +50,8 @@ export const getBusLatLng = (bus: any): [number, number] | null => {
     return [Number(lng), Number(lat)];
 };
 
-// Helper to create a circle polygon (50m radius)
-const createCirclePolygon = (center: [number, number], radiusInMeters: number = 50, points: number = 64) => {
+// Helper to create a circle polygon (100m radius — matches ARRIVED_RADIUS_M)
+const createCirclePolygon = (center: [number, number], radiusInMeters: number = 100, points: number = 64) => {
     const coords = {
         latitude: center[1],
         longitude: center[0]
@@ -78,14 +78,45 @@ const createCirclePolygon = (center: [number, number], radiusInMeters: number = 
     };
 };
 
+// Helper: get expected update interval from tracking mode
+const getExpectedInterval = (bus: any): number => {
+    const mode = bus.trackingMode || 'FAR';
+    return mode === 'NEAR_STOP' ? 5000 : 20000; // ms
+};
+
+// Helper: get status color
+const getStatusColor = (bus: any): string => {
+    const status = bus.status;
+    if (status === 'ARRIVED') return '#16a34a';    // green
+    if (status === 'ARRIVING') return '#f59e0b';   // amber
+    if (status === 'MAINTENANCE') return '#ea580c'; // orange
+    if (status === 'ON_ROUTE' || status === 'ACTIVE') return '#3b82f6'; // blue
+    return '#64748b'; // slate (IDLE/Offline)
+};
+
+// Helper: get status label
+const getStatusLabel = (bus: any): string => {
+    const s = bus.status;
+    if (s === 'ARRIVED') return 'Arrived';
+    if (s === 'ARRIVING') return 'Arriving';
+    if (s === 'ON_ROUTE' || s === 'ACTIVE') return 'On Route';
+    return s || 'Offline';
+};
+
 const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, path, selectedBusId, routes, selectedRouteId, onBusClick, stopMarkers, showStopCircles, routePreviewPath }: MapLibreMapProps) => {
     const mapRef = useRef<MapRef | null>(null);
 
     // Type definition for DOM Marker State
     const markersRef = useRef<{ [key: string]: { marker: maplibregl.Marker, root: ReturnType<typeof createRoot> } }>({});
 
-    // Animation Refs for high-performance updates
-    const animatedPositionsRef = useRef<{ [key: string]: { pos: [number, number], bearing: number } }>({});
+    // Time-based interpolation refs for smooth animation with 20s update gaps
+    const anchorRef = useRef<{
+        [key: string]: {
+            prevPos: [number, number], prevTime: number, prevBearing: number,
+            currPos: [number, number], currTime: number, currBearing: number,
+            animPos: [number, number], animBearing: number
+        }
+    }>({});
     const animationFrameRef = useRef<number | null>(null);
 
     const defaultCenter: [number, number] = [78.4867, 17.3850];
@@ -177,10 +208,10 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
                 markersRef.current[bus._id] = markerState;
             }
 
-            let color = '#16a34a';
-            if (bus.status === 'MAINTENANCE') color = '#ea580c';
-            else if (bus.status === 'ACTIVE' || bus.status === 'ON_ROUTE') color = '#16a34a';
-            else color = '#64748b'; // IDLE or Offline
+            const color = getStatusColor(bus);
+            const statusLabel = getStatusLabel(bus);
+            const isLive = ['ON_ROUTE', 'ACTIVE', 'ARRIVING', 'ARRIVED'].includes(bus.status);
+            const modeLabel = bus.trackingMode === 'NEAR_STOP' ? 'Live (fast)' : 'Live (eco)';
 
             // React guarantees fast targeted updates to this specific DOM portal
             markerState.root.render(
@@ -194,6 +225,9 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
                     {selectedBusId === bus._id && (
                         <div className="absolute w-14 h-14 bg-dashboard-primary/20 rounded-full animate-pulse" />
                     )}
+                    {bus.status === 'ARRIVED' && (
+                        <div className="absolute w-12 h-12 bg-green-400/30 rounded-full animate-ping" />
+                    )}
                     <BsBusFront
                         color={color}
                         size={32}
@@ -204,19 +238,25 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
                     <div className={`absolute top-10 whitespace-nowrap bg-dashboard-surface text-dashboard-text border border-dashboard-border shadow-soft text-[11px] font-bold px-3 py-1.5 rounded-lg pointer-events-none transition-opacity z-50 flex flex-col gap-0.5 ${selectedBusId === bus._id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                         <div className="flex items-center gap-2">
                             <span>Bus {bus.busNumber || 'Unknown'} • {bus.driverName || 'No Driver'}</span>
-                            {(bus.status === 'ON_ROUTE' || bus.status === 'ACTIVE') && (
+                            {isLive && (
                                 <span className="text-dashboard-primary">
                                     {Math.round(bus.speed ?? bus.speedMph ?? bus.speedMPH ?? 0)} mph
                                 </span>
                             )}
                         </div>
-                        {bus.routeName && <span className="text-[10px] text-dashboard-muted font-medium">{bus.routeName}</span>}
+                        <div className="flex items-center gap-1.5">
+                            {bus.routeName && <span className="text-[10px] text-dashboard-muted font-medium">{bus.routeName}</span>}
+                            {isLive && <span className="text-[9px] text-dashboard-muted/70">• {modeLabel}</span>}
+                        </div>
+                        {(bus.status === 'ARRIVING' || bus.status === 'ARRIVED') && (
+                            <span className={`text-[10px] font-bold ${bus.status === 'ARRIVED' ? 'text-green-600' : 'text-amber-600'}`}>{statusLabel}</span>
+                        )}
                     </div>
                 </div>
             );
 
             // Sync stationary bus immediately
-            const moving = bus.status === 'ON_ROUTE' || bus.status === 'ACTIVE';
+            const moving = ['ON_ROUTE', 'ACTIVE', 'ARRIVING', 'ARRIVED'].includes(bus.status);
             if (!moving) {
                 markerState.marker.setLngLat(latLng);
                 const iconEl = markerState.marker.getElement().querySelector('.bus-icon-svg') as HTMLElement;
@@ -234,56 +274,90 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
         });
     }, [buses, selectedBusId]);
 
-    // --- Fast Animation Engine ---
+    // --- Time-Based Interpolation Engine ---
+    // Update anchor points when Firestore data changes
+    useEffect(() => {
+        const now = Date.now();
+        buses.forEach(bus => {
+            const latLng = getBusLatLng(bus);
+            if (!latLng) return;
+
+            const existing = anchorRef.current[bus._id];
+            const bearing = bus.location?.heading || bus.heading || 0;
+
+            if (!existing) {
+                // First time seeing this bus — initialize both anchors to current position
+                anchorRef.current[bus._id] = {
+                    prevPos: latLng, prevTime: now - 1000, prevBearing: bearing,
+                    currPos: latLng, currTime: now, currBearing: bearing,
+                    animPos: [...latLng] as [number, number], animBearing: bearing,
+                };
+            } else {
+                // Check if position actually changed (new Firestore update arrived)
+                const dx = latLng[0] - existing.currPos[0];
+                const dy = latLng[1] - existing.currPos[1];
+                if (Math.abs(dx) > 0.000001 || Math.abs(dy) > 0.000001) {
+                    // Shift current → prev, set new current
+                    existing.prevPos = [...existing.currPos] as [number, number];
+                    existing.prevTime = existing.currTime;
+                    existing.prevBearing = existing.currBearing;
+                    existing.currPos = latLng;
+                    existing.currTime = now;
+                    existing.currBearing = bearing;
+                }
+            }
+        });
+    }, [buses]);
+
+    // Animation loop: interpolate marker positions between anchor points
     useEffect(() => {
         const busesWithLoc = buses.filter(b => getBusLatLng(b));
         if (busesWithLoc.length === 0) return;
 
-        const animate = (_time: number) => {
+        const animate = () => {
+            const now = Date.now();
+
             busesWithLoc.forEach(bus => {
-                const latLng = getBusLatLng(bus)!;
-                const moving = bus.status === 'ON_ROUTE' || bus.status === 'ACTIVE';
+                const anchor = anchorRef.current[bus._id];
+                if (!anchor) return;
 
-                // If not moving, don't animate (handled in main useEffect)
+                const moving = ['ON_ROUTE', 'ACTIVE', 'ARRIVING', 'ARRIVED'].includes(bus.status);
                 if (!moving) {
-                    animatedPositionsRef.current[bus._id] = { pos: latLng, bearing: bus.location?.heading || 0 };
-                    return;
-                }
-
-                const targetLatLng = latLng;
-                const currentAnimated = animatedPositionsRef.current[bus._id];
-
-                if (!currentAnimated) {
-                    // Initialize first position
-                    animatedPositionsRef.current[bus._id] = { pos: targetLatLng, bearing: bus.location?.heading || 0 };
+                    anchor.animPos = [...anchor.currPos] as [number, number];
+                    anchor.animBearing = anchor.currBearing;
                 } else {
-                    const dx = targetLatLng[0] - currentAnimated.pos[0];
-                    const dy = targetLatLng[1] - currentAnimated.pos[1];
-                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    // Time-based interpolation
+                    const duration = Math.max(anchor.currTime - anchor.prevTime, 100);
+                    const elapsed = now - anchor.currTime;
+                    // Allow extrapolation up to 1.5x the expected interval for smooth coasting
+                    const expectedInterval = getExpectedInterval(bus);
+                    const maxProgress = 1 + (expectedInterval * 0.3 / duration);
+                    const progress = Math.min(elapsed / duration + 1, maxProgress); // +1 because we start from prevTime
+                    const t = Math.max(0, Math.min(progress, maxProgress));
 
-                    if (dist > 0.00001) {
-                        // Move 5% of the distance per frame (~1/3 second to catch up)
-                        currentAnimated.pos[0] += dx * 0.05;
-                        currentAnimated.pos[1] += dy * 0.05;
-                        currentAnimated.bearing = bus.location?.heading ?? calculateBearing(
-                            { lat: currentAnimated.pos[1], lng: currentAnimated.pos[0] },
-                            { lat: targetLatLng[1], lng: targetLatLng[0] }
+                    // Lerp position: at t=1, we're at currPos. At t>1, we coast beyond.
+                    const dx = anchor.currPos[0] - anchor.prevPos[0];
+                    const dy = anchor.currPos[1] - anchor.prevPos[1];
+                    anchor.animPos[0] = anchor.prevPos[0] + dx * t;
+                    anchor.animPos[1] = anchor.prevPos[1] + dy * t;
+
+                    // Bearing interpolation or calculation
+                    if (anchor.currBearing) {
+                        anchor.animBearing = anchor.currBearing;
+                    } else if (Math.abs(dx) > 0.000001 || Math.abs(dy) > 0.000001) {
+                        anchor.animBearing = calculateBearing(
+                            { lat: anchor.prevPos[1], lng: anchor.prevPos[0] },
+                            { lat: anchor.currPos[1], lng: anchor.currPos[0] }
                         );
-                    } else {
-                        // Snap exactly to target if very close
-                        currentAnimated.pos = [...targetLatLng] as [number, number];
-                        if (bus.location?.heading) {
-                            currentAnimated.bearing = bus.location.heading;
-                        }
                     }
                 }
 
-                // Actually update the marker on the map!
+                // Update marker on map
                 const markerData = markersRef.current[bus._id];
                 if (markerData?.marker) {
-                    markerData.marker.setLngLat(currentAnimated.pos);
+                    markerData.marker.setLngLat(anchor.animPos);
                     const iconEl = markerData.marker.getElement().querySelector('.bus-icon-svg') as HTMLElement;
-                    if (iconEl) iconEl.style.transform = `rotate(${currentAnimated.bearing}deg)`;
+                    if (iconEl) iconEl.style.transform = `rotate(${anchor.animBearing}deg)`;
                 }
             });
 
@@ -301,8 +375,9 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
     // Follow Mode (Camera Tracking logic)
     useEffect(() => {
         if (followBusEnabled && activeBusWithLocation && mapRef.current) {
-            const animated = animatedPositionsRef.current[activeBusWithLocation._id];
-            const center = animated ? animated.pos : getBusLatLng(activeBusWithLocation);
+            // Use animated position if available
+            const animated = anchorRef.current[activeBusWithLocation._id];
+            const center = animated ? animated.animPos : getBusLatLng(activeBusWithLocation);
             if (center) mapRef.current.panTo(center, { duration: 800 });
         }
     }, [followBusEnabled, activeBusWithLocation]);
@@ -495,7 +570,7 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
                             type: 'FeatureCollection',
                             features: stopMarkers
                                 .filter(m => m.lat && m.lng)
-                                .map(m => createCirclePolygon([m.lng, m.lat], 50))
+                                .map(m => createCirclePolygon([m.lng, m.lat], 100))
                         }}
                     >
                         <Layer
