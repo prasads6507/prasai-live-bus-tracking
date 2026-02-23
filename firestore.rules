@@ -44,8 +44,7 @@ service cloud.firestore {
     match /buses/{busId} {
       // Any authenticated user can read buses (students track, admins manage)
       allow read: if isAuthenticated();
-      // Drivers update bus location/status; allow any authenticated write
-      // (server-side validation handles authorization)
+      // Drivers update bus location/status
       allow write: if isAuthenticated();
 
       // Trips subcollection (used by mobile app for trip management)
