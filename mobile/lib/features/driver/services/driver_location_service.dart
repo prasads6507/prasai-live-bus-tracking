@@ -13,6 +13,8 @@ import 'package:flutter/foundation.dart';
 import '../../../data/datasources/api_ds.dart';
 import '../../../core/utils/polyline_encoder.dart';
 
+import '../../../core/services/relay_service.dart';
+
 double _sanitizeSpeedMps(double? v) {
   if (v == null) return 0;
   if (!v.isFinite) return 0;
@@ -22,6 +24,10 @@ double _sanitizeSpeedMps(double? v) {
 
 int _speedMphRounded(double? mps) =>
   (_sanitizeSpeedMps(mps) * 2.236936).round();
+
+// Separate relay for the background isolate
+RelayService? _backgroundRelay;
+String? _currentBackgroundWsUrl;
 
 @pragma('vm:entry-point')
 void backgroundCallback() {
@@ -35,6 +41,8 @@ void backgroundCallback() {
       await prefs.reload();
       final collegeId = prefs.getString('track_college_id');
       final busId = prefs.getString('track_bus_id');
+      final tripId = prefs.getString('track_trip_id');
+      final wsUrl = prefs.getString('track_ws_url');
       
       if (collegeId == null || busId == null) return;
       
@@ -108,6 +116,54 @@ void backgroundCallback() {
 
         await prefs.setString('trip_history_buffer', jsonEncode(buffer));
         await prefs.setInt('trip_buffer_count', buffer.length);
+
+        // ─── BACKGROUND UPDATES (Autonomous) ───
+        // These run even when the screen is locked because they are in the background isolate.
+
+        final db = FirebaseFirestore.instance;
+
+        // 1. Update Real-time Relay (WebSocket)
+        if (wsUrl != null && tripId != null) {
+          if (_backgroundRelay == null || _currentBackgroundWsUrl != wsUrl) {
+            _backgroundRelay?.dispose();
+            _backgroundRelay = RelayService();
+            _backgroundRelay!.connect(wsUrl);
+            _currentBackgroundWsUrl = wsUrl;
+          }
+
+          if (_backgroundRelay!.isConnected) {
+            _backgroundRelay!.sendLocation(
+              tripId: tripId,
+              lat: smoothedLat,
+              lng: smoothedLng,
+              speedMps: finalSpeedMps,
+              heading: data.course,
+            );
+          }
+        }
+
+        // 2. Update Firestore Bus document directly
+        // We only update the core location fields so it shows up on the "Live" map
+        try {
+          await db.collection('buses').doc(busId).update({
+            'lastUpdated': DateTime.now().toIso8601String(),
+            'lastLocationUpdate': FieldValue.serverTimestamp(),
+            'location': {
+              'latitude': smoothedLat,
+              'longitude': smoothedLng,
+              'heading': data.course,
+            },
+            'currentLocation': {
+              'lat': smoothedLat,
+              'lng': smoothedLng,
+            },
+            'currentSpeed': speedMph,
+            'currentHeading': data.course,
+            'status': 'ON_ROUTE',
+          });
+        } catch (_) {
+          // Best effort for Firestore write in background
+        }
 
         // --- Geofence + ETA check (fire-and-forget, reads only) ---
         final db = FirebaseFirestore.instance;

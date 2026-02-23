@@ -609,6 +609,10 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
       final tokenData = await ApiDataSource(Dio(), FirebaseFirestore.instance).getRelayToken(widget.busId, 'driver');
       final wsUrl = tokenData['wsUrl'];
       
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('track_ws_url', wsUrl);
+      await prefs.setString('track_trip_id', tripId);
+
       _relay?.dispose();
       _relay = RelayService();
       _relay!.connect(wsUrl);
