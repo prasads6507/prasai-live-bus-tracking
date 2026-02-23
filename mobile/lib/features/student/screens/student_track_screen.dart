@@ -140,7 +140,7 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
           if (mounted) {
             setState(() {
               _currentBus = bus;
-              _busSpeed = bus.currentSpeed ?? (bus.location?.speed ?? 0.0) * 2.23694;
+              _busSpeed = (bus.speedMph ?? bus.currentSpeed ?? (bus.location?.speed ?? 0.0) * 2.23694).toDouble();
               
               if (bus.location != null) {
                 _liveBusLocation = LocationPoint(
@@ -269,10 +269,18 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
       } else {
         final distanceToUserKm = distanceToUserM / 1000.0;
         // Fix: Speed is already in mph from backend natively
-        final speedMph = (_currentBus?.location?.speed ?? 0) > 2 ? _currentBus!.location!.speed! : 20.0; 
+        final speedMph = (_currentBus?.speedMph ?? _currentBus?.location?.speed ?? 0) > 2 ? (_currentBus!.speedMph ?? _currentBus!.location!.speed!) : 20.0; 
         final timeHours = (distanceToUserKm * 0.621371) / speedMph; 
         final timeMinutes = (timeHours * 60).round();
-        etaDisplay = "ETA $timeMinutes min";
+        
+        final status = _currentBus?.currentStatus ?? "MOVING";
+        if (status == 'ARRIVING') {
+           etaDisplay = "Arriving at next stop";
+        } else if (status == 'ARRIVED') {
+           etaDisplay = "At stop";
+        } else {
+           etaDisplay = "ETA $timeMinutes min";
+        }
       }
     }
 
@@ -294,11 +302,11 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
       distanceDisplay = "${(distanceToFinalKm * 0.621371).toStringAsFixed(1)} mi";
       
       // Fix: Speed is already in mph from backend natively
-      final speedMph = (_currentBus?.location?.speed ?? 0) > 2 ? _currentBus!.location!.speed! : 20.0;
+      final speedMph = (_currentBus?.speedMph ?? _currentBus?.location?.speed ?? 0) > 2 ? (_currentBus!.speedMph ?? _currentBus!.location!.speed!) : 20.0;
       final totalTimeHours = (distanceToFinalKm * 0.621371) / speedMph;
       totalTimeDisplay = "${(totalTimeHours * 60).round()} min";
 
-      final completed = _currentBus!.completedStops.length;
+      final completed = _tripStopProgress['arrivedStopIds']?.length ?? _currentBus!.completedStops.length;
       remaining = (stopList.length - completed).clamp(0, stopList.length);
     }
 
@@ -512,7 +520,7 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
-                                  _currentRoadName,
+                                  "${_currentBus?.currentStatus ?? 'MOVING'} • $_currentRoadName",
                                   style: AppTypography.textTheme.bodyMedium?.copyWith(
                                     fontWeight: FontWeight.bold,
                                     color: AppColors.textPrimary,

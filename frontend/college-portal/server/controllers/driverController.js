@@ -215,22 +215,35 @@ const endTrip = async (req, res) => {
         const busRef = db.collection('buses').doc(busId);
 
         // 1. Update Trip Status
+        const endTime = new Date();
+        const startTimeStr = tripDoc.data().startTime;
+        let durationMinutes = 0;
+        if (startTimeStr) {
+            const startTime = new Date(startTimeStr);
+            durationMinutes = Math.round((endTime - startTime) / 60000);
+        }
+
         batch.update(tripRef, {
-            status: 'ended',
-            endTime: new Date().toISOString(),
+            status: 'COMPLETED',
+            endTime: endTime.toISOString(),
+            endedAt: admin.firestore.FieldValue.serverTimestamp(),
+            durationMinutes: durationMinutes,
             isActive: false
         });
 
         // 2. Update Bus Status (Canonical State)
         batch.update(busRef, {
-            status: 'ACTIVE',
+            status: 'IDLE',
             activeTripId: null,
             currentTripId: null,
             currentRoadName: '',
             currentSpeed: 0,
             speed: 0,
+            speedMph: 0,
             liveTrail: [],
             liveTrackBuffer: [],
+            trackingMode: admin.firestore.FieldValue.delete(),
+            nextStopId: admin.firestore.FieldValue.delete(),
             lastUpdated: new Date().toISOString()
         });
 

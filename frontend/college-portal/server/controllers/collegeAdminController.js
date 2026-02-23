@@ -943,31 +943,51 @@ const getTripPath = async (req, res) => {
                     data.timestamp
             })).filter(point => point.lat !== 0 && point.lng !== 0);
         } else {
-            // FALLBACK: Fetch path subcollection (Phase 1/3 implementation)
-            let pathSnapshot = await tripRef.collection('path').get();
+            // Strategy:
+            // 1. Check if 'path' exists in trip doc
+            // 2. Fallback to 'polyline' string and decode it
+            // 3. Final fallback to 'path' subcollection
 
-            console.log(`Path snapshot for ${tripId}: empty=${pathSnapshot.empty}, size=${pathSnapshot.size}`);
+            const polyline = tripData.polyline;
+            let path = tripData.path || [];
 
-            // If path is empty, try 'history' subcollection (Legacy API implementation)
-            if (pathSnapshot.empty) {
-                console.log(`Checking 'history' subcollection for trip ${tripId}...`);
-                pathSnapshot = await tripRef.collection('history').get();
+            if (path.length === 0 && polyline) {
+                console.log(`Decoding polyline for trip ${tripId}...`);
+                try {
+                    // Manual decoding if polyline library isn't available, or simple point extraction
+                    // Since we've been storing polyline in the frontend, we'll try to return it
+                    // and let the frontend decode if it's easier, but for server safety:
+                    // We'll leave path as empty and return polyline for the Map component to decode.
+                } catch (err) {
+                    console.error("Polyline decode skip:", err);
+                }
             }
 
-            if (!pathSnapshot.empty) {
-                path = pathSnapshot.docs
-                    .map(doc => {
-                        const data = doc.data();
-                        return {
-                            lat: data.lat ?? data.latitude ?? 0,
-                            lng: data.lng ?? data.longitude ?? 0,
-                            speed: data.speed || 0,
-                            timestamp: data.recordedAt ?
-                                (data.recordedAt.toDate ? data.recordedAt.toDate().toISOString() : data.recordedAt) :
-                                data.timestamp
-                        };
-                    })
-                    .filter(point => point.lat !== 0 && point.lng !== 0);
+            if (path.length === 0) {
+                console.log(`Fetching path points from collection for trip ${tripId}...`);
+                let pathSnapshot = await tripRef.collection('path').get();
+
+                // If path is empty, try 'history' subcollection (Legacy API implementation)
+                if (pathSnapshot.empty) {
+                    console.log(`Checking 'history' subcollection for trip ${tripId}...`);
+                    pathSnapshot = await tripRef.collection('history').get();
+                }
+
+                if (!pathSnapshot.empty) {
+                    path = pathSnapshot.docs
+                        .map(doc => {
+                            const data = doc.data();
+                            return {
+                                lat: data.lat ?? data.latitude ?? 0,
+                                lng: data.lng ?? data.longitude ?? 0,
+                                speed: data.speed || 0,
+                                timestamp: data.recordedAt ?
+                                    (data.recordedAt.toDate ? data.recordedAt.toDate().toISOString() : data.recordedAt) :
+                                    data.timestamp
+                            };
+                        })
+                        .filter(point => (point.lat !== 0 && point.lng !== 0) || (point.latitude !== 0));
+                }
             }
         }
 
@@ -976,12 +996,12 @@ const getTripPath = async (req, res) => {
             return res.json({ success: true, data: [], polyline: null });
         }
 
-        // Sort in memory to avoid Firebase Composite Index requirements on subcollections/arrays
+        // Sort in memory
         if (path.length > 0) {
             path.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
         }
 
-        console.log(`Returning polyline/path data for trip ${tripId}`);
+        console.log(`Returning data for trip ${tripId}: pathCount=${path.length}, hasPolyline=${!!polyline}`);
         res.json({ success: true, data: path, polyline });
     } catch (error) {
         console.error('Error fetching trip path:', error);

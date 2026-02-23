@@ -86,20 +86,20 @@ const getExpectedInterval = (bus: any): number => {
 
 // Helper: get status color
 const getStatusColor = (bus: any): string => {
-    const status = bus.status;
+    const status = bus.currentStatus || bus.status;
     if (status === 'ARRIVED') return '#16a34a';    // green
     if (status === 'ARRIVING') return '#f59e0b';   // amber
     if (status === 'MAINTENANCE') return '#ea580c'; // orange
-    if (status === 'ON_ROUTE' || status === 'ACTIVE') return '#3b82f6'; // blue
+    if (status === 'ON_ROUTE' || status === 'ACTIVE' || status === 'MOVING') return '#3b82f6'; // blue
     return '#64748b'; // slate (IDLE/Offline)
 };
 
 // Helper: get status label
 const getStatusLabel = (bus: any): string => {
-    const s = bus.status;
+    const s = bus.currentStatus || bus.status;
     if (s === 'ARRIVED') return 'Arrived';
     if (s === 'ARRIVING') return 'Arriving';
-    if (s === 'ON_ROUTE' || s === 'ACTIVE') return 'On Route';
+    if (s === 'ON_ROUTE' || s === 'ACTIVE' || s === 'MOVING') return 'Moving';
     return s || 'Offline';
 };
 
@@ -210,7 +210,8 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
 
             const color = getStatusColor(bus);
             const statusLabel = getStatusLabel(bus);
-            const isLive = ['ON_ROUTE', 'ACTIVE', 'ARRIVING', 'ARRIVED'].includes(bus.status);
+            const currentStatus = bus.currentStatus || bus.status;
+            const isLive = ['ON_ROUTE', 'ACTIVE', 'ARRIVING', 'ARRIVED', 'MOVING'].includes(currentStatus);
             const modeLabel = bus.trackingMode === 'NEAR_STOP' ? 'Live (fast)' : 'Live (eco)';
 
             // React guarantees fast targeted updates to this specific DOM portal
@@ -225,7 +226,7 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
                     {selectedBusId === bus._id && (
                         <div className="absolute w-14 h-14 bg-dashboard-primary/20 rounded-full animate-pulse" />
                     )}
-                    {bus.status === 'ARRIVED' && (
+                    {(currentStatus === 'ARRIVED' || bus.status === 'ARRIVED') && (
                         <div className="absolute w-12 h-12 bg-green-400/30 rounded-full animate-ping" />
                     )}
                     <BsBusFront
@@ -240,7 +241,7 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
                             <span>Bus {bus.busNumber || 'Unknown'} • {bus.driverName || 'No Driver'}</span>
                             {isLive && (
                                 <span className="text-dashboard-primary">
-                                    {Math.round(bus.speed ?? bus.speedMph ?? bus.speedMPH ?? 0)} mph
+                                    {Math.round(bus.speedMph ?? bus.speed ?? bus.speedMPH ?? bus.currentSpeed ?? 0)} mph
                                 </span>
                             )}
                         </div>
@@ -248,15 +249,15 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
                             {bus.routeName && <span className="text-[10px] text-dashboard-muted font-medium">{bus.routeName}</span>}
                             {isLive && <span className="text-[9px] text-dashboard-muted/70">• {modeLabel}</span>}
                         </div>
-                        {(bus.status === 'ARRIVING' || bus.status === 'ARRIVED') && (
-                            <span className={`text-[10px] font-bold ${bus.status === 'ARRIVED' ? 'text-green-600' : 'text-amber-600'}`}>{statusLabel}</span>
+                        {(currentStatus === 'ARRIVING' || currentStatus === 'ARRIVED') && (
+                            <span className={`text-[10px] font-bold ${currentStatus === 'ARRIVED' ? 'text-green-600' : 'text-amber-600'}`}>{statusLabel}</span>
                         )}
                     </div>
                 </div>
             );
 
             // Sync stationary bus immediately
-            const moving = ['ON_ROUTE', 'ACTIVE', 'ARRIVING', 'ARRIVED'].includes(bus.status);
+            const moving = ['ON_ROUTE', 'ACTIVE', 'ARRIVING', 'ARRIVED', 'MOVING'].includes(currentStatus);
             if (!moving) {
                 markerState.marker.setLngLat(latLng);
                 const iconEl = markerState.marker.getElement().querySelector('.bus-icon-svg') as HTMLElement;
@@ -321,7 +322,8 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
                 const anchor = anchorRef.current[bus._id];
                 if (!anchor) return;
 
-                const moving = ['ON_ROUTE', 'ACTIVE', 'ARRIVING', 'ARRIVED'].includes(bus.status);
+                const currentStatus = bus.currentStatus || bus.status;
+                const moving = ['ON_ROUTE', 'ACTIVE', 'ARRIVING', 'ARRIVED', 'MOVING'].includes(currentStatus);
                 if (!moving) {
                     anchor.animPos = [...anchor.currPos] as [number, number];
                     anchor.animBearing = anchor.currBearing;

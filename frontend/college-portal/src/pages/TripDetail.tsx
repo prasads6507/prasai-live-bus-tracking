@@ -39,7 +39,7 @@ const TripDetail = () => {
     const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
     // Use pre-computed stats from the trip document if available, otherwise 0
-    const maxSpeed = trip?.maxSpeedMph ?? (rawPathData.length > 0 ? Math.round(Math.max(...rawPathData.map((p: any) => Number(p.speed) || 0))) : 0);
+    const maxSpeed = trip?.maxSpeedMph ?? (rawPathData.length > 0 ? Math.round(Math.max(...rawPathData.map((p: any) => Number(p.speedMph ?? p.speed) || 0))) : 0);
     const distanceMiles = trip?.distanceMeters ? (trip.distanceMeters / 1609.34).toFixed(1) : '0';
 
     const fetchData = async () => {
@@ -72,10 +72,14 @@ const TripDetail = () => {
                         .map((p: any) => {
                             const lat = Number(p.lat ?? p.latitude);
                             const lng = Number(p.lng ?? p.longitude);
-                            return [lat, lng];
+                            const speed = Number(p.speedMph ?? p.speed ?? 0);
+                            return [lat, lng, speed];
                         })
-                        .filter((coords: number[]) => Number.isFinite(coords[0]) && Number.isFinite(coords[1])) as [number, number][];
-                    setPath(pathPoints);
+                        .filter((item: any) => Number.isFinite(item[0]) && Number.isFinite(item[1])) as any;
+
+                    const pathCoords = pathPoints.map((p: any) => [p[0], p[1]] as [number, number]);
+                    setRawPathData(pathPoints.map((p: any) => ({ lat: p[0], lng: p[1], speed: p[2] })));
+                    setPath(pathCoords);
                 }
             }
 
@@ -304,14 +308,17 @@ const TripDetail = () => {
                 <div className="flex-1 relative bg-slate-50">
                     {path.length > 0 ? (
                         <MapLibreMap
-                            buses={trip.status === 'ACTIVE' ? [{
-                                id: trip.busId,
+                            buses={trip.status === 'ACTIVE' && path.length > 0 ? [{
+                                _id: trip.busId,
                                 busNumber: trip.busNumber,
-                                latitude: path[path.length - 1][0],
-                                longitude: path[path.length - 1][1],
-                                speed: 0,
-                                status: 'BUSY'
-                            }] : []}
+                                location: {
+                                    latitude: path[path.length - 1][1],
+                                    longitude: path[path.length - 1][0],
+                                    heading: 0
+                                },
+                                speedMph: rawPathData[rawPathData.length - 1]?.speed || 0,
+                                status: 'ON_ROUTE'
+                            } as any] : []}
                             path={path}
                             followBus={trip.status === 'ACTIVE'}
                         />

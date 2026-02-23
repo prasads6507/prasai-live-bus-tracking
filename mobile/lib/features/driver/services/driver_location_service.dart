@@ -179,17 +179,28 @@ void backgroundCallback() {
         final elapsedMs = nowTime.millisecondsSinceEpoch - lastWriteMs;
         final intervalMs = _getIntervalForMode(newMode) * 1000;
 
+        // Smart triggers: force write on significant movement changes
+        final prevHeading = prefs.getDouble('prev_heading') ?? data.course;
+        final prevSpeed = prefs.getInt('prev_speed_mph') ?? 0;
+        
+        double headingDiff = (data.course - prevHeading).abs();
+        if (headingDiff > 180) headingDiff = 360 - headingDiff;
+        final bool sharpTurn = headingDiff > 25.0 && finalSpeedMps > 2.0;
+        final bool speedChange = (speedMph - prevSpeed).abs() > 10;
+
         final modeChanged = newMode != prevMode;
         final statusChanged = newStatus != prevStatus;
         final nextStopChanged = nextStopId != prevNextStopId;
         final intervalElapsed = elapsedMs >= intervalMs;
 
-        final shouldWrite = modeChanged || statusChanged || nextStopChanged || intervalElapsed;
+        final shouldWrite = modeChanged || statusChanged || nextStopChanged || intervalElapsed || sharpTurn || speedChange;
 
         // Save state regardless
         await prefs.setString('adaptive_mode', newMode);
         await prefs.setString('adaptive_status', newStatus);
         await prefs.setString('adaptive_next_stop_id', nextStopId);
+        await prefs.setDouble('prev_heading', data.course);
+        await prefs.setInt('prev_speed_mph', speedMph);
 
         if (!shouldWrite) {
           debugPrint("[Adaptive] SKIP write | mode=$newMode status=$newStatus elapsed=${elapsedMs}ms < ${intervalMs}ms");
@@ -223,7 +234,8 @@ void backgroundCallback() {
             'currentSpeed': speedMph,
             'heading': data.course,
             'currentHeading': data.course,
-            'status': newStatus,
+            'status': 'ON_ROUTE', // Bus overall status while trip exists
+            'currentStatus': newStatus, // Moving/Arriving/Arrived
             'trackingMode': newMode,
             'nextStopId': nextStopId,
           });
@@ -231,7 +243,7 @@ void backgroundCallback() {
           await prefs.setInt('last_firestore_write_ms', nowTime.millisecondsSinceEpoch);
 
           debugPrint("[Adaptive] WRITE | mode=$newMode status=$newStatus speed=${speedMph}mph "
-              "dist=${distToNextStop.round()}m reason=${modeChanged ? 'MODE_CHANGE' : statusChanged ? 'STATUS_CHANGE' : nextStopChanged ? 'STOP_CHANGE' : 'INTERVAL'}");
+              "dist=${distToNextStop.round()}m turn=$sharpTurn speedChg=$speedChange reason=${modeChanged ? 'MODE_CHANGE' : statusChanged ? 'STATUS_CHANGE' : nextStopChanged ? 'STOP_CHANGE' : 'INTERVAL'}");
         } catch (e) {
           debugPrint("[Adaptive] Firestore write failed: $e");
         }
@@ -295,16 +307,27 @@ void backgroundCallback() {
 
                     // Auto End Trip at final stop
                     if (newIndex >= stops.length) {
+                      debugPrint("[Adaptive] AUTO-ENDING TRIP at final stop");
+                      // 1. Mark trip as completed in Firestore
                       await tripRef.update({
                         'status': 'COMPLETED',
                         'endTime': nowTime.toIso8601String(),
+                        'isActive': false,
+                        'endedAt': FieldValue.serverTimestamp(),
                       });
+                      // 2. Mark bus as IDLE
                       await busRef.update({
-                        'status': 'ACTIVE',
+                        'status': 'IDLE',
                         'activeTripId': FieldValue.delete(),
+                        'currentTripId': FieldValue.delete(),
                         'trackingMode': FieldValue.delete(),
                         'nextStopId': FieldValue.delete(),
+                        'currentStatus': 'MOVING',
+                        'speedMph': 0,
                       });
+                      // 3. Trigger history upload from this background isolate
+                      // ignore: unawaited_futures
+                      DriverLocationService.uploadBufferedHistory(activeTripId);
                     }
 
                     // Write arrival event for push notification trigger
