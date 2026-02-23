@@ -1,4 +1,4 @@
-const { db, initializationError } = require('../config/firebase');
+const { db, admin, auth, initializationError } = require('../config/firebase');
 const bcrypt = require('bcryptjs');
 
 // --- BUSES ---
@@ -295,34 +295,41 @@ const createBulkUsers = async (req, res) => {
                 continue;
             }
 
-            // Check DB for existing email (Sequential check is slow but safer for now, or fetch all emails first?)
-            // For small batches (<100), sequential find is okay-ish. For larger, we should fetch all user emails for college.
-            const existingUser = await db.collection('users').where('email', '==', user.email).limit(1).get();
-            if (!existingUser.empty) {
-                results.errors.push({ user, error: 'Email already exists' });
-                continue;
+            try {
+                // 1. Create in Firebase Auth first (for login compatibility)
+                const authUser = await admin.auth().createUser({
+                    email: user.email,
+                    password: user.phone.toString(),
+                    displayName: user.name
+                }).catch(async (err) => {
+                    if (err.code === 'auth/email-already-exists') {
+                        return await admin.auth().getUserByEmail(user.email);
+                    }
+                    throw err;
+                });
+
+                const userId = authUser.uid;
+                const salt = await bcrypt.genSalt(10);
+                const passwordHash = await bcrypt.hash(user.phone.toString(), salt);
+
+                const newUser = {
+                    userId,
+                    collegeId: req.collegeId,
+                    name: user.name,
+                    email: user.email,
+                    phone: user.phone,
+                    passwordHash,
+                    role,
+                    status: 'ACTIVE',
+                    createdAt: new Date().toISOString()
+                };
+
+                batch.set(db.collection('users').doc(userId), newUser);
+                results.success.push({ name: user.name, email: user.email });
+                results.createdCount++;
+            } catch (err) {
+                results.errors.push({ user, error: err.message });
             }
-
-            const userId = role.toLowerCase() + '-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-            const salt = await bcrypt.genSalt(10);
-            // Password is the phone number
-            const passwordHash = await bcrypt.hash(user.phone.toString(), salt);
-
-            const newUser = {
-                userId,
-                collegeId: req.collegeId,
-                name: user.name,
-                email: user.email,
-                phone: user.phone,
-                passwordHash,
-                role,
-                status: 'ACTIVE',
-                createdAt: new Date().toISOString()
-            };
-
-            batch.set(db.collection('users').doc(userId), newUser);
-            results.success.push({ name: user.name, email: user.email });
-            results.createdCount++;
         }
 
         if (results.createdCount > 0) {
@@ -348,13 +355,19 @@ const createUser = async (req, res) => {
     }
 
     try {
-        // Check if user exists
-        const existingUser = await db.collection('users').where('email', '==', email).limit(1).get();
-        if (!existingUser.empty) {
-            return res.status(400).json({ message: 'User with this email already exists' });
-        }
+        // 1. Create in Firebase Auth (ensures login works on mobile)
+        const authUser = await admin.auth().createUser({
+            email,
+            password,
+            displayName: name
+        }).catch(async (err) => {
+            if (err.code === 'auth/email-already-exists') {
+                return await admin.auth().getUserByEmail(email);
+            }
+            throw err;
+        });
 
-        const userId = role.toLowerCase() + '-' + Date.now();
+        const userId = authUser.uid;
         const salt = await bcrypt.genSalt(10);
         const passwordHash = await bcrypt.hash(password, salt);
 
@@ -370,12 +383,16 @@ const createUser = async (req, res) => {
             createdAt: new Date().toISOString()
         };
 
+        // Save to Firestore with the SAME UID as Auth
         await db.collection('users').doc(userId).set(newUser);
+
+        console.log(`[Admin] Created/Synced ${role}: ${email} with UID: ${userId}`);
 
         // Return without password
         const { passwordHash: _, ...userResponse } = newUser;
         res.status(201).json({ _id: userId, ...userResponse });
     } catch (error) {
+        console.error(`[Admin] Error creating ${role}:`, error);
         res.status(500).json({ message: error.message });
     }
 };
@@ -458,7 +475,10 @@ const assignDriver = async (req, res) => {
     const { busId, userId, routeId } = req.body;
 
     try {
+        const batch = db.batch();
         const assignmentId = 'assign-' + Date.now();
+
+        // 1. Create Assignment Doc
         const assignment = {
             assignmentId,
             collegeId: req.collegeId,
@@ -468,10 +488,26 @@ const assignDriver = async (req, res) => {
             role: 'DRIVER',
             createdAt: new Date().toISOString()
         };
+        batch.set(db.collection('assignments').doc(assignmentId), assignment);
 
-        await db.collection('assignments').doc(assignmentId).set(assignment);
+        // 2. Update Bus Document (cross-link)
+        batch.update(db.collection('buses').doc(busId), {
+            assignedDriverId: userId,
+            assignedRouteId: routeId || null,
+            status: 'ACTIVE'
+        });
+
+        // 3. Update User/Driver Document (cross-link)
+        batch.update(db.collection('users').doc(userId), {
+            busId: busId,
+            routeId: routeId || null
+        });
+
+        await batch.commit();
+        console.log(`[Admin] Assigned driver ${userId} to bus ${busId}`);
         res.status(201).json({ _id: assignmentId, ...assignment });
     } catch (error) {
+        console.error('[Admin] Assignment Error:', error);
         res.status(500).json({ message: error.message });
     }
 };

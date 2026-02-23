@@ -53,15 +53,19 @@ class FirestoreDataSource {
         'location': {
           'latitude': lastPoint.latitude,
           'longitude': lastPoint.longitude,
-          'heading': lastPoint.heading ?? 0,
+          'heading': lastPoint.heading ?? 0.0,
         },
         'currentLocation': {
-          'lat': lastPoint.latitude,
-          'lng': lastPoint.longitude,
+          'latitude': lastPoint.latitude, // Standardized key
+          'longitude': lastPoint.longitude, // Standardized key
+          'lat': lastPoint.latitude, // Fallback key
+          'lng': lastPoint.longitude, // Fallback key
+          'heading': lastPoint.heading ?? 0.0,
         },
+        'speedMph': speedMph,
         'speed': speedMph,
         'currentSpeed': speedMph,
-        'heading': lastPoint.heading ?? 0,
+        'heading': lastPoint.heading ?? 0.0,
         'currentHeading': lastPoint.heading ?? 0.0,
         'liveTrackBuffer': trimmedBuffer,
         'status': 'ON_ROUTE',
@@ -181,16 +185,21 @@ class FirestoreDataSource {
       'location': {
         'latitude': lastPoint.latitude,
         'longitude': lastPoint.longitude,
+        'heading': lastPoint.heading ?? 0.0,
       },
       'currentLocation': {
+        'latitude': lastPoint.latitude,
+        'longitude': lastPoint.longitude,
         'lat': lastPoint.latitude,
         'lng': lastPoint.longitude,
+        'heading': lastPoint.heading ?? 0.0,
       },
       'lastLocationUpdate': FieldValue.serverTimestamp(),
       'currentRoadName': roadName,
       'currentStreetName': roadName,
       'currentSpeed': speed,
       'speed': speed,
+      'speedMph': speed,
       'heading': lastPoint.heading ?? 0.0,
       'currentHeading': lastPoint.heading ?? 0.0,
       'lastUpdated': DateTime.now().toIso8601String(),

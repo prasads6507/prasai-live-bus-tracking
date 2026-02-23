@@ -24,25 +24,28 @@ interface MapLibreMapProps {
 export const getBusLatLng = (bus: any): [number, number] | null => {
     if (!bus) return null;
 
+    // Support location, currentLocation, current_location, or top-level lat/lng
     const src =
         bus.location ||
         bus.currentLocation ||
         bus.current_location ||
-        null;
+        bus;
 
     const lat =
         src?.latitude ??
         src?.lat ??
         bus.latitude ??
+        bus.lat ??
         null;
 
     const lng =
         src?.longitude ??
         src?.lng ??
         bus.longitude ??
+        bus.lng ??
         null;
 
-    if (lat === null || lng === null) return null;
+    if (lat === null || lng === null || isNaN(Number(lat)) || isNaN(Number(lng))) return null;
 
     return [Number(lng), Number(lat)];
 };
