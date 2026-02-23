@@ -177,15 +177,24 @@ const Dashboard = () => {
                             if (data.type === 'bus_location_update') {
                                 const lat = data.lat ?? data.latitude;
                                 const lng = data.lng ?? data.longitude;
-                                const speedMph = Math.max(0, data.speedMph ?? data.speed ?? 0);
+
+                                // Robust speed parsing
+                                let rawSpeed = data.speedMph ?? data.speed_mph ?? data.speedMPH ?? data.speed ?? 0;
+                                if (data.speedMps !== undefined) {
+                                    rawSpeed = data.speedMps * 2.236936;
+                                }
+                                const speedMph = Math.max(0, rawSpeed);
+
                                 const heading = data.heading ?? 0;
 
                                 // Update this bus's location in state — does NOT trigger relay effect re-run
                                 setBuses(prev => prev.map(b => {
                                     if (b._id === stableBusId) {
+                                        const newLoc = { latitude: lat, longitude: lng, heading };
                                         return {
                                             ...b,
-                                            location: { latitude: lat, longitude: lng, heading },
+                                            location: newLoc,
+                                            currentLocation: newLoc,
                                             speed: speedMph,
                                             lastUpdated: new Date().toISOString()
                                         };

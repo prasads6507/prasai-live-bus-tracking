@@ -21,13 +21,17 @@ interface MapLibreMapProps {
     routePreviewPath?: [number, number][]; // [lng, lat] pairs for the preview polyline
 }
 
-// 1. Universal Coordinate Normalizer (Fix 2 & Mismatch Fix)
 export const getBusLatLng = (bus: any): [number, number] | null => {
-    if (!bus || !bus.location) return null;
+    if (!bus) return null;
 
     // Check all possible field structures
-    const lat = bus.location.latitude ?? bus.location.lat ?? bus.latitude;
-    const lng = bus.location.longitude ?? bus.location.lng ?? bus.longitude;
+    const lat = bus.location?.latitude ?? bus.location?.lat ??
+        bus.currentLocation?.latitude ?? bus.currentLocation?.lat ??
+        bus.current_location?.lat ?? bus.latitude;
+
+    const lng = bus.location?.longitude ?? bus.location?.lng ??
+        bus.currentLocation?.longitude ?? bus.currentLocation?.lng ??
+        bus.current_location?.lng ?? bus.longitude;
 
     if (lat === undefined || lng === undefined) return null;
 

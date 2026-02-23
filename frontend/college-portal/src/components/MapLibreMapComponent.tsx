@@ -11,10 +11,20 @@ interface MapLibreMapComponentProps {
 }
 
 export const getBusLatLng = (bus: any): [number, number] | null => {
-    if (!bus || !bus.location) return null;
-    const lat = bus.location.latitude ?? bus.location.lat ?? bus.latitude;
-    const lng = bus.location.longitude ?? bus.location.lng ?? bus.longitude;
+    if (!bus) return null;
+
+    // Check all possible field structures
+    const lat = bus.location?.latitude ?? bus.location?.lat ??
+        bus.currentLocation?.latitude ?? bus.currentLocation?.lat ??
+        bus.current_location?.lat ?? bus.latitude;
+
+    const lng = bus.location?.longitude ?? bus.location?.lng ??
+        bus.currentLocation?.longitude ?? bus.currentLocation?.lng ??
+        bus.current_location?.lng ?? bus.longitude;
+
     if (lat === undefined || lng === undefined) return null;
+
+    // Always return MapLibre standard [lng, lat]
     return [lng, lat]; // Lng, Lat for MapLibre
 };
 

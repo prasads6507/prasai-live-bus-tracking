@@ -368,6 +368,7 @@ const DriverDashboard = () => {
     };
 
     // 3. Stop Tracking
+    // 3. Stop Tracking (Optimized for instant UI update)
     const endTrip = async () => {
         // 1. Stop Geolocation Immediately
         if (watchIdRef.current !== null) {
@@ -381,78 +382,85 @@ const DriverDashboard = () => {
         // 3. Clear Persistence IMMEDIATELY (Critical to prevent auto-resume on reload)
         localStorage.removeItem('driver_active_trip');
 
-        // 4. Upload buffered trip history in a single write
-        if (tripId && historyBufferRef.current.length > 0) {
-            try {
-                const points = historyBufferRef.current;
-                let totalDistanceM = 0;
-                let maxSpeedMph = 0;
-                let sumSpeedMph = 0;
+        // 4. Capture current state variables before clearing them
+        const endingTripId = tripId;
+        const endingBusId = selectedBusId;
+        const finalHistoryBuffer = [...historyBufferRef.current];
 
-                for (let i = 0; i < points.length; i++) {
-                    maxSpeedMph = Math.max(maxSpeedMph, points[i].speed);
-                    sumSpeedMph += points[i].speed;
-                    if (i > 0) {
-                        totalDistanceM += getDistanceFromLatLonInKm(
-                            points[i - 1].lat, points[i - 1].lng,
-                            points[i].lat, points[i].lng
-                        ) * 1000;
-                    }
-                }
-
-                const firstTs = new Date(points[0].timestamp).getTime();
-                const lastTs = new Date(points[points.length - 1].timestamp).getTime();
-                const durationSec = Math.round((lastTs - firstTs) / 1000);
-
-                console.log(`[History] Uploading ${points.length} buffered points for trip ${tripId}`);
-
-                const coords: [number, number][] = points.map((p: any) => [p.lat, p.lng]);
-                const polylineStr = encodePolyline(coords);
-
-                await uploadTripHistory(tripId, {
-                    distanceMeters: Math.round(totalDistanceM),
-                    durationSeconds: durationSec,
-                    maxSpeedMph: Math.round(maxSpeedMph),
-                    avgSpeedMph: Math.round(sumSpeedMph / points.length),
-                    pointsCount: points.length,
-                    polyline: polylineStr,
-                });
-                console.log('[History] Upload complete');
-            } catch (err) {
-                console.error('[History] Failed to upload trip history:', err);
-                // Save to localStorage as fallback
-                try {
-                    localStorage.setItem(`trip_history_${tripId}`, JSON.stringify(historyBufferRef.current));
-                    console.log('[History] Saved to localStorage as fallback');
-                } catch (_) { }
-            }
-        }
-
-        // 5. Reset Local State
+        // 5. Reset Local State IMMEDIATELY to update UI instantly
         setIsTracking(false);
         setCurrentSpeed(0);
-        const endingTripId = tripId;
         setTripId(null);
-        lastHistorySaveRef.current = 0;
-        currentPositionRef.current = null;
-        prevPositionRef.current = null; // Reset dead-reckoning state
-        liveTrailBufferRef.current = [];
-        historyBufferRef.current = [];
-
-        // 6. End trip on backend (Atomic Transaction)
-        if (endingTripId && selectedBusId) {
-            try {
-                await api.post(`/driver/trips/${endingTripId}/end`, { busId: selectedBusId });
-                console.log('Trip ended atomically via API:', endingTripId);
-            } catch (err) {
-                console.error('Failed to end trip on backend', err);
-            }
-        }
-
-        // Reset Selection to "Redirect" to Dashboard Home
         setSelectedBusId('');
         setManualBusNumber('');
         setManualEntryMode(false);
+        lastHistorySaveRef.current = 0;
+        currentPositionRef.current = null;
+        prevPositionRef.current = null;
+        liveTrailBufferRef.current = [];
+        historyBufferRef.current = [];
+
+        // 6. End trip on backend asynchronously so it doesn't block UI
+        if (endingTripId && endingBusId) {
+            api.post(`/driver/trips/${endingTripId}/end`, { busId: endingBusId })
+                .then(() => console.log('Trip ended atomically via API:', endingTripId))
+                .catch(err => console.error('Failed to end trip on backend', err));
+        }
+
+        // 7. Upload buffered trip history asynchronously
+        if (endingTripId && finalHistoryBuffer.length > 0) {
+            (async () => {
+                try {
+                    const points = finalHistoryBuffer;
+                    let totalDistanceM = 0;
+                    let maxSpeedMph = 0;
+                    let sumSpeedMph = 0;
+
+                    for (let i = 0; i < points.length; i++) {
+                        maxSpeedMph = Math.max(maxSpeedMph, points[i].speed);
+                        sumSpeedMph += points[i].speed;
+                        if (i > 0) {
+                            totalDistanceM += getDistanceFromLatLonInKm(
+                                points[i - 1].lat, points[i - 1].lng,
+                                points[i].lat, points[i].lng
+                            ) * 1000;
+                        }
+                    }
+
+                    const firstTs = new Date(points[0].timestamp).getTime();
+                    const lastTs = new Date(points[points.length - 1].timestamp).getTime();
+                    const durationSec = Math.round((lastTs - firstTs) / 1000);
+
+                    console.log(`[History] Uploading ${points.length} buffered points for trip ${endingTripId}`);
+
+                    const coords: [number, number][] = points.map((p: any) => [p.lat, p.lng]);
+                    const polylineStr = encodePolyline(coords);
+
+                    await uploadTripHistory(endingTripId, {
+                        distanceMeters: Math.round(totalDistanceM),
+                        durationSeconds: durationSec,
+                        maxSpeedMph: Math.round(maxSpeedMph),
+                        avgSpeedMph: Math.round(sumSpeedMph / points.length),
+                        pointsCount: points.length,
+                        polyline: polylineStr,
+                        path: points.map(p => ({
+                            lat: p.lat,
+                            lng: p.lng,
+                            speed: p.speed,
+                            heading: p.heading,
+                            timestamp: p.timestamp
+                        }))
+                    });
+                    console.log('[History] Upload complete');
+                } catch (err) {
+                    console.error('[History] Failed to upload trip history:', err);
+                    try {
+                        localStorage.setItem(`trip_history_${endingTripId}`, JSON.stringify(finalHistoryBuffer));
+                        console.log('[History] Saved to localStorage as fallback');
+                    } catch (_) { }
+                }
+            })();
+        }
     };
 
     const updateBusStatus = async (status: string, busId?: string) => {

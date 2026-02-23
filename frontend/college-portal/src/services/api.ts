@@ -373,6 +373,7 @@ export const uploadTripHistory = async (tripId: string, data: {
     maxSpeedMph: number;
     avgSpeedMph: number;
     pointsCount: number;
+    path?: { lat: number, lng: number, speed?: number, heading?: number, timestamp?: string }[];
 }) => {
     const response = await api.post(`/driver/trips/${tripId}/history-upload`, data);
     return response.data;
