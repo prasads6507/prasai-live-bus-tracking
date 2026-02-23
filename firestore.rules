@@ -1,0 +1,91 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── Helper functions ────────────────────────────────────────────
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isAuthenticated() && request.auth.uid == uid;
+    }
+
+    // ─── Colleges ────────────────────────────────────────────────────
+    // Any authenticated user can read colleges (needed for login/slug lookup)
+    match /colleges/{collegeId} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Admin SDK only
+    }
+
+    // ─── Users (admins, drivers) ─────────────────────────────────────
+    match /users/{uid} {
+      // Users can read their own doc; admins/drivers need this for login
+      allow read: if isAuthenticated();
+      // Users can update their own doc (e.g., fcmToken, favoriteBusIds)
+      allow update: if isOwner(uid);
+      // Create/delete via Admin SDK only
+      allow create, delete: if false;
+    }
+
+    // ─── Students ────────────────────────────────────────────────────
+    match /students/{studentId} {
+      // Any authenticated user can read student docs
+      // (students read their own; admins read for management)
+      allow read: if isAuthenticated();
+      // Students can update their own doc (favoriteBusIds, fcmToken, lastLocation)
+      allow update: if isOwner(studentId);
+      // Create/delete via Admin SDK only (admin portal manages students)
+      allow create, delete: if false;
+    }
+
+    // ─── Buses ───────────────────────────────────────────────────────
+    match /buses/{busId} {
+      // Any authenticated user can read buses (students track, admins manage)
+      allow read: if isAuthenticated();
+      // Drivers update bus location/status; allow any authenticated write
+      // (server-side validation handles authorization)
+      allow write: if isAuthenticated();
+    }
+
+    // ─── Routes ──────────────────────────────────────────────────────
+    match /routes/{routeId} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Admin SDK only
+    }
+
+    // ─── Stops ───────────────────────────────────────────────────────
+    match /stops/{stopId} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Admin SDK only
+    }
+
+    // ─── Trips ───────────────────────────────────────────────────────
+    match /trips/{tripId} {
+      // Students need to read active trips for tracking
+      allow read: if isAuthenticated();
+      // Drivers start/end trips from mobile app
+      allow write: if isAuthenticated();
+
+      // Trip path subcollection
+      match /path/{pointId} {
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated();
+      }
+    }
+
+    // ─── Notifications ───────────────────────────────────────────────
+    match /notifications/{notificationId} {
+      // Admins read notifications on dashboard
+      allow read: if isAuthenticated();
+      // Server creates notifications via Admin SDK; no client writes
+      allow write: if false;
+    }
+
+    // ─── Catch-all: deny everything else ─────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
