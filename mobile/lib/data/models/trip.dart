@@ -19,6 +19,13 @@ class Trip {
     this.endedAt,
   });
 
+  static DateTime _parseDate(dynamic value, [DateTime? fallback]) {
+    if (value == null) return fallback ?? DateTime.now();
+    if (value is Timestamp) return value.toDate();
+    if (value is String) return DateTime.tryParse(value) ?? (fallback ?? DateTime.now());
+    return fallback ?? DateTime.now();
+  }
+
   factory Trip.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     return Trip(
@@ -26,9 +33,9 @@ class Trip {
       busId: data['busId'] ?? '',
       driverId: data['driverId'] ?? '',
       routeId: data['routeId'] ?? '',
-      status: data['status'] ?? 'active',
-      startedAt: (data['startedAt'] as Timestamp).toDate(),
-      endedAt: (data['endedAt'] as Timestamp?)?.toDate(),
+      status: data['status'] ?? 'ACTIVE',
+      startedAt: _parseDate(data['startedAt'] ?? data['startTime']),
+      endedAt: data['endedAt'] != null || data['endTime'] != null ? _parseDate(data['endedAt'] ?? data['endTime']) : null,
     );
   }
 }

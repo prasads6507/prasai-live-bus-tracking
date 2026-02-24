@@ -597,6 +597,7 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
   StreamSubscription<Map<String, dynamic>?>? _locationUpdateSubscription;
   Timer? _pathHistoryTimer;
   bool _isLoading = false;
+  bool _isTrackingStarting = false;  // Guard: prevents concurrent _startTracking calls
   double _currentSpeed = 0.0;
   String _statusText = "READY";
   String _currentRoad = "Identifying...";
@@ -644,62 +645,177 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
   }
 
   Future<void> _startTracking(String tripId) async {
-    // Ensure permission before starting background service
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
+    // ─── GUARD: Prevent concurrent or redundant starts ──────────────────────
+    if (_isTrackingStarting || _locationUpdateSubscription != null) {
+      debugPrint("[DriverContent] _startTracking SKIPPED (already starting or active)");
+      return;
     }
-    
-    if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+    _isTrackingStarting = true;
+
+   try {
+    // ─── STEP 1: Notification permission FIRST (Android 13+) ────────────────
+    // Android 13+ requires POST_NOTIFICATIONS before starting a foreground
+    // service that shows a notification. Doing this AFTER service.start() 
+    // causes a SecurityException / ForegroundServiceStartNotAllowedException.
+    if (Platform.isAndroid) {
+      try {
+        final notifStatus = await Permission.notification.status;
+        if (notifStatus.isDenied) {
+          final result = await Permission.notification.request();
+          if (result.isPermanentlyDenied) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text("Notification permission denied. Tracking will work but no persistent notification."),
+                  duration: Duration(seconds: 4),
+                ),
+              );
+            }
+            // Continue anyway – tracking will work without persistent notification
+          }
+        }
+      } catch (e) {
+        debugPrint("[DriverContent] Notification permission error (non-fatal): $e");
+      }
+    }
+
+    if (!mounted) return;
+
+    // ─── STEP 2: Fine/Coarse location WHILE-IN-USE ───────────────────────────
+    // Android requires you to get while-in-use permission FIRST before
+    // requesting background location – this sequence is mandatory.
+    try {
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied || 
+          permission == LocationPermission.deniedForever) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Location permission is required to track trips")),
+          );
+        }
+        return;
+      }
+    } catch (e) {
+      debugPrint("[DriverContent] Location permission error: $e");
       if (mounted) {
-         ScaffoldMessenger.of(context).showSnackBar(
-           const SnackBar(content: Text("Location permission is required to track trips")),
-         );
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Location permission error: $e")),
+        );
       }
       return;
     }
 
-    // Ensure Notification Permission (Android 13+)
+    if (!mounted) return;
+
+    // ─── STEP 3: Background location (only after fine/coarse granted) ─────────
     if (Platform.isAndroid) {
-      if (await Permission.notification.isDenied) {
-        await Permission.notification.request();
+      try {
+        final bgStatus = await Permission.locationAlways.status;
+        if (bgStatus.isDenied) {
+          // This is shown as a separate system dialog on Android
+          await Permission.locationAlways.request();
+        }
+      } catch (e) {
+        debugPrint("[DriverContent] Background location permission error (non-fatal): $e");
       }
     }
 
-    try {
-      if (await Permission.ignoreBatteryOptimizations.isDenied) {
-        await Permission.ignoreBatteryOptimizations.request();
-      }
-    } catch (_) {}
+    if (!mounted) return;
 
-    // Initialize BackgroundTrackingService
-    await BackgroundTrackingService.start();
-    
-    _locationUpdateSubscription?.cancel();
-    final service = FlutterBackgroundService();
-    _locationUpdateSubscription = service.on('update').listen((data) {
-        if (data != null && mounted) {
-            setState(() {
-                _currentSpeed = (data['speed'] ?? 0.0) * 2.23694;
-                _lastUpdate = TimeOfDay.now().format(context);
-                _lastRecordedPoint = LocationPoint(
-                    latitude: data['lat'],
-                    longitude: data['lng'],
-                    timestamp: DateTime.now(),
-                    speed: data['speed'],
-                    heading: data['heading'],
-                );
-            });
-            _updateRoadName(data['lat'], data['lng']);
+    // ─── STEP 4: Battery optimization (optional, non-blocking) ───────────────
+    try {
+      if (Platform.isAndroid) {
+        final battStatus = await Permission.ignoreBatteryOptimizations.status;
+        if (battStatus.isDenied) {
+          await Permission.ignoreBatteryOptimizations.request();
         }
-    }) as StreamSubscription<Map<String, dynamic>?>?;
-  }
+      }
+    } catch (e) {
+      debugPrint("[DriverContent] Battery optimization error (non-fatal): $e");
+    }
+
+    if (!mounted) return;
+
+    // ─── STEP 5: Save tracking context keys BEFORE starting background service ─
+    // The background isolate starts and immediately reads these keys.
+    // If they're missing, it calls stopSelf() causing the app to "crash".
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('track_college_id', widget.collegeId);
+      await prefs.setString('track_bus_id', widget.busId);
+      await prefs.setString('track_trip_id', tripId);
+      debugPrint("[DriverContent] Tracking keys saved: college=${widget.collegeId}, bus=${widget.busId}, trip=$tripId");
+    } catch (e) {
+      debugPrint("[DriverContent] Failed to save tracking keys (CRITICAL): $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Failed to initialize tracking storage: $e")),
+        );
+      }
+      return;
+    }
+
+    if (!mounted) return;
+
+    // ─── STEP 6: Start the background foreground service ─────────────────────
+    try {
+      await BackgroundTrackingService.start();
+      debugPrint("[DriverContent] Background service started successfully");
+    } catch (e) {
+      debugPrint("[DriverContent] Failed to start background service: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Could not start background tracking: $e")),
+        );
+      }
+      return;
+    }
+
+    if (!mounted) return;
+
+    // ─── STEP 7: Subscribe to location updates from background isolate ────────
+    try {
+      _locationUpdateSubscription?.cancel();
+      final service = FlutterBackgroundService();
+      _locationUpdateSubscription = service.on('update').listen((data) {
+        if (data != null && mounted) {
+          try {
+            setState(() {
+              _currentSpeed = ((data['speed'] as num? ?? 0.0) * 2.23694).toDouble();
+              _lastUpdate = TimeOfDay.now().format(context);
+              _lastRecordedPoint = LocationPoint(
+                latitude:  (data['lat'] as num).toDouble(),
+                longitude: (data['lng'] as num).toDouble(),
+                timestamp: DateTime.now(),
+                speed:   (data['speed'] as num?)?.toDouble(),
+                heading: (data['heading'] as num?)?.toDouble(),
+              );
+            });
+            _updateRoadName((data['lat'] as num).toDouble(), (data['lng'] as num).toDouble());
+          } catch (e) {
+            debugPrint("[DriverContent] State update error (non-fatal): $e");
+          }
+        }
+      });
+    } catch (e) {
+      debugPrint("[DriverContent] Failed to subscribe to service updates: $e");
+    }
+   } catch (e) {
+    debugPrint("[DriverContent] _startTracking unexpected error: $e");
+   } finally {
+    _isTrackingStarting = false;
+   }
+  } // end _startTracking
 
   void _stopTracking() {
     BackgroundTrackingService.stop();
     
     _locationUpdateSubscription?.cancel();
     _locationUpdateSubscription = null;
+    _isTrackingStarting = false;  // Reset guard so future starts are allowed
     if (mounted) {
       setState(() {
         _currentSpeed = 0.0;
@@ -723,9 +839,11 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
 
         final routeName = _currentRoute?.routeName ?? "Loading Route...";
 
-        // Auto-resume logic
-        if (isTripActive && _locationUpdateSubscription == null && !_isLoading) {
-          WidgetsBinding.instance.addPostFrameCallback((_) => _startTracking(bus.activeTripId!));
+        // Auto-resume logic - only if bus truly has an active trip
+        final resumeTripId = bus.activeTripId;
+        if (isTripActive && resumeTripId != null && resumeTripId.isNotEmpty &&
+            _locationUpdateSubscription == null && !_isLoading && !_isTrackingStarting) {
+          WidgetsBinding.instance.addPostFrameCallback((_) => _startTracking(resumeTripId));
         }
 
         // Auto-stop logic if ended externally

@@ -18,34 +18,56 @@ const int _FAR_UPDATE_SEC = 20;               // Write interval in FAR mode
 const int _NEAR_UPDATE_SEC = 5;               // Write interval in NEAR_STOP mode
 
 class BackgroundTrackingService {
-  static Future<void> initialize() async {
-    final service = FlutterBackgroundService();
+  static bool _isRunning = false;  // Static guard: prevents double-start at service level
 
-    await service.configure(
-      androidConfiguration: AndroidConfiguration(
-        onStart: onStart,
-        autoStart: false,
-        isForegroundMode: true,
-        notificationChannelId: 'bus_tracking',
-        initialNotificationTitle: 'Tracking Active',
-        initialNotificationContent: 'Ready to track trip',
-      ),
-      iosConfiguration: IosConfiguration(
-        autoStart: false,
-        onForeground: onStart,
-        onBackground: onIosBackground,
-      ),
-    );
+  static Future<void> initialize() async {
+    try {
+      final service = FlutterBackgroundService();
+
+      await service.configure(
+        androidConfiguration: AndroidConfiguration(
+          onStart: onStart,
+          autoStart: false,
+          isForegroundMode: true,
+          notificationChannelId: 'bus_tracking',
+          initialNotificationTitle: 'Tracking Active',
+          initialNotificationContent: 'Ready to track trip',
+        ),
+        iosConfiguration: IosConfiguration(
+          autoStart: false,
+          onForeground: onStart,
+          onBackground: onIosBackground,
+        ),
+      );
+    } catch (e) {
+      debugPrint("[BackgroundTrackingService] initialize() failed (non-fatal): $e");
+    }
   }
 
   static Future<void> start() async {
-    final service = FlutterBackgroundService();
-    await service.startService();
+    if (_isRunning) {
+      debugPrint("[BackgroundTrackingService] start() SKIPPED - already running");
+      return;
+    }
+    _isRunning = true;
+    try {
+      final service = FlutterBackgroundService();
+      await service.startService();
+    } catch (e) {
+      _isRunning = false;
+      debugPrint("[BackgroundTrackingService] start() FAILED: $e");
+      rethrow;
+    }
   }
 
   static Future<void> stop() async {
-    final service = FlutterBackgroundService();
-    service.invoke("stopService");
+    _isRunning = false;
+    try {
+      final service = FlutterBackgroundService();
+      service.invoke("stopService");
+    } catch (e) {
+      debugPrint("[BackgroundTrackingService] stop() error (non-fatal): $e");
+    }
   }
 
   @pragma('vm:entry-point')
@@ -56,116 +78,134 @@ class BackgroundTrackingService {
 
   @pragma('vm:entry-point')
   static void onStart(ServiceInstance service) async {
-    DartPluginRegistrant.ensureInitialized();
-    
-    // 1. Initialize Firebase and SharedPreferences
-    if (Firebase.apps.isEmpty) {
-      await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-    }
-    final prefs = await SharedPreferences.getInstance();
-    
-    // 2. Setup service commands
-    service.on('stopService').listen((event) {
-      service.stopSelf();
-    });
-
-    // 3. Load tracking context
-    final collegeId = prefs.getString('track_college_id');
-    final busId = prefs.getString('track_bus_id');
-    final tripId = prefs.getString('track_trip_id');
-
-    if (collegeId == null || busId == null || tripId == null) {
-      debugPrint("[Background] Context missing, stopping service.");
-      service.stopSelf();
-      return;
-    }
-
-    debugPrint("[Background] Tracking STARTED for Bus $busId, Trip $tripId");
-
-    // 4. Update Notification
-    if (service is AndroidServiceInstance) {
-      service.setForegroundNotificationInfo(
-        title: "Tracking Active",
-        content: "Bus ID: $busId is on route",
-      );
-    }
-
-    // 5. Adaptive State
-    int lastWriteMs = 0;
-    String currentMode = "FAR";
-    String currentStatus = "ON_ROUTE";
-
-    // 6. Start Location Stream
-    final positionStream = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 10,
-      ),
-    );
-
-    StreamSubscription<Position>? subscription;
-    subscription = positionStream.listen((Position position) async {
-      final now = DateTime.now();
+    // Top-level try/catch: ANY crash in background isolate kills the app process.
+    // This ensures we stop gracefully instead of crashing.
+    try {
+      DartPluginRegistrant.ensureInitialized();
       
-      // A. Buffer GPS point locally
-      await _bufferPoint(prefs, position);
-
-      // B. Load cached next stop
-      final nextStopLat = prefs.getDouble('next_stop_lat');
-      final nextStopLng = prefs.getDouble('next_stop_lng');
-      final nextStopId = prefs.getString('next_stop_id') ?? '';
-      final nextStopRadius = prefs.getDouble('next_stop_radius') ?? 100.0;
-
-      double distToNextStop = double.infinity;
-      if (nextStopLat != null && nextStopLng != null) {
-        distToNextStop = Geolocator.distanceBetween(
-          position.latitude, position.longitude, nextStopLat, nextStopLng
-        );
+      // 1. Initialize Firebase and SharedPreferences
+      if (Firebase.apps.isEmpty) {
+        await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
       }
-
-      // C. Compute Adaptive mode
-      final newState = _computeAdaptiveState(distToNextStop, currentStatus, nextStopRadius);
-      final newMode = newState['mode']!;
-      final newStatus = newState['status']!;
-
-      // D. Determine if we should write to Firestore
-      final elapsedMs = now.millisecondsSinceEpoch - lastWriteMs;
-      final intervalSec = newMode == 'NEAR_STOP' ? _NEAR_UPDATE_SEC : _FAR_UPDATE_SEC;
+      final prefs = await SharedPreferences.getInstance();
       
-      final statusChanged = newStatus != currentStatus;
-      final modeChanged = newMode != currentMode;
-      final intervalElapsed = elapsedMs >= (intervalSec * 1000);
-
-      if (statusChanged || modeChanged || intervalElapsed) {
-        await _writeToFirestore(prefs, busId!, tripId!, position, newMode, newStatus, nextStopId);
-        lastWriteMs = now.millisecondsSinceEpoch;
-        currentMode = newMode;
-        currentStatus = newStatus;
-        
-        // E. Geofence / Stop Arrival logic
-        if (distToNextStop <= nextStopRadius && statusChanged && newStatus == 'ARRIVED') {
-           await _handleArrival(prefs, collegeId!, busId!, tripId!, nextStopId, position);
-        }
-      }
-      
-      // F. Send to Main Isolate for UI feedback (if running)
-      service.invoke('update', {
-        "lat": position.latitude,
-        "lng": position.longitude,
-        "speed": position.speed,
-        "heading": position.heading,
-        "status": newStatus,
-        "mode": newMode,
+      // 2. Setup service commands
+      StreamSubscription<Position>? posSubscription;
+      service.on('stopService').listen((event) {
+        posSubscription?.cancel();
+        service.stopSelf();
       });
 
-    }, onError: (e) {
-      debugPrint("[Background] Stream error: $e");
-    });
-    
-    // Ensure subscription is cancelled on stop
-    service.on('stopService').listen((event) {
-      subscription?.cancel();
-    });
+      // 3. Load tracking context
+      final collegeId = prefs.getString('track_college_id');
+      final busId = prefs.getString('track_bus_id');
+      final tripId = prefs.getString('track_trip_id');
+
+      if (collegeId == null || busId == null || tripId == null) {
+        debugPrint("[Background] Context missing, stopping service.");
+        service.stopSelf();
+        return;
+      }
+
+      debugPrint("[Background] Tracking STARTED for Bus $busId, Trip $tripId");
+
+      // 4. Update Notification (wrapped in try/catch for channel creation issues)
+      try {
+        if (service is AndroidServiceInstance) {
+          service.setForegroundNotificationInfo(
+            title: "Tracking Active",
+            content: "Bus $busId is on route",
+          );
+        }
+      } catch (e) {
+        debugPrint("[Background] Notification update failed (non-fatal): $e");
+      }
+
+      // 5. Adaptive State
+      int lastWriteMs = 0;
+      String currentMode = "FAR";
+      String currentStatus = "ON_ROUTE";
+
+      // 6. Start Location Stream (wrapped in try/catch for permission edge cases)
+      late final Stream<Position> positionStream;
+      try {
+        positionStream = Geolocator.getPositionStream(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+            distanceFilter: 10,
+          ),
+        );
+      } catch (e) {
+        debugPrint("[Background] Failed to start position stream: $e");
+        service.stopSelf();
+        return;
+      }
+
+      posSubscription = positionStream.listen((Position position) async {
+        // Wrap entire callback in try/catch — crash here kills app process
+        try {
+          final now = DateTime.now();
+          
+          // A. Buffer GPS point locally
+          await _bufferPoint(prefs, position);
+
+          // B. Load cached next stop
+          final nextStopLat = prefs.getDouble('next_stop_lat');
+          final nextStopLng = prefs.getDouble('next_stop_lng');
+          final nextStopId = prefs.getString('next_stop_id') ?? '';
+          final nextStopRadius = prefs.getDouble('next_stop_radius') ?? 100.0;
+
+          double distToNextStop = double.infinity;
+          if (nextStopLat != null && nextStopLng != null) {
+            distToNextStop = Geolocator.distanceBetween(
+              position.latitude, position.longitude, nextStopLat, nextStopLng
+            );
+          }
+
+          // C. Compute Adaptive mode
+          final newState = _computeAdaptiveState(distToNextStop, currentStatus, nextStopRadius);
+          final newMode = newState['mode']!;
+          final newStatus = newState['status']!;
+
+          // D. Determine if we should write to Firestore
+          final elapsedMs = now.millisecondsSinceEpoch - lastWriteMs;
+          final intervalSec = newMode == 'NEAR_STOP' ? _NEAR_UPDATE_SEC : _FAR_UPDATE_SEC;
+          
+          final statusChanged = newStatus != currentStatus;
+          final modeChanged = newMode != currentMode;
+          final intervalElapsed = elapsedMs >= (intervalSec * 1000);
+
+          if (statusChanged || modeChanged || intervalElapsed) {
+            await _writeToFirestore(prefs, busId!, tripId!, position, newMode, newStatus, nextStopId);
+            lastWriteMs = now.millisecondsSinceEpoch;
+            currentMode = newMode;
+            currentStatus = newStatus;
+            
+            // E. Geofence / Stop Arrival logic
+            if (distToNextStop <= nextStopRadius && statusChanged && newStatus == 'ARRIVED') {
+               await _handleArrival(prefs, collegeId!, busId!, tripId!, nextStopId, position);
+            }
+          }
+          
+          // F. Send to Main Isolate for UI feedback (if running)
+          service.invoke('update', {
+            "lat": position.latitude,
+            "lng": position.longitude,
+            "speed": position.speed,
+            "heading": position.heading,
+            "status": newStatus,
+            "mode": newMode,
+          });
+        } catch (e) {
+          debugPrint("[Background] Position callback error (non-fatal): $e");
+        }
+      }, onError: (e) {
+        debugPrint("[Background] Stream error: $e");
+      });
+    } catch (e) {
+      debugPrint("[Background] CRITICAL onStart error: $e");
+      service.stopSelf();
+    }
   }
 
   static Future<void> _bufferPoint(SharedPreferences prefs, Position p) async {
