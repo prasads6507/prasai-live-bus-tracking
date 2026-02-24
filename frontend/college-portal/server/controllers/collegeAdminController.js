@@ -770,6 +770,7 @@ const adminEndTrip = async (req, res) => {
         }
 
         const endTime = new Date();
+        const startTime = tripData.startTime ? new Date(tripData.startTime) : endTime;
         const durationMinutes = Math.round((endTime - startTime) / 60000);
 
         // Update trip to COMPLETED (Canonical Fields)
