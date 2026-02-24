@@ -107,10 +107,17 @@ class DropOffList extends StatelessWidget {
               Color textColor = Colors.white70;
               bool isArriving = stop.time == "Arriving";
 
+              bool isSkipped = stop.time == "SKIPPED";
+
               if (stop.isCompleted) {
                 iconData = Icons.check_circle;
                 iconColor = Colors.white54;
                 textColor = Colors.white54;
+              } else if (isSkipped) {
+                iconData = Icons.error_outline;
+                iconColor = Colors.redAccent;
+                textColor = Colors.white70;
+                fontWeight = FontWeight.normal;
               } else if (isArriving) {
                 iconData = Icons.location_on;
                 iconColor = Colors.orangeAccent;
@@ -139,27 +146,28 @@ class DropOffList extends StatelessWidget {
                       children: [
                         Icon(iconData, color: iconColor, size: 18),
                         const SizedBox(width: 12),
-                        Expanded(
                           child: Text(
                             stop.location,
                             style: TextStyle(
                               color: textColor,
                               fontWeight: fontWeight,
+                              decoration: isSkipped ? TextDecoration.lineThrough : null,
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
-                        ),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
                             color: isArriving 
                               ? Colors.orangeAccent.withOpacity(0.2) 
-                              : (stop.isCurrent && !stop.isCompleted) 
-                                ? AppColors.success.withOpacity(0.2) 
-                                : Colors.transparent,
+                              : isSkipped 
+                                ? Colors.redAccent.withOpacity(0.2)
+                                : (stop.isCurrent && !stop.isCompleted) 
+                                  ? AppColors.success.withOpacity(0.2) 
+                                  : Colors.transparent,
                             borderRadius: BorderRadius.circular(8),
-                            border: isArriving || (stop.isCurrent && !stop.isCompleted)
-                              ? Border.all(color: (isArriving ? Colors.orangeAccent : AppColors.success).withOpacity(0.5))
+                            border: isArriving || isSkipped || (stop.isCurrent && !stop.isCompleted)
+                              ? Border.all(color: (isArriving ? Colors.orangeAccent : isSkipped ? Colors.redAccent : AppColors.success).withOpacity(0.5))
                               : null,
                           ),
                           child: Text(

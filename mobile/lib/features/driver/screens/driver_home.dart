@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/driver_location_service.dart';
 import '../services/background_tracking_service.dart';
 import '../services/trip_finalizer.dart';
+import '../../../core/services/tracking_lifecycle_manager.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/typography.dart';
@@ -810,14 +811,16 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
    }
   } // end _startTracking
 
-  void _stopTracking() {
-    BackgroundTrackingService.stop();
+  void _stopTracking() async {
+    await TrackingLifecycleManager.stopTrackingAndClearContext();
     
-    _locationUpdateSubscription?.cancel();
-    _locationUpdateSubscription = null;
-    _isTrackingStarting = false;  // Reset guard so future starts are allowed
     if (mounted) {
       setState(() {
+        _locationUpdateSubscription?.cancel();
+        _locationUpdateSubscription = null;
+        _pathHistoryTimer?.cancel();
+        _pathHistoryTimer = null;
+        _isTrackingStarting = false;
         _currentSpeed = 0.0;
         _currentRoad = "Ready";
         _lastRecordedPoint = null;

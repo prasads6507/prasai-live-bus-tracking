@@ -18,6 +18,8 @@ import '../widgets/track_bottom_sheet.dart';
 import '../widgets/drop_off_list.dart';
 import '../../map/widgets/mobile_maplibre.dart';
 import 'package:geocoding/geocoding.dart' as geo;
+import '../../../../core/services/tracking_lifecycle_manager.dart';
+import '../../../../core/services/notification_service.dart';
 
 class StudentTrackScreen extends ConsumerStatefulWidget {
   final String? busId; 
@@ -30,6 +32,7 @@ class StudentTrackScreen extends ConsumerStatefulWidget {
 
 class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
   StreamSubscription? _busSubscription;
+  StreamSubscription? _lifecycleSubscription;
   StreamSubscription<Position>? _positionStream;
   
   bool _followBus = false;
@@ -59,6 +62,7 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
   Map<String, dynamic> _tripStopProgress = {};
   Map<String, dynamic> _tripEta = {};
   String? _tripDirection;
+  StreamSubscription? _notifSubscription;
 
   @override
   void initState() {
@@ -74,6 +78,8 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
     _positionStream?.cancel();
     _tripSubscription?.cancel();
     _metricsTimer?.cancel();
+    _lifecycleSubscription?.cancel();
+    _notifSubscription?.cancel();
     super.dispose();
   }
   
@@ -168,9 +174,38 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
           // Subscribe to trip document for stopsSnapshot + stopProgress + eta
           if (bus.activeTripId != null) {
             _subscribeTripProgress(bus.activeTripId!);
+            _setupLifecycleListener(collegeId, bus.id);
+            _setupNotificationListener(bus.activeTripId!);
           } else {
-            // Trip ended
+            // Trip ended - Kill all GPS/Tracking
             _liveBusLocation = null;
+            TrackingLifecycleManager.stopTrackingAndClearContext();
+            _positionStream?.cancel();
+            _positionStream = null;
+          }
+        });
+  }
+
+  void _setupNotificationListener(String tripId) {
+    _notifSubscription?.cancel();
+    _notifSubscription = FirebaseFirestore.instance
+        .collection('stopArrivals')
+        .where('tripId', isEqualTo: tripId)
+        .where('timestamp', isGreaterThan: DateTime.now().subtract(const Duration(minutes: 5)).toIso8601String())
+        .snapshots()
+        .listen((snapshot) {
+          for (var change in snapshot.docChanges) {
+            if (change.type == DocumentChangeType.added) {
+              final data = change.doc.data() as Map<String, dynamic>;
+              final stopName = data['stopName'] ?? 'Stop';
+              final type = data['type'] ?? 'ARRIVED';
+
+              if (type == 'ARRIVED' || type == 'ARRIVING') {
+                NotificationService.showArrivalNotification(stopName);
+              } else if (type == 'SKIPPED') {
+                NotificationService.showSkipNotification(stopName);
+              }
+            }
           }
         });
   }
@@ -333,6 +368,7 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
     if (_tripStopsSnapshot.isEmpty || _currentBus?.location == null) return [];
 
     final arrivedIds = List<String>.from(_tripStopProgress['arrivedStopIds'] ?? []);
+    final skippedIds = List<String>.from(_tripStopProgress['skippedStopIds'] ?? []);
     final currentIndex = (_tripStopProgress['currentIndex'] as num?)?.toInt() ?? 0;
     final busLat = _currentBus!.location!.latitude;
     final busLng = _currentBus!.location!.longitude;
@@ -346,9 +382,12 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
       
       final distM = Geolocator.distanceBetween(busLat, busLng, stopLat, stopLng);
       final isArrivedInDoc = arrivedIds.contains(stopId);
+      final isSkippedInDoc = skippedIds.contains(stopId);
 
       String status;
-      if (isArrivedInDoc) {
+      if (isSkippedInDoc) {
+        status = "SKIPPED";
+      } else if (isArrivedInDoc) {
         // Once bus crosses outside after arrived -> DEPARTED
         status = (distM <= radiusM) ? "ARRIVED" : "DEPARTED";
       } else {

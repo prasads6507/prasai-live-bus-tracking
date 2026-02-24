@@ -121,10 +121,13 @@ class BackgroundTrackingService {
         debugPrint("[Background] Notification update failed (non-fatal): $e");
       }
 
-      // 5. Adaptive State
+      // 5. Adaptive State & Speed Estimation
       int lastWriteMs = 0;
       String currentMode = "FAR";
       String currentStatus = "ON_ROUTE";
+      Position? lastPosition;
+      double smoothedSpeedMph = 0.0;
+      const double emaAlpha = 0.25; // Smoothing factor
 
       // 6. Start Location Stream (wrapped in try/catch for permission edge cases)
       late final Stream<Position> positionStream;
@@ -146,10 +149,33 @@ class BackgroundTrackingService {
         try {
           final now = DateTime.now();
           
-          // A. Buffer GPS point locally
-          await _bufferPoint(prefs, position);
+          // A. Compute Robust Speed (mph)
+          double rawSpeedMph = 0.0;
+          if (position.speed > 0.5) {
+            rawSpeedMph = position.speed * 2.23694;
+          } else if (lastPosition != null) {
+            // Dead-reckoning fallback: dist / time
+            final distM = Geolocator.distanceBetween(
+              lastPosition!.latitude, lastPosition!.longitude,
+              position.latitude, position.longitude
+            );
+            final timeSec = position.timestamp.difference(lastPosition!.timestamp).inSeconds;
+            if (timeSec > 0 && distM > 2) {
+              rawSpeedMph = (distM / timeSec) * 2.23694;
+            }
+          }
+          
+          // Clamp noise and smooth
+          if (rawSpeedMph < 1.0) rawSpeedMph = 0.0;
+          if (rawSpeedMph > 85.0) rawSpeedMph = smoothedSpeedMph; // Clamp jumps
+          
+          smoothedSpeedMph = (emaAlpha * rawSpeedMph) + ((1 - emaAlpha) * smoothedSpeedMph);
+          final finalSpeedMph = smoothedSpeedMph.round();
 
-          // B. Load cached next stop
+          // B. Buffer GPS point locally
+          await _bufferPoint(prefs, position, finalSpeedMph);
+
+          // C. Load cached next stop
           final nextStopLat = prefs.getDouble('next_stop_lat');
           final nextStopLng = prefs.getDouble('next_stop_lng');
           final nextStopId = prefs.getString('next_stop_id') ?? '';
@@ -162,12 +188,12 @@ class BackgroundTrackingService {
             );
           }
 
-          // C. Compute Adaptive mode
+          // D. Compute Adaptive mode
           final newState = _computeAdaptiveState(distToNextStop, currentStatus, nextStopRadius);
           final newMode = newState['mode']!;
           final newStatus = newState['status']!;
 
-          // D. Determine if we should write to Firestore
+          // E. Determine if we should write to Firestore
           final elapsedMs = now.millisecondsSinceEpoch - lastWriteMs;
           final intervalSec = newMode == 'NEAR_STOP' ? _NEAR_UPDATE_SEC : _FAR_UPDATE_SEC;
           
@@ -176,22 +202,34 @@ class BackgroundTrackingService {
           final intervalElapsed = elapsedMs >= (intervalSec * 1000);
 
           if (statusChanged || modeChanged || intervalElapsed) {
-            await _writeToFirestore(prefs, busId!, tripId!, position, newMode, newStatus, nextStopId);
+            await _writeToFirestore(prefs, busId!, tripId!, position, newMode, newStatus, nextStopId, finalSpeedMph);
             lastWriteMs = now.millisecondsSinceEpoch;
             currentMode = newMode;
             currentStatus = newStatus;
             
-            // E. Geofence / Stop Arrival logic
+            // F. Geofence / Stop Arrival logic
             if (distToNextStop <= nextStopRadius && statusChanged && newStatus == 'ARRIVED') {
                await _handleArrival(prefs, collegeId!, busId!, tripId!, nextStopId, position);
             }
+            // G. Skip logic: If we are much closer to the *subsequent* stop than the current next stop
+            else if (distToNextStop > nextStopRadius && distToNextStop < 500) {
+              // Check if we passed it. We look at the stop list in prefs (if we had it)
+              // For now, we'll implement a robust "closer to next-next" if we can fetch it.
+              // A simpler robust skip: if distToNextStop starts increasing after being < 400m
+              // and we are now > 500m away, it's likely skipped.
+              // But the most reliable is "Closer to stop[currentIndex + 1]".
+              await _checkForSkip(prefs, collegeId!, busId!, tripId!, nextStopId, position, distToNextStop);
+            }
           }
           
-          // F. Send to Main Isolate for UI feedback (if running)
+          lastPosition = position;
+          
+          // G. Send to Main Isolate for UI feedback (if running)
           service.invoke('update', {
             "lat": position.latitude,
             "lng": position.longitude,
-            "speed": position.speed,
+            "speed": smoothedSpeedMph / 2.23694, // Send m/s back to UI for consistency
+            "speedMph": finalSpeedMph,
             "heading": position.heading,
             "status": newStatus,
             "mode": newMode,
@@ -208,11 +246,12 @@ class BackgroundTrackingService {
     }
   }
 
-  static Future<void> _bufferPoint(SharedPreferences prefs, Position p) async {
+  static Future<void> _bufferPoint(SharedPreferences prefs, Position p, int speedMph) async {
     final newPoint = {
       'lat': p.latitude,
       'lng': p.longitude,
-      'speed': (p.speed * 2.23694).round(),
+      'speed': speedMph,
+      'speedMph': speedMph,
       'heading': p.heading,
       'timestamp': DateTime.now().toIso8601String(),
     };
@@ -232,9 +271,9 @@ class BackgroundTrackingService {
     String mode,
     String status,
     String nextStopId,
+    int speedMph,
   ) async {
     try {
-      final speedMph = (p.speed * 2.23694).round();
       final db = FirebaseFirestore.instance;
       
       await db.collection('buses').doc(busId).update({
@@ -243,6 +282,9 @@ class BackgroundTrackingService {
           'latitude': p.latitude,
           'longitude': p.longitude,
           'heading': p.heading,
+          'speed': speedMph,
+          'speedMph': speedMph,
+          'timestamp': FieldValue.serverTimestamp(),
         },
         'currentLocation': {
           'lat': p.latitude,
@@ -250,6 +292,7 @@ class BackgroundTrackingService {
           'latitude': p.latitude,
           'longitude': p.longitude,
           'heading': p.heading,
+          'speedMph': speedMph,
         },
         'speedMph': speedMph,
         'currentStatus': status,
@@ -259,6 +302,74 @@ class BackgroundTrackingService {
       debugPrint("[Background] Firestore WRITE: status=$status, speed=${speedMph}mph");
     } catch (e) {
       debugPrint("[Background] Firestore WRITE FAILED: $e");
+    }
+  }
+
+  static Future<void> _checkForSkip(
+    SharedPreferences prefs,
+    String collegeId,
+    String busId,
+    String tripId,
+    String currentStopId,
+    Position p,
+    double distToCurrentM,
+  ) async {
+    try {
+      final db = FirebaseFirestore.instance;
+      final tripRef = db.collection('trips').doc(tripId);
+      final tripDoc = await tripRef.get();
+      if (!tripDoc.exists) return;
+
+      final data = tripDoc.data()!;
+      final progress = data['stopProgress'] as Map<String, dynamic>? ?? {};
+      final currentIndex = (progress['currentIndex'] as num?)?.toInt() ?? 0;
+      final stops = (data['stopsSnapshot'] as List<dynamic>?) ?? [];
+
+      if (currentIndex + 1 < stops.length) {
+        final followingStop = stops[currentIndex + 1] as Map<String, dynamic>;
+        final distToFollowingM = Geolocator.distanceBetween(
+          p.latitude, p.longitude,
+          (followingStop['lat'] as num).toDouble(),
+          (followingStop['lng'] as num).toDouble()
+        );
+
+        // If we are significantly closer to the following stop than the current one, we skipped it
+        if (distToFollowingM < distToCurrentM && distToCurrentM > 300) {
+          debugPrint("[Background] SKIP DETECTED: $currentStopId. Heading to ${followingStop['stopId']}");
+          
+          final skippedIds = List<String>.from(progress['skippedStopIds'] ?? []);
+          if (!skippedIds.contains(currentStopId)) {
+            skippedIds.add(currentStopId);
+            
+            final newIndex = currentIndex + 1;
+            await tripRef.update({
+              'stopProgress.currentIndex': newIndex,
+              'stopProgress.skippedStopIds': skippedIds,
+            });
+
+            // Trigger Skip Event for Notifications
+            await db.collection('stopArrivals').add({
+              'tripId': tripId,
+              'busId': busId,
+              'collegeId': collegeId,
+              'stopId': currentStopId,
+              'stopName': stops[currentIndex]['name'] ?? 'Stop',
+              'type': 'SKIPPED',
+              'timestamp': DateTime.now().toIso8601String(),
+              'processed': false,
+            });
+
+            // Cache NEXT-NEXT stop
+            final nextStop = stops[newIndex] as Map<String, dynamic>;
+            await prefs.setDouble('next_stop_lat', (nextStop['lat'] as num).toDouble());
+            await prefs.setDouble('next_stop_lng', (nextStop['lng'] as num).toDouble());
+            await prefs.setDouble('next_stop_radius', (nextStop['radiusM'] as num?)?.toDouble() ?? 100.0);
+            await prefs.setString('next_stop_id', nextStop['stopId'] as String);
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("[Background] CheckForSkip error: $e");
     }
   }
 
@@ -296,6 +407,7 @@ class BackgroundTrackingService {
           'stopProgress.currentIndex': newIndex,
           'stopProgress.arrivedStopIds': arrivedIds,
           'stopProgress.arrivals': arrivals,
+          'stopProgress.completedStopIds': FieldValue.arrayUnion([stopId]), 
         });
 
         // Trigger Arrival Event for Notifications
@@ -304,6 +416,8 @@ class BackgroundTrackingService {
           'busId': busId,
           'collegeId': collegeId,
           'stopId': stopId,
+          'stopName': stops[currentIndex]['name'] ?? 'Stop',
+          'type': 'ARRIVED',
           'arrivedAt': DateTime.now().toIso8601String(),
           'processed': false,
         });
@@ -319,8 +433,6 @@ class BackgroundTrackingService {
           // AUTO-END
           debugPrint("[Background] AUTO-ENDING TRIP at final stop");
           await tripRef.update({'status': 'COMPLETED', 'isActive': false});
-          // We can't easily run the full TripFinalizer from here without more work,
-          // but we can set the pending flag.
           await prefs.setBool('pending_finalize', true);
           await prefs.setString('pending_trip_id', tripId);
           await prefs.setString('pending_bus_id', busId);

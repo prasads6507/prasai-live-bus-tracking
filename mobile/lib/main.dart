@@ -9,6 +9,7 @@ import 'features/shell/app_router.dart';
 import 'core/services/location_service.dart';
 import 'data/providers.dart';
 import 'features/driver/services/background_tracking_service.dart';
+import 'core/services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,6 +29,9 @@ void main() async {
     
     // Initialize Background Tracking Service for Drivers
     await BackgroundTrackingService.initialize();
+    
+    // Initialize Local Notifications
+    await NotificationService.initialize();
   } catch (e) {
     print("Firebase initialization or Firestore query failed: $e");
   }
