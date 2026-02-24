@@ -845,16 +845,16 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
                     _stopTracking();
 
                     if (activeTripId != null && activeTripId.isNotEmpty) {
-                      // 2. Call Backend API to end trip
+                      // 2. Upload history batch from background service (handles compression internally)
+                      await DriverLocationService.uploadBufferedHistory(activeTripId);
+
+                      // 3. Call Backend API to atomically end trip
                       try {
                         await ref.read(apiDataSourceProvider).endTrip(widget.collegeId, activeTripId, widget.busId);
                       } catch (e) {
                         debugPrint("API endTrip failed: $e. Falling back to firestore endTrip.");
                         await ref.read(firestoreDataSourceProvider).endTrip(activeTripId, widget.busId);
                       }
-
-                      // 3. Upload history batch from background service (handles compression internally)
-                      await DriverLocationService.uploadBufferedHistory(activeTripId);
                     } else {
                       // Failsafe for stuck bus without active trip
                       await ref.read(firestoreDataSourceProvider).endTrip(null, widget.busId);

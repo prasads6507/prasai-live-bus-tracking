@@ -211,6 +211,11 @@ const endTrip = async (req, res) => {
             return res.status(403).json({ success: false, message: 'You are not authorized to end this trip because you did not start it.' });
         }
 
+        if (tripDoc.data().status === 'COMPLETED' || tripDoc.data().status === 'CANCELLED') {
+            console.log(`Trip ${tripId} is already ended. Returning success.`);
+            return res.status(200).json({ success: true, message: 'Trip already ended.' });
+        }
+
         const batch = db.batch();
         const busRef = db.collection('buses').doc(busId);
 

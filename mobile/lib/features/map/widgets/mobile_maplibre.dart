@@ -59,7 +59,7 @@ class _MobileMapLibreState extends ConsumerState<MobileMapLibre> with SingleTick
     if (widget.liveBusLocation != null && 
         widget.liveBusLocation?.timestamp != oldWidget.liveBusLocation?.timestamp &&
         widget.selectedBusId != null) {
-      _animationTicker.updateTarget(widget.liveBusLocation!);
+      _animationTicker.updateTarget(widget.liveBusLocation!, expectedIntervalSec: 5); // 5s for live high-freq override
     }
 
     // Jump to focused location if provided and updated
@@ -111,6 +111,9 @@ class _MobileMapLibreState extends ConsumerState<MobileMapLibre> with SingleTick
       // 1. Load Assets
       final busImg = await _createIcon(Icons.directions_bus_outlined, AppColors.primary, 120); 
       if (busImg != null) await _mapController!.addImage(_busIconId, busImg);
+      
+      final stopImg = await _createIcon(Icons.location_on, const Color(0xFFEF4444), 60); // red marker
+      if (stopImg != null) await _mapController!.addImage('stop-icon', stopImg);
 
       // 2. Add Sources
       await _mapController!.addGeoJsonSource('buses-source', _buildBusesGeoJson(_currentBuses));
@@ -206,16 +209,16 @@ class _MobileMapLibreState extends ConsumerState<MobileMapLibre> with SingleTick
         ),
       );
 
-      // Stop center dot
-      await _mapController!.addCircleLayer(
+      // Stop pin marker
+      await _mapController!.addSymbolLayer(
         'stop-circles-source',
-        'stop-dots-layer',
-        CircleLayerProperties(
-          circleRadius: 5.0,
-          circleColor: '#f97316',
-          circleOpacity: 0.8,
-          circleStrokeColor: '#ffffff',
-          circleStrokeWidth: 2.0,
+        'stop-pins-layer',
+        SymbolLayerProperties(
+          iconImage: 'stop-icon',
+          iconSize: 0.8,
+          iconAllowOverlap: true,
+          iconIgnorePlacement: true,
+          iconAnchor: 'bottom',
         ),
       );
     } catch (e) {
@@ -308,7 +311,7 @@ class _MobileMapLibreState extends ConsumerState<MobileMapLibre> with SingleTick
                speed: selectedBus.currentSpeed,
                heading: selectedBus.currentHeading ?? loc.heading ?? 0,
                timestamp: DateTime.now(),
-            ));
+            ), expectedIntervalSec: selectedBus.trackingMode == 'NEAR_STOP' ? 5 : 20);
         }
       }
     });

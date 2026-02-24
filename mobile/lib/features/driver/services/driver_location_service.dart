@@ -10,6 +10,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../../../core/config/env.dart';
 import '../../../data/datasources/api_ds.dart';
 import '../../../core/utils/polyline_encoder.dart';
 
@@ -308,26 +309,43 @@ void backgroundCallback() {
                     // Auto End Trip at final stop
                     if (newIndex >= stops.length) {
                       debugPrint("[Adaptive] AUTO-ENDING TRIP at final stop");
-                      // 1. Mark trip as completed in Firestore
-                      await tripRef.update({
-                        'status': 'COMPLETED',
-                        'endTime': nowTime.toIso8601String(),
-                        'isActive': false,
-                        'endedAt': FieldValue.serverTimestamp(),
-                      });
-                      // 2. Mark bus as IDLE
+
+                      // 1. Mark bus as ending to prevent UI logic bugs while API runs
                       await busRef.update({
                         'status': 'IDLE',
-                        'activeTripId': FieldValue.delete(),
-                        'currentTripId': FieldValue.delete(),
-                        'trackingMode': FieldValue.delete(),
-                        'nextStopId': FieldValue.delete(),
                         'currentStatus': 'MOVING',
                         'speedMph': 0,
                       });
-                      // 3. Trigger history upload from this background isolate
-                      // ignore: unawaited_futures
-                      DriverLocationService.uploadBufferedHistory(activeTripId);
+                      
+                      // 2. Trigger history upload BEFORE ending trip
+                      await DriverLocationService.uploadBufferedHistory(activeTripId);
+
+                      // 3. Call the server API to atomically end trip (same as manual)
+                      try {
+                        final dio = Dio();
+                        await dio.post(
+                          '${Env.apiUrl}/api/driver/trips/$activeTripId/end',
+                          data: {
+                            'collegeId': collegeId,
+                            'busId': busId,
+                          },
+                        );
+                        debugPrint("[Adaptive] Auto-end trip API called successfully");
+                      } catch (e) {
+                         debugPrint("[Adaptive] Auto-end API failed: $e. Falling back to native firestore updates.");
+                         await tripRef.update({
+                           'status': 'COMPLETED',
+                           'endTime': nowTime.toIso8601String(),
+                           'isActive': false,
+                           'endedAt': FieldValue.serverTimestamp(),
+                         });
+                         await busRef.update({
+                           'activeTripId': FieldValue.delete(),
+                           'currentTripId': FieldValue.delete(),
+                           'trackingMode': FieldValue.delete(),
+                           'nextStopId': FieldValue.delete(),
+                         });
+                      }
                     }
 
                     // Write arrival event for push notification trigger

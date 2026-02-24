@@ -273,11 +273,17 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
         final timeHours = (distanceToUserKm * 0.621371) / speedMph; 
         final timeMinutes = (timeHours * 60).round();
         
-        final status = _currentBus?.currentStatus ?? "MOVING";
+        final pointTime = _currentBus?.location?.timestamp ?? DateTime.now();
+        final ageSec = DateTime.now().difference(pointTime).inSeconds;
+        final isStale = ageSec > 120;
+        final status = isStale ? 'OFFLINE' : (_currentBus?.currentStatus ?? "MOVING");
+
         if (status == 'ARRIVING') {
            etaDisplay = "Arriving at next stop";
         } else if (status == 'ARRIVED') {
            etaDisplay = "At stop";
+        } else if (status == 'OFFLINE') {
+           etaDisplay = "Status: Offline";
         } else {
            etaDisplay = "ETA $timeMinutes min";
         }
@@ -306,8 +312,8 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
       final totalTimeHours = (distanceToFinalKm * 0.621371) / speedMph;
       totalTimeDisplay = "${(totalTimeHours * 60).round()} min";
 
-      final completed = _tripStopProgress['arrivedStopIds']?.length ?? _currentBus!.completedStops.length;
-      remaining = (stopList.length - completed).clamp(0, stopList.length);
+      final int completed = (_tripStopProgress['arrivedStopIds']?.length ?? _currentBus!.completedStops.length).toInt();
+      remaining = (stopList.length - completed).clamp(0, stopList.length).toInt();
     }
 
     if (mounted) {
@@ -337,14 +343,26 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
 
         String timeLabel;
         if (isCompleted) {
-          timeLabel = "✅ Done";
-        } else if (isCurrent && nextStopEta != null) {
-          try {
-            final etaTime = DateTime.parse(nextStopEta);
-            final diff = etaTime.difference(DateTime.now()).inMinutes;
-            timeLabel = diff > 0 ? "~${diff} min" : "Now";
-          } catch (_) {
-            timeLabel = "Next";
+          timeLabel = "Arrived";
+        } else if (isCurrent) {
+          if (_currentBus != null && _currentBus!.location != null) {
+            final pointTime = _currentBus!.location!.timestamp;
+            final ageSec = DateTime.now().difference(pointTime).inSeconds;
+            bool isStale = ageSec > 120;
+            
+            final status = isStale ? 'OFFLINE' : (_currentBus!.currentStatus ?? "MOVING");
+
+            if (status == 'ARRIVING') {
+              timeLabel = "Arriving";
+            } else if (status == 'ARRIVED') {
+              timeLabel = "Arrived";
+            } else if (status == 'OFFLINE') {
+              timeLabel = "Offline";
+            } else {
+              timeLabel = "Next";
+            }
+          } else {
+            timeLabel = "Next"; // Fallback if bus or location is null
           }
         } else {
           timeLabel = stop['plannedTime'] as String? ?? 'TBD';
@@ -519,15 +537,21 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
                                   ),
                                 ),
                                 const SizedBox(height: 2),
-                                Text(
-                                  "${_currentBus?.currentStatus ?? 'MOVING'} • $_currentRoadName",
-                                  style: AppTypography.textTheme.bodyMedium?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                    color: AppColors.textPrimary,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                                Builder(builder: (context) {
+                                  final pointTime = _currentBus?.location?.timestamp ?? DateTime.now();
+                                  final isStale = DateTime.now().difference(pointTime).inSeconds > 120;
+                                  final displayStatus = isStale ? 'OFFLINE' : (_currentBus?.currentStatus ?? 'MOVING');
+                                  
+                                  return Text(
+                                    "$displayStatus • $_currentRoadName",
+                                    style: AppTypography.textTheme.bodyMedium?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: isStale ? AppColors.textSecondary : AppColors.textPrimary,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  );
+                                }),
                               ],
                             ),
                           ),

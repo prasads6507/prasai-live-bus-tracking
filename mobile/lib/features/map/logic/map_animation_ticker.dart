@@ -15,18 +15,35 @@ class MapAnimationTicker {
     required VoidCallback onTick,
   }) : _controller = AnimationController(
           vsync: vsync,
-          duration: const Duration(milliseconds: 4500),
+          duration: const Duration(seconds: 5), // default
         )..addListener(onTick);
 
-  void updateTarget(LocationPoint point) {
-    if (_lastPoint == null) {
+  void updateTarget(LocationPoint point, {int expectedIntervalSec = 5}) {
+    // If it's stale (e.g. > 120s), we jump without interpolating slowly
+    final now = DateTime.now();
+    final pointTime = point.timestamp;
+    final ageSec = now.difference(pointTime).inSeconds;
+    
+    // Staleness check
+    bool isStale = ageSec > 120;
+    
+    if (_lastPoint == null || isStale) {
       _lastPoint = point;
       _targetPoint = point;
+      // snap instantly if fresh initialization or stale jump
+      _controller.duration = const Duration(milliseconds: 100);
+      _controller.forward(from: 0.0);
       return;
     }
 
     _lastPoint = currentInterpolated; // Start from where we are currently rendered
     _targetPoint = point;
+    
+    // Dynamically set animation length to span smoothly
+    // A bit faster than the interval to ensure it completes before next update
+    int animDuration = (expectedIntervalSec * 1000 * 0.95).round();
+    _controller.duration = Duration(milliseconds: animDuration);
+    
     _controller.forward(from: 0.0);
   }
 
