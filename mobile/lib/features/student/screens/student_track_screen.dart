@@ -177,13 +177,32 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
             _setupLifecycleListener(collegeId, bus.id);
             _setupNotificationListener(bus.activeTripId!);
           } else {
-            // Trip ended - Kill all GPS/Tracking
+            // Trip ended - Kill all GPS/Tracking and stop metrics
             _liveBusLocation = null;
+            _metricsTimer?.cancel();
+            _metricsTimer = null;
             TrackingLifecycleManager.stopTrackingAndClearContext();
             _positionStream?.cancel();
             _positionStream = null;
+            if (mounted) setState(() {});
           }
         });
+  }
+  }
+
+  void _setupLifecycleListener(String collegeId, String busId) {
+    _lifecycleSubscription?.cancel();
+    _lifecycleSubscription = TrackingLifecycleManager.isTripActive(collegeId, busId).listen((isActive) {
+      if (!isActive && mounted) {
+        debugPrint("[StudentTrack] Trip inactive, stopping tracking.");
+        TrackingLifecycleManager.stopTrackingAndClearContext();
+        _positionStream?.cancel();
+        _positionStream = null;
+        setState(() {
+          _userPosition = null; 
+        });
+      }
+    });
   }
 
   void _setupNotificationListener(String tripId) {

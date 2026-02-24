@@ -146,6 +146,7 @@ class DropOffList extends StatelessWidget {
                       children: [
                         Icon(iconData, color: iconColor, size: 18),
                         const SizedBox(width: 12),
+                        Expanded(
                           child: Text(
                             stop.location,
                             style: TextStyle(
@@ -155,6 +156,7 @@ class DropOffList extends StatelessWidget {
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
+                        ),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(

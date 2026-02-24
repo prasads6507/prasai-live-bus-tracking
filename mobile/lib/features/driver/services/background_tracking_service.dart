@@ -10,6 +10,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import '../../../../firebase_options.dart';
 import 'trip_finalizer.dart';
+import '../../../../core/services/notification_service.dart';
 
 // ─── ADAPTIVE TRACKING CONSTANTS ───
 const double _ARRIVING_DISTANCE_M = 804.0;   // 0.5 mile
@@ -91,8 +92,9 @@ class BackgroundTrackingService {
       
       // 2. Setup service commands
       StreamSubscription<Position>? posSubscription;
-      service.on('stopService').listen((event) {
-        posSubscription?.cancel();
+      service.on('stopService').listen((event) async {
+        debugPrint("[Background] stopService received. Cleaning up...");
+        await posSubscription?.cancel();
         service.stopSelf();
       });
 
@@ -188,8 +190,10 @@ class BackgroundTrackingService {
             );
           }
 
-          // D. Compute Adaptive mode
-          final newState = _computeAdaptiveState(distToNextStop, currentStatus, nextStopRadius);
+          // D. Compute Adaptive mode (Latch logic)
+          final hasArrivedCurrent = prefs.getBool('has_arrived_current') ?? false;
+          
+          final newState = _computeAdaptiveState(distToNextStop, currentStatus, nextStopRadius, hasArrivedCurrent);
           final newMode = newState['mode']!;
           final newStatus = newState['status']!;
 
@@ -207,17 +211,18 @@ class BackgroundTrackingService {
             currentMode = newMode;
             currentStatus = newStatus;
             
-            // F. Geofence / Stop Arrival logic
-            if (distToNextStop <= nextStopRadius && statusChanged && newStatus == 'ARRIVED') {
-               await _handleArrival(prefs, collegeId!, busId!, tripId!, nextStopId, position);
+            // F. Geofence / Stop Arrival logic (Latching Entry)
+            if (distToNextStop <= nextStopRadius && !hasArrivedCurrent) {
+               await prefs.setBool('has_arrived_current', true);
+               await _handleArrivalEntry(prefs, collegeId!, busId!, tripId!, nextStopId, position);
+            }
+            // H. Geofence / Exit logic (Latching Exit)
+            else if (distToNextStop > (nextStopRadius + 30) && hasArrivedCurrent) {
+               await prefs.setBool('has_arrived_current', false);
+               await _handleStopCompletion(prefs, collegeId!, busId!, tripId!, nextStopId);
             }
             // G. Skip logic: If we are much closer to the *subsequent* stop than the current next stop
-            else if (distToNextStop > nextStopRadius && distToNextStop < 500) {
-              // Check if we passed it. We look at the stop list in prefs (if we had it)
-              // For now, we'll implement a robust "closer to next-next" if we can fetch it.
-              // A simpler robust skip: if distToNextStop starts increasing after being < 400m
-              // and we are now > 500m away, it's likely skipped.
-              // But the most reliable is "Closer to stop[currentIndex + 1]".
+            else if (!hasArrivedCurrent && distToNextStop > nextStopRadius && distToNextStop < 500) {
               await _checkForSkip(prefs, collegeId!, busId!, tripId!, nextStopId, position, distToNextStop);
             }
           }
@@ -294,7 +299,9 @@ class BackgroundTrackingService {
           'heading': p.heading,
           'speedMph': speedMph,
         },
-        'speedMph': speedMph,
+        'speed': speedMph,          // LEGACY
+        'speedMph': speedMph,       // CANONICAL
+        'currentSpeed': speedMph,   // ALIAS
         'currentStatus': status,
         'trackingMode': mode,
         'nextStopId': nextStopId,
@@ -335,20 +342,23 @@ class BackgroundTrackingService {
 
         // If we are significantly closer to the following stop than the current one, we skipped it
         if (distToFollowingM < distToCurrentM && distToCurrentM > 300) {
-          debugPrint("[Background] SKIP DETECTED: $currentStopId. Heading to ${followingStop['stopId']}");
+          final batch = db.batch();
           
           final skippedIds = List<String>.from(progress['skippedStopIds'] ?? []);
           if (!skippedIds.contains(currentStopId)) {
             skippedIds.add(currentStopId);
             
             final newIndex = currentIndex + 1;
-            await tripRef.update({
+            
+            // 1. Update Trip Progress
+            batch.update(tripRef, {
               'stopProgress.currentIndex': newIndex,
               'stopProgress.skippedStopIds': skippedIds,
             });
 
-            // Trigger Skip Event for Notifications
-            await db.collection('stopArrivals').add({
+            // 2. Trigger Skip Event for Notifications (Firestore)
+            final notifRef = db.collection('stopArrivals').doc();
+            batch.set(notifRef, {
               'tripId': tripId,
               'busId': busId,
               'collegeId': collegeId,
@@ -358,6 +368,20 @@ class BackgroundTrackingService {
               'timestamp': DateTime.now().toIso8601String(),
               'processed': false,
             });
+
+            // 3. Update Bus Status
+            batch.update(db.collection('buses').doc(busId), {
+              'nextStopId': stops[newIndex]['stopId'],
+            });
+
+            await batch.commit();
+
+            // 4. Driver Notification (Local)
+            try {
+              NotificationService.showSkipNotification(stops[currentIndex]['name'] ?? 'Stop');
+            } catch (e) {
+              debugPrint("[Background] Local notif failed: $e");
+            }
 
             // Cache NEXT-NEXT stop
             final nextStop = stops[newIndex] as Map<String, dynamic>;
@@ -373,7 +397,7 @@ class BackgroundTrackingService {
     }
   }
 
-  static Future<void> _handleArrival(
+  static Future<void> _handleArrivalEntry(
     SharedPreferences prefs,
     String collegeId,
     String busId,
@@ -383,8 +407,6 @@ class BackgroundTrackingService {
   ) async {
     try {
       final db = FirebaseFirestore.instance;
-      
-      // Update Trip Progress
       final tripRef = db.collection('trips').doc(tripId);
       final tripDoc = await tripRef.get();
       if (!tripDoc.exists) return;
@@ -400,18 +422,18 @@ class BackgroundTrackingService {
         arrivedIds.add(stopId);
         arrivals[stopId] = DateTime.now().toIso8601String();
         
-        final newIndex = currentIndex + 1;
-        final isFinalStop = newIndex >= stops.length;
+        final batch = db.batch();
 
-        await tripRef.update({
-          'stopProgress.currentIndex': newIndex,
+        // 1. Update Trip
+        batch.update(tripRef, {
           'stopProgress.arrivedStopIds': arrivedIds,
           'stopProgress.arrivals': arrivals,
-          'stopProgress.completedStopIds': FieldValue.arrayUnion([stopId]), 
+          'stopStatus.$stopId': 'ARRIVED',
         });
 
-        // Trigger Arrival Event for Notifications
-        await db.collection('stopArrivals').add({
+        // 2. Trigger Event for Student Notifications
+        final notifRef = db.collection('stopArrivals').doc();
+        batch.set(notifRef, {
           'tripId': tripId,
           'busId': busId,
           'collegeId': collegeId,
@@ -419,30 +441,97 @@ class BackgroundTrackingService {
           'stopName': stops[currentIndex]['name'] ?? 'Stop',
           'type': 'ARRIVED',
           'arrivedAt': DateTime.now().toIso8601String(),
+          'timestamp': DateTime.now().toIso8601String(),
           'processed': false,
         });
 
-        // Cache NEXT stop
-        if (!isFinalStop) {
-          final nextStop = stops[newIndex] as Map<String, dynamic>;
-          await prefs.setDouble('next_stop_lat', (nextStop['lat'] as num).toDouble());
-          await prefs.setDouble('next_stop_lng', (nextStop['lng'] as num).toDouble());
-          await prefs.setDouble('next_stop_radius', (nextStop['radiusM'] as num?)?.toDouble() ?? 100.0);
-          await prefs.setString('next_stop_id', nextStop['stopId'] as String);
-        } else {
-          // AUTO-END
-          debugPrint("[Background] AUTO-ENDING TRIP at final stop");
-          await tripRef.update({'status': 'COMPLETED', 'isActive': false});
-          await prefs.setBool('pending_finalize', true);
-          await prefs.setString('pending_trip_id', tripId);
-          await prefs.setString('pending_bus_id', busId);
-          await prefs.setString('pending_college_id', collegeId);
-          
-          FlutterBackgroundService().invoke("stopService");
+        // 3. Update Bus
+        batch.update(db.collection('buses').doc(busId), {
+          'currentStatus': 'ARRIVED',
+          'trackingMode': 'NEAR_STOP',
+        });
+
+        await batch.commit();
+
+        // 4. Driver Notification (Local)
+        try {
+          NotificationService.showArrivalNotification(stops[currentIndex]['name'] ?? 'Stop');
+        } catch (e) {
+          debugPrint("[Background] Local notif failed: $e");
         }
       }
     } catch (e) {
-      debugPrint("[Background] HandleArrival error: $e");
+      debugPrint("[Background] HandleArrivalEntry error: $e");
+    }
+  }
+
+  static Future<void> _handleStopCompletion(
+    SharedPreferences prefs,
+    String collegeId,
+    String busId,
+    String tripId,
+    String stopId,
+  ) async {
+    try {
+      final db = FirebaseFirestore.instance;
+      final tripRef = db.collection('trips').doc(tripId);
+      final tripDoc = await tripRef.get();
+      if (!tripDoc.exists) return;
+
+      final data = tripDoc.data()!;
+      final progress = data['stopProgress'] as Map<String, dynamic>? ?? {};
+      final stops = (data['stopsSnapshot'] as List<dynamic>?) ?? [];
+      final currentIndex = (progress['currentIndex'] as num?)?.toInt() ?? 0;
+
+      final newIndex = currentIndex + 1;
+      final isFinalStop = newIndex >= stops.length;
+
+      final batch = db.batch();
+
+      // 1. Update Trip Progress
+      batch.update(tripRef, {
+        'stopProgress.currentIndex': newIndex,
+        'stopProgress.completedStopIds': FieldValue.arrayUnion([stopId]),
+        'stopStatus.$stopId': 'COMPLETED',
+      });
+
+      // 2. Update Bus Status
+      final busUpdate = {
+        'currentStatus': 'MOVING',
+        'trackingMode': 'FAR',
+        'completedStops': FieldValue.arrayUnion([stopId]),
+      };
+
+      if (!isFinalStop) {
+        final nextStop = stops[newIndex] as Map<String, dynamic>;
+        busUpdate['nextStopId'] = nextStop['stopId'] as String;
+        
+        // Cache NEXT stop for isolate restart
+        await prefs.setDouble('next_stop_lat', (nextStop['lat'] as num).toDouble());
+        await prefs.setDouble('next_stop_lng', (nextStop['lng'] as num).toDouble());
+        await prefs.setDouble('next_stop_radius', (nextStop['radiusM'] as num?)?.toDouble() ?? 100.0);
+        await prefs.setString('next_stop_id', nextStop['stopId'] as String);
+        await prefs.setBool('has_arrived_current', false);
+      } else {
+        // AUTO-END
+        debugPrint("[Background] AUTO-ENDING TRIP at final stop");
+        batch.update(tripRef, {'status': 'COMPLETED', 'isActive': false});
+        busUpdate['status'] = 'IDLE';
+        busUpdate['activeTripId'] = null;
+        
+        await prefs.setBool('pending_finalize', true);
+        await prefs.setString('pending_trip_id', tripId);
+        await prefs.setString('pending_bus_id', busId);
+        await prefs.setString('pending_college_id', collegeId);
+        
+        FlutterBackgroundService().invoke("stopService");
+      }
+
+      batch.update(db.collection('buses').doc(busId), busUpdate);
+      await batch.commit();
+
+    } catch (e) {
+      debugPrint("[Background] HandleStopCompletion error: $e");
     }
   }
 
@@ -450,7 +539,14 @@ class BackgroundTrackingService {
     double distToNextStopM,
     String currentStatus,
     double radiusM,
+    bool hasArrivedCurrent,
   ) {
+    if (hasArrivedCurrent) {
+       // We latch in ARRIVED even if GPS drifts slightly outside, 
+       // until _handleStopCompletion explicitly moves us out with hysteresis.
+       return {'mode': 'NEAR_STOP', 'status': 'ARRIVED'};
+    }
+    
     if (distToNextStopM <= radiusM) {
       return {'mode': 'NEAR_STOP', 'status': 'ARRIVED'};
     } else if (distToNextStopM <= _ARRIVING_DISTANCE_M) {
