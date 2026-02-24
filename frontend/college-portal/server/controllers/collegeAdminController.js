@@ -1,5 +1,6 @@
 const { db, admin, auth, initializationError } = require('../config/firebase');
 const bcrypt = require('bcryptjs');
+const polyline = require('@mapbox/polyline');
 
 // --- BUSES ---
 
@@ -18,7 +19,7 @@ const createBus = async (req, res) => {
             plateNumber,
             assignedDriverId: assignedDriverId || null,
             assignedRouteId: assignedRouteId || null,
-            status: 'ACTIVE',
+            status: 'IDLE',
             createdAt: new Date().toISOString()
         };
 
@@ -494,7 +495,7 @@ const assignDriver = async (req, res) => {
         batch.update(db.collection('buses').doc(busId), {
             assignedDriverId: userId,
             assignedRouteId: routeId || null,
-            status: 'ACTIVE'
+            status: 'IDLE'
         });
 
         // 3. Update User/Driver Document (cross-link)
@@ -768,36 +769,40 @@ const adminEndTrip = async (req, res) => {
             return res.status(403).json({ success: false, message: 'Unauthorized' });
         }
 
-        // Calculate duration
-        const startTime = new Date(tripData.startTime);
         const endTime = new Date();
         const durationMinutes = Math.round((endTime - startTime) / 60000);
 
-        // Update trip to COMPLETED
+        // Update trip to COMPLETED (Canonical Fields)
         await tripRef.update({
-            endTime: endTime.toISOString(),
             status: 'COMPLETED',
+            endTime: endTime.toISOString(),
+            endedAt: admin.firestore.FieldValue.serverTimestamp(),
             durationMinutes,
+            isActive: false,
             endedBy: 'ADMIN' // Track that admin ended this trip
         });
 
-        // Also update the bus status if we have busId
+        // Also update the bus status if we have busId (Standardized Reset)
         if (busId) {
             const busRef = db.collection('buses').doc(busId);
             const busDoc = await busRef.get();
             if (busDoc.exists && (busDoc.data().currentTripId === tripId || busDoc.data().activeTripId === tripId)) {
                 await busRef.update({
+                    status: 'IDLE',
                     currentTripId: null,
                     activeTripId: null,
-                    status: 'ACTIVE',
                     liveTrail: [],
                     liveTrackBuffer: [],
                     currentRoadName: '',
+                    currentStreetName: '',
                     currentSpeed: 0,
+                    speed: 0,
+                    speedMph: 0,
                     lastUpdated: new Date().toISOString()
                 });
             }
         }
+
 
         console.log('Admin ended trip successfully:', tripId);
         res.status(200).json({ success: true, message: 'Trip ended by admin', tripId });
@@ -897,7 +902,7 @@ const getTripPath = async (req, res) => {
         const { tripId } = req.params;
         console.log('--- GET TRIP PATH ---', tripId);
 
-        // Try ROOT collection first (Phase 1 implementation writes here)
+        // Try ROOT collection first
         let tripRef = db.collection('trips').doc(tripId);
         let tripDoc = await tripRef.get();
 
@@ -923,17 +928,16 @@ const getTripPath = async (req, res) => {
         }
 
         const tripData = tripDoc.data();
-
         let path = [];
-        let polyline = tripData.polyline || null;
+        let decodedPath = null;
+        let polylineStr = tripData.polyline || null;
+        let source = 'none';
+        let rawCounts = { pathArrayCount: 0, subcollectionCount: 0 };
 
-        // PRIMARY: New implementation saves a polyline string or path array inside the document
-        if (polyline) {
-            console.log(`Found polyline string directly in trip document.`);
-            // We still send an empty path array for backward compatibility, 
-            // the frontend will decode the polyline.
-        } else if (tripData.path && Array.isArray(tripData.path) && tripData.path.length > 0) {
-            console.log(`Found path array directly in trip document with ${tripData.path.length} points.`);
+        // 1. Try path array in doc
+        if (tripData.path && Array.isArray(tripData.path) && tripData.path.length > 0) {
+            source = 'path-array';
+            rawCounts.pathArrayCount = tripData.path.length;
             path = tripData.path.map(data => ({
                 lat: data.lat ?? data.latitude ?? 0,
                 lng: data.lng ?? data.longitude ?? 0,
@@ -942,67 +946,72 @@ const getTripPath = async (req, res) => {
                     (data.recordedAt.toDate ? data.recordedAt.toDate().toISOString() : data.recordedAt) :
                     data.timestamp
             })).filter(point => point.lat !== 0 && point.lng !== 0);
-        } else {
-            // Strategy:
-            // 1. Check if 'path' exists in trip doc
-            // 2. Fallback to 'polyline' string and decode it
-            // 3. Final fallback to 'path' subcollection
+        }
 
-            const polyline = tripData.polyline;
-            let path = tripData.path || [];
-
-            if (path.length === 0 && polyline) {
-                console.log(`Decoding polyline for trip ${tripId}...`);
-                try {
-                    // Manual decoding if polyline library isn't available, or simple point extraction
-                    // Since we've been storing polyline in the frontend, we'll try to return it
-                    // and let the frontend decode if it's easier, but for server safety:
-                    // We'll leave path as empty and return polyline for the Map component to decode.
-                } catch (err) {
-                    console.error("Polyline decode skip:", err);
-                }
-            }
-
-            if (path.length === 0) {
-                console.log(`Fetching path points from collection for trip ${tripId}...`);
-                let pathSnapshot = await tripRef.collection('path').get();
-
-                // If path is empty, try 'history' subcollection (Legacy API implementation)
-                if (pathSnapshot.empty) {
-                    console.log(`Checking 'history' subcollection for trip ${tripId}...`);
-                    pathSnapshot = await tripRef.collection('history').get();
-                }
-
-                if (!pathSnapshot.empty) {
-                    path = pathSnapshot.docs
-                        .map(doc => {
-                            const data = doc.data();
-                            return {
-                                lat: data.lat ?? data.latitude ?? 0,
-                                lng: data.lng ?? data.longitude ?? 0,
-                                speed: data.speed || 0,
-                                timestamp: data.recordedAt ?
-                                    (data.recordedAt.toDate ? data.recordedAt.toDate().toISOString() : data.recordedAt) :
-                                    data.timestamp
-                            };
-                        })
-                        .filter(point => (point.lat !== 0 && point.lng !== 0) || (point.latitude !== 0));
-                }
+        // 2. Always try to decode polyline if it exists
+        if (polylineStr) {
+            console.log(`Decoding polyline for trip ${tripId}...`);
+            try {
+                // Returns [[lat, lng], ...]
+                const decoded = polyline.decode(polylineStr);
+                decodedPath = decoded.map(coord => ({ lat: coord[0], lng: coord[1] }));
+                if (source === 'none') source = 'polyline';
+            } catch (err) {
+                console.error("Polyline decode failed:", err);
             }
         }
 
-        if (path.length === 0 && !polyline) {
-            console.log(`No path, polyline or history data found for trip ${tripId}`);
-            return res.json({ success: true, data: [], polyline: null });
+        // 3. Fallback to subcollections if no path/polyline found
+        if (path.length === 0 && !decodedPath) {
+            console.log(`Fetching path points from collection for trip ${tripId}...`);
+            let pathSnapshot = await tripRef.collection('path').get();
+
+            // If path is empty, try 'history' subcollection
+            if (pathSnapshot.empty) {
+                pathSnapshot = await tripRef.collection('history').get();
+            }
+
+            if (!pathSnapshot.empty) {
+                source = pathSnapshot.docs[0].ref.parent.id === 'path' ? 'subcollection-path' : 'subcollection-history';
+                rawCounts.subcollectionCount = pathSnapshot.size;
+                path = pathSnapshot.docs
+                    .map(doc => {
+                        const data = doc.data();
+                        return {
+                            lat: data.lat ?? data.latitude ?? 0,
+                            lng: data.lng ?? data.longitude ?? 0,
+                            speed: data.speed || 0,
+                            timestamp: data.recordedAt ?
+                                (data.recordedAt.toDate ? data.recordedAt.toDate().toISOString() : data.recordedAt) :
+                                data.timestamp
+                        };
+                    })
+                    .filter(point => point.lat !== 0 && point.lng !== 0);
+            }
         }
 
         // Sort in memory
         if (path.length > 0) {
-            path.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+            path.sort((a, b) => new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime());
         }
 
-        console.log(`Returning data for trip ${tripId}: pathCount=${path.length}, hasPolyline=${!!polyline}`);
-        res.json({ success: true, data: path, polyline });
+        console.log(`Returning data for trip ${tripId}: source=${source}, pathCount=${path.length}, hasPolyline=${!!polylineStr}`);
+
+        res.json({
+            success: true,
+            data: path,
+            polyline: polylineStr,
+            decodedPath,
+            source,
+            rawCounts,
+            metrics: {
+                distanceMeters: tripData.distanceMeters || 0,
+                durationSeconds: tripData.durationSeconds || 0,
+                maxSpeedMph: tripData.maxSpeedMph || 0,
+                avgSpeedMph: tripData.avgSpeedMph || 0,
+                totalPoints: tripData.totalPoints || tripData.pointsCount || 0
+            }
+        });
     } catch (error) {
         console.error('Error fetching trip path:', error);
         res.status(500).json({ success: false, message: 'Server Error', error: error.message });

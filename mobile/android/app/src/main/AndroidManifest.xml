@@ -38,13 +38,11 @@
             </intent-filter>
         </activity>
         
-        <receiver android:name="com.icapps.background_location_tracker.flutter.LocationUpdateReceiver" android:exported="true"/>
-        <receiver android:name="com.icapps.background_location_tracker.flutter.BootReceiver" android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED"/>
-            </intent-filter>
-        </receiver>
-        <service android:name="com.icapps.background_location_tracker.flutter.LocationService" android:foregroundServiceType="location" android:exported="true" />
+        <service
+            android:name="id.flutter.background_service.BackgroundService"
+            android:foregroundServiceType="location"
+            android:enabled="true"
+            android:exported="false" />
 
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->

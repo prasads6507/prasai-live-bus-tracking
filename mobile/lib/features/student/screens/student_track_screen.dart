@@ -262,7 +262,8 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
         busLoc.latitude, busLoc.longitude
       );
       
-      // Check if student is in the bus or very close (100m precision to account for dual-device GPS drift)
+      // Check if student is in the bus or very close (100m default precision to account for dual-device GPS drift)
+      // Note: We use 100m as a safe "inside bus" threshold regardless of stop radius
       if (distanceToUserM <= 100.0) {
         userInBus = true;
         etaDisplay = "You're in the bus!";
@@ -333,7 +334,18 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
     if (_tripStopsSnapshot.isNotEmpty) {
       final arrivedIds = List<String>.from(_tripStopProgress['arrivedStopIds'] ?? []);
       final currentIndex = (_tripStopProgress['currentIndex'] as num?)?.toInt() ?? 0;
-      final nextStopEta = _tripEta['nextStopEta'] as String?;
+      
+      // Calculate distance to next stop for status derivation
+      double distToNextStopM = double.infinity;
+      if (currentIndex < _tripStopsSnapshot.length && _currentBus?.location != null) {
+        final nextStop = _tripStopsSnapshot[currentIndex];
+        distToNextStopM = Geolocator.distanceBetween(
+          _currentBus!.location!.latitude, 
+          _currentBus!.location!.longitude,
+          (nextStop['lat'] as num).toDouble(),
+          (nextStop['lng'] as num).toDouble(),
+        );
+      }
 
       return List.generate(_tripStopsSnapshot.length, (index) {
         final stop = _tripStopsSnapshot[index];
@@ -345,24 +357,13 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
         if (isCompleted) {
           timeLabel = "Arrived";
         } else if (isCurrent) {
-          if (_currentBus != null && _currentBus!.location != null) {
-            final pointTime = _currentBus!.location!.timestamp;
-            final ageSec = DateTime.now().difference(pointTime).inSeconds;
-            bool isStale = ageSec > 120;
-            
-            final status = isStale ? 'OFFLINE' : (_currentBus!.currentStatus ?? "MOVING");
-
-            if (status == 'ARRIVING') {
-              timeLabel = "Arriving";
-            } else if (status == 'ARRIVED') {
-              timeLabel = "Arrived";
-            } else if (status == 'OFFLINE') {
-              timeLabel = "Offline";
-            } else {
-              timeLabel = "Next";
-            }
+          final stopRadius = (stop['radiusM'] as num?)?.toDouble() ?? 100.0;
+          if (distToNextStopM <= stopRadius) {
+            timeLabel = "Arrived";
+          } else if (distToNextStopM <= 804) {
+            timeLabel = "Arriving";
           } else {
-            timeLabel = "Next"; // Fallback if bus or location is null
+            timeLabel = "Next";
           }
         } else {
           timeLabel = stop['plannedTime'] as String? ?? 'TBD';
@@ -374,6 +375,7 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
           isCompleted: isCompleted,
           isCurrent: isCurrent,
           isNext: isCurrent,
+          distanceM: isCurrent ? distToNextStopM : null,
         );
       });
     }
@@ -393,7 +395,8 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
            busLoc.latitude, busLoc.longitude,
            stop.latitude, stop.longitude
         );
-        if (dist <= 100.0) {
+        final stopRadius = stop.radiusM ?? 100.0;
+        if (dist <= stopRadius) {
            currentStopId = stop.id;
            completedStops.remove(stop.id);
            break;
@@ -481,8 +484,13 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
                       'lng': (s['lng'] as num?)?.toDouble() ?? 0.0,
                       'radiusM': s['radiusM'] ?? 100,
                       'name': s['name'] ?? '',
+                      'id': s['stopId'] ?? s['id'] ?? s['_id'],
                     }).toList()
                   : null,
+              nextStopId: _currentBus?.nextStopId,
+              arrivedStopIds: _tripStopProgress['arrivedStopIds'] != null 
+                  ? List<String>.from(_tripStopProgress['arrivedStopIds']) 
+                  : _currentBus?.completedStops.map((e) => e.toString()).toList(),
             ),
 
           // Top overlay: Back, Speed/Road, Track Live

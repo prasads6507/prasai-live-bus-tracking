@@ -8,6 +8,8 @@ import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/driver_location_service.dart';
+import '../services/background_tracking_service.dart';
+import '../services/trip_finalizer.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/typography.dart';
@@ -36,6 +38,13 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
   String? _selectedDirection;
   String _searchQuery = "";
   final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    // Check for any pending trip finalizations on launch
+    TripFinalizer.checkAndRetry();
+  }
 
   @override
   void dispose() {
@@ -89,6 +98,58 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
                 onLogout: () {
                   ref.read(authRepositoryProvider).signOut();
                   context.go('/login');
+                },
+              ),
+              // Trip Finalization Status Banner
+              ValueListenableBuilder<bool>(
+                valueListenable: TripFinalizer.isFinalizing,
+                builder: (context, isFinalizing, child) {
+                  return ValueListenableBuilder<String?>(
+                    valueListenable: TripFinalizer.error,
+                    builder: (context, error, child) {
+                      if (!isFinalizing && error == null) return const SizedBox.shrink();
+                      
+                      return Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                        color: error != null ? AppColors.error.withOpacity(0.1) : AppColors.primary.withOpacity(0.1),
+                        child: Row(
+                          children: [
+                            if (isFinalizing)
+                              const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                              )
+                            else if (error != null)
+                              const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 20),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                error != null 
+                                  ? "Finalization failed. Tap to retry." 
+                                  : "Finalizing your last trip...",
+                                style: AppTypography.textTheme.bodyMedium?.copyWith(
+                                  color: error != null ? AppColors.error : AppColors.primary,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            if (error != null)
+                              TextButton(
+                                onPressed: () => TripFinalizer.checkAndRetry(),
+                                style: TextButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                child: const Text("RETRY"),
+                              ),
+                          ],
+                        ),
+                      );
+                    },
+                  );
                 },
               ),
               Expanded(child: content),
@@ -610,68 +671,31 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
       }
     } catch (_) {}
 
-    // Initialize DriverLocationService with background_location_tracker
-    await DriverLocationService.startTracking(
-      widget.collegeId, 
-      widget.busId, 
-      tripId,
-      (locationDto) {
-        if (mounted) {
-          double rawSpeed = locationDto.speed ?? 0.0;
-          if (rawSpeed < 0 || !rawSpeed.isFinite) rawSpeed = 0.0;
-          
-          DateTime now = DateTime.now();
-          
-          // Speed fallback calculation
-          if (rawSpeed <= 0 && _lastRecordedPoint != null && _lastRecordedPoint!.timestamp != null) {
-              double distMeters = Geolocator.distanceBetween(
-                  _lastRecordedPoint!.latitude, _lastRecordedPoint!.longitude,
-                  locationDto.lat, locationDto.lon
-              );
-              double seconds = now.difference(_lastRecordedPoint!.timestamp!).inSeconds.toDouble();
-              if (seconds > 0) {
-                  rawSpeed = distMeters / seconds; // m/s
-                  if (rawSpeed > 40) rawSpeed = 0; // Sanity check (90mph limit)
-              }
-          }
-
-          double speedMph = rawSpeed * 2.23694;
-
-          // Jitter / stationary filter
-          if (_lastRecordedPoint != null) {
-            double dist = Geolocator.distanceBetween(
-              _lastRecordedPoint!.latitude, _lastRecordedPoint!.longitude,
-              locationDto.lat, locationDto.lon,
-            );
-            if (dist < 3.0 && speedMph < 1.0) {
-              return; // Ignore static jitter point
-            }
-          }
-
-          final point = LocationPoint(
-             latitude: locationDto.lat,
-             longitude: locationDto.lon,
-             timestamp: now,
-             speed: rawSpeed,
-             heading: locationDto.course,
-          );
-
-          setState(() {
-            _currentSpeed = speedMph;
-            _lastUpdate = TimeOfDay.now().format(context);
-            _lastRecordedPoint = point;
-          });
-          _updateRoadName(point.latitude, point.longitude);
-          
-          // Buffer point in memory for real-time display UI
-          _liveTrackBuffer.add(point);
+    // Initialize BackgroundTrackingService
+    await BackgroundTrackingService.start();
+    
+    _locationUpdateSubscription?.cancel();
+    final service = FlutterBackgroundService();
+    _locationUpdateSubscription = service.on('update').listen((data) {
+        if (data != null && mounted) {
+            setState(() {
+                _currentSpeed = (data['speed'] ?? 0.0) * 2.23694;
+                _lastUpdate = TimeOfDay.now().format(context);
+                _lastRecordedPoint = LocationPoint(
+                    latitude: data['lat'],
+                    longitude: data['lng'],
+                    timestamp: DateTime.now(),
+                    speed: data['speed'],
+                    heading: data['heading'],
+                );
+            });
+            _updateRoadName(data['lat'], data['lng']);
         }
-      }
-    );
+    }) as StreamSubscription<Map<String, dynamic>?>?;
   }
 
   void _stopTracking() {
-    DriverLocationService.stopTracking();
+    BackgroundTrackingService.stop();
     
     _locationUpdateSubscription?.cancel();
     _locationUpdateSubscription = null;
@@ -837,33 +861,30 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
 
                   if (confirmed != true) return;
 
-                  setState(() => _isLoading = true);
                   try {
                     final String? activeTripId = bus.activeTripId;
 
-                    // 1. Stop location stream immediately
+                    // 1. Stop location stream immediately (local UI & Background service)
                     _stopTracking();
 
                     if (activeTripId != null && activeTripId.isNotEmpty) {
-                      // 2. Upload history batch from background service (handles compression internally)
-                      await DriverLocationService.uploadBufferedHistory(activeTripId);
-
-                      // 3. Call Backend API to atomically end trip
-                      try {
-                        await ref.read(apiDataSourceProvider).endTrip(widget.collegeId, activeTripId, widget.busId);
-                      } catch (e) {
-                        debugPrint("API endTrip failed: $e. Falling back to firestore endTrip.");
-                        await ref.read(firestoreDataSourceProvider).endTrip(activeTripId, widget.busId);
-                      }
-                    } else {
-                      // Failsafe for stuck bus without active trip
-                      await ref.read(firestoreDataSourceProvider).endTrip(null, widget.busId);
+                      // 2. Start background finalization (unawaited)
+                      unawaited(TripFinalizer.finalizeTrip(
+                        collegeId: widget.collegeId,
+                        busId: widget.busId,
+                        tripId: activeTripId,
+                      ));
                     }
+                    
                     _liveTrackBuffer.clear();
 
+                    // 3. Navigate home immediately
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Trip ended successfully!")),
+                        const SnackBar(
+                          content: Text("Trip ending... Returning home."),
+                          duration: Duration(seconds: 2),
+                        ),
                       );
                       widget.onBack();
                     }
@@ -873,8 +894,6 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
                         SnackBar(content: Text("Error ending trip: $e")),
                       );
                     }
-                  } finally {
-                    if (mounted) setState(() => _isLoading = false);
                   }
                 },
               ),

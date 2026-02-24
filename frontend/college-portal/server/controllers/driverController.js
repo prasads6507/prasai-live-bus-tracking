@@ -142,7 +142,7 @@ const updateBusLocation = async (req, res) => {
 
             const busData = busDoc.data();
             const isActiveTrip = !!busData.activeTripId;
-            const newStatus = isActiveTrip ? 'ON_ROUTE' : (busData.status === 'MAINTENANCE' ? 'MAINTENANCE' : 'ACTIVE');
+            const newStatus = isActiveTrip ? 'ON_ROUTE' : (busData.status === 'MAINTENANCE' ? 'MAINTENANCE' : 'IDLE');
 
             const updateData = {
                 lastUpdated: new Date().toISOString(),
@@ -206,22 +206,25 @@ const endTrip = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Trip not found' });
         }
 
-        if (tripDoc.data().driverId !== req.user.id) {
-            console.warn(`[UNAUTHORIZED END TRIP] Driver ${req.user.id} attempted to end trip ${tripId} owned by ${tripDoc.data().driverId}`);
-            return res.status(403).json({ success: false, message: 'You are not authorized to end this trip because you did not start it.' });
+        const tripData = tripDoc.data();
+
+        // 0. Idempotency Check: If already ended, return success
+        if (tripData.status === 'COMPLETED' || tripData.status === 'CANCELLED' || tripData.isActive === false) {
+            console.log(`Trip ${tripId} is already finalized (Status: ${tripData.status}). Returning success.`);
+            return res.status(200).json({ success: true, message: 'Trip already ended.' });
         }
 
-        if (tripDoc.data().status === 'COMPLETED' || tripDoc.data().status === 'CANCELLED') {
-            console.log(`Trip ${tripId} is already ended. Returning success.`);
-            return res.status(200).json({ success: true, message: 'Trip already ended.' });
+        if (tripData.driverId !== req.user.id) {
+            console.warn(`[UNAUTHORIZED END TRIP] Driver ${req.user.id} attempted to end trip ${tripId} owned by ${tripData.driverId}`);
+            return res.status(403).json({ success: false, message: 'You are not authorized to end this trip because you did not start it.' });
         }
 
         const batch = db.batch();
         const busRef = db.collection('buses').doc(busId);
 
-        // 1. Update Trip Status
+        // 1. Update Trip Status (Canonical: COMPLETED)
         const endTime = new Date();
-        const startTimeStr = tripDoc.data().startTime;
+        const startTimeStr = tripData.startTime;
         let durationMinutes = 0;
         if (startTimeStr) {
             const startTime = new Date(startTimeStr);
@@ -236,12 +239,13 @@ const endTrip = async (req, res) => {
             isActive: false
         });
 
-        // 2. Update Bus Status (Canonical State)
+        // 2. Update Bus Status (Canonical: IDLE)
         batch.update(busRef, {
             status: 'IDLE',
-            activeTripId: null,
-            currentTripId: null,
+            activeTripId: null,      // Explicitly null for clarity
+            currentTripId: null,     // Legacy field support
             currentRoadName: '',
+            currentStreetName: '',
             currentSpeed: 0,
             speed: 0,
             speedMph: 0,
@@ -249,11 +253,12 @@ const endTrip = async (req, res) => {
             liveTrackBuffer: [],
             trackingMode: admin.firestore.FieldValue.delete(),
             nextStopId: admin.firestore.FieldValue.delete(),
+            completedStops: [],      // Reset completed stops
             lastUpdated: new Date().toISOString()
         });
 
         await batch.commit();
-        console.log('Trip ended atomically.');
+        console.log('Trip ended atomically with canonical statuses.');
 
         res.status(200).json({ success: true, message: 'Trip ended successfully' });
     } catch (error) {

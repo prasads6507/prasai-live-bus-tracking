@@ -8,6 +8,7 @@ class DropOffItem {
   final bool isCompleted;
   final bool isNext;
   final bool isCurrent;
+  final double? distanceM;
 
   const DropOffItem({
     required this.time,
@@ -15,6 +16,7 @@ class DropOffItem {
     this.isCompleted = false,
     this.isNext = false,
     this.isCurrent = false,
+    this.distanceM,
   });
 }
 
@@ -103,11 +105,17 @@ class DropOffList extends StatelessWidget {
               IconData iconData;
               FontWeight fontWeight = FontWeight.w500;
               Color textColor = Colors.white70;
+              bool isArriving = stop.time == "Arriving";
 
               if (stop.isCompleted) {
                 iconData = Icons.check_circle;
                 iconColor = Colors.white54;
                 textColor = Colors.white54;
+              } else if (isArriving) {
+                iconData = Icons.location_on;
+                iconColor = Colors.orangeAccent;
+                textColor = Colors.white;
+                fontWeight = FontWeight.bold;
               } else if (stop.isCurrent) {
                 iconData = Icons.location_on;
                 iconColor = AppColors.success;
@@ -125,28 +133,76 @@ class DropOffList extends StatelessWidget {
 
               return Padding(
                 padding: const EdgeInsets.only(bottom: 12.0),
-                child: Row(
+                child: Column(
                   children: [
-                    Icon(iconData, color: iconColor, size: 18),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        stop.location,
-                        style: TextStyle(
-                          color: textColor,
-                          fontWeight: fontWeight,
+                    Row(
+                      children: [
+                        Icon(iconData, color: iconColor, size: 18),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            stop.location,
+                            style: TextStyle(
+                              color: textColor,
+                              fontWeight: fontWeight,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: isArriving 
+                              ? Colors.orangeAccent.withOpacity(0.2) 
+                              : (stop.isCurrent && !stop.isCompleted) 
+                                ? AppColors.success.withOpacity(0.2) 
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(8),
+                            border: isArriving || (stop.isCurrent && !stop.isCompleted)
+                              ? Border.all(color: (isArriving ? Colors.orangeAccent : AppColors.success).withOpacity(0.5))
+                              : null,
+                          ),
+                          child: Text(
+                            stop.time,
+                            style: TextStyle(
+                              color: isArriving 
+                                ? Colors.orangeAccent 
+                                : (stop.isCurrent && !stop.isCompleted) 
+                                  ? AppColors.success 
+                                  : (stop.isNext ? Colors.white : Colors.white54), 
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        )
+                      ],
                     ),
-                    Text(
-                      stop.time,
-                      style: TextStyle(
-                        color: stop.isCurrent ? AppColors.success : (stop.isNext ? Colors.white : Colors.white54), 
-                        fontSize: stop.isCurrent || stop.isNext ? 14 : 12,
-                        fontWeight: stop.isCurrent ? FontWeight.bold : FontWeight.normal,
+                    if (isArriving && stop.distanceM != null) ...[
+                      const SizedBox(height: 8),
+                      Padding(
+                        padding: const EdgeInsets.only(left: 30),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(2),
+                                child: LinearProgressIndicator(
+                                  value: 1.0 - (stop.distanceM! / 804.0).clamp(0.0, 1.0),
+                                  backgroundColor: Colors.white10,
+                                  color: Colors.orangeAccent,
+                                  minHeight: 4,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              "${(stop.distanceM! / 1609.34).toStringAsFixed(1)} mi",
+                              style: const TextStyle(color: Colors.orangeAccent, fontSize: 10, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
                       ),
-                    )
+                    ],
                   ],
                 ),
               );

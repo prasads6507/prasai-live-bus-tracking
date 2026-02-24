@@ -604,13 +604,16 @@ class FirestoreDataSource {
       final busDoc = await busRef.get();
       if (busDoc.exists) {
         batch.update(busRef, {
-          'status': 'ACTIVE',
+          'status': 'IDLE',
           'activeTripId': null,
           'currentTripId': null,
           'currentRoadName': '',
           'currentStreetName': '',
           'currentSpeed': 0,
           'speed': 0,
+          'speedMph': 0,
+          'trackingMode': null,
+          'nextStopId': null,
           'completedStops': [],
           'liveTrackBuffer': [],
           'liveTrail': [],
@@ -624,7 +627,7 @@ class FirestoreDataSource {
       // If batch fails, try a direct update on the bus to at least unlock it
       try {
         await _firestore.collection('buses').doc(busId).update({
-          'status': 'ACTIVE',
+          'status': 'IDLE',
           'activeTripId': null,
           'currentTripId': null,
         });

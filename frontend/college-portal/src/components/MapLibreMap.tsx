@@ -10,7 +10,7 @@ import { BsBusFront } from 'react-icons/bs';
 interface MapLibreMapProps {
     buses: any[];
     focusedLocation?: { lat: number, lng: number } | null;
-    stopMarkers?: { lat: number, lng: number, name: string, isCompleted?: boolean }[];
+    stopMarkers?: { lat: number, lng: number, name: string, isCompleted?: boolean, radiusM?: number }[];
     followBus?: boolean;
     path?: [number, number][];
     selectedBusId?: string | null;
@@ -101,6 +101,16 @@ const getStatusLabel = (bus: any): string => {
     if (s === 'ARRIVING') return 'Arriving';
     if (s === 'ON_ROUTE' || s === 'ACTIVE' || s === 'MOVING') return 'Moving';
     return s || 'Offline';
+};
+
+const isStale = (isoString: string, thresholdSeconds = 120) => {
+    if (!isoString) return true;
+    try {
+        const date = new Date(isoString);
+        if (isNaN(date.getTime())) return true;
+        const diffInSeconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
+        return diffInSeconds > thresholdSeconds;
+    } catch (e) { return true; }
 };
 
 const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, path, selectedBusId, routes, selectedRouteId, onBusClick, stopMarkers, showStopCircles, routePreviewPath }: MapLibreMapProps) => {
@@ -240,8 +250,8 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
                         <div className="flex items-center gap-2">
                             <span>Bus {bus.busNumber || 'Unknown'} • {bus.driverName || 'No Driver'}</span>
                             {isLive && (
-                                <span className="text-dashboard-primary">
-                                    {Math.round(bus.speedMph ?? bus.speed ?? bus.speedMPH ?? bus.currentSpeed ?? 0)} mph
+                                <span className={isStale(bus.lastUpdated) ? 'text-dashboard-muted' : 'text-dashboard-primary'}>
+                                    {isStale(bus.lastUpdated) ? '--' : Math.round(bus.speedMph ?? bus.speed ?? bus.speedMPH ?? bus.currentSpeed ?? 0)} mph
                                 </span>
                             )}
                         </div>
@@ -572,7 +582,7 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
                             type: 'FeatureCollection',
                             features: stopMarkers
                                 .filter(m => m.lat && m.lng)
-                                .map(m => createCirclePolygon([m.lng, m.lat], 100))
+                                .map(m => createCirclePolygon([m.lng, m.lat], m.radiusM || 100))
                         }}
                     >
                         <Layer

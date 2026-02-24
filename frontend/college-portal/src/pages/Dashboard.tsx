@@ -12,9 +12,11 @@ const isLiveBus = (bus: any) => {
     // If the bus has an active trip ID, it's live (relay is handling movement)
     if (!bus.activeTripId) return false;
 
-    // Status can be ON_ROUTE (set by backend start) or ACTIVE (legacy/alternate)
-    const isActive = bus.status === 'ON_ROUTE' || bus.status === 'ACTIVE';
-    if (!isActive) return false;
+    // Canonical: bus.status === 'ON_ROUTE'
+    // Legacy Support: bus.status === 'ACTIVE' or 'LIVE' (if used by any older writers)
+    const isCanonicalLive = bus.status === 'ON_ROUTE';
+    const isLegacyLive = bus.status === 'ACTIVE' || bus.status === 'LIVE';
+    if (!(isCanonicalLive || isLegacyLive)) return false;
 
     // Use a much longer heartbeat for "Offline" fallback, since we rely on WebSockets now
     if (bus.lastUpdated || bus.lastLocationUpdate) {
@@ -360,6 +362,16 @@ const getRelativeTime = (isoString: string) => {
     return date.toLocaleDateString();
 };
 
+const isStale = (isoString: string, thresholdSeconds = 120) => {
+    if (!isoString) return true;
+    try {
+        const date = new Date(isoString);
+        if (isNaN(date.getTime())) return true;
+        const diffInSeconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
+        return diffInSeconds > thresholdSeconds;
+    } catch (e) { return true; }
+};
+
 const BusCard = ({ bus, address }: { bus: any, address?: string }) => (
     <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition-shadow group">
         <div className="flex items-start justify-between mb-3">
@@ -389,8 +401,8 @@ const BusCard = ({ bus, address }: { bus: any, address?: string }) => (
                 <div className="flex flex-col gap-2 text-sm bg-green-50 p-2 rounded-lg">
                     <div className="flex justify-between items-center pb-2 border-b border-slate-100">
                         <span className="text-slate-500 font-medium">Speed</span>
-                        <span className="font-semibold text-green-700">
-                            {Math.round(bus.speed ?? bus.speedMph ?? bus.speedMPH ?? 0)} mph
+                        <span className={`font-semibold ${isStale(bus.lastUpdated) ? 'text-slate-400' : 'text-green-700'}`}>
+                            {isStale(bus.lastUpdated) ? '--' : Math.round(bus.speedMph ?? bus.speed ?? bus.speedMPH ?? 0)} mph
                         </span>
                     </div>
                     <div className="flex items-center gap-2">

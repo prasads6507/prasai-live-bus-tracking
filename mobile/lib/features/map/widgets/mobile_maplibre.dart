@@ -22,6 +22,8 @@ class MobileMapLibre extends ConsumerStatefulWidget {
   final bool showStudentLocation;
   final LocationPoint? studentLocation;
   final List<Map<String, dynamic>>? stopCircles; // [{lat, lng, radiusM, name}]
+  final String? nextStopId;
+  final List<String>? arrivedStopIds;
   final LocationPoint? liveBusLocation; // For high-freq websocket updates
 
   const MobileMapLibre({
@@ -34,6 +36,8 @@ class MobileMapLibre extends ConsumerStatefulWidget {
     this.showStudentLocation = false,
     this.studentLocation,
     this.stopCircles,
+    this.nextStopId,
+    this.arrivedStopIds,
     this.liveBusLocation,
   });
 
@@ -59,7 +63,8 @@ class _MobileMapLibreState extends ConsumerState<MobileMapLibre> with SingleTick
     if (widget.liveBusLocation != null && 
         widget.liveBusLocation?.timestamp != oldWidget.liveBusLocation?.timestamp &&
         widget.selectedBusId != null) {
-      _animationTicker.updateTarget(widget.liveBusLocation!, expectedIntervalSec: 5); // 5s for live high-freq override
+      final latLngPath = widget.path?.map((p) => LatLng(p[0], p[1])).toList();
+      _animationTicker.updateTarget(widget.liveBusLocation!, expectedIntervalSec: 5, path: latLngPath); 
     }
 
     // Jump to focused location if provided and updated
@@ -82,6 +87,14 @@ class _MobileMapLibreState extends ConsumerState<MobileMapLibre> with SingleTick
         widget.studentLocation != null &&
         _styleLoaded && _mapController != null) {
       _updateStudentLocation();
+    }
+
+    // Update stop layers when circles or status changes
+    if (_styleLoaded && _mapController != null && 
+        (widget.stopCircles != oldWidget.stopCircles || 
+         widget.nextStopId != oldWidget.nextStopId || 
+         widget.arrivedStopIds != oldWidget.arrivedStopIds)) {
+      _updateStopLayers();
     }
   }
 
@@ -200,7 +213,7 @@ class _MobileMapLibreState extends ConsumerState<MobileMapLibre> with SingleTick
         'stop-circles-source',
         'stop-circles-layer',
         CircleLayerProperties(
-          circleRadius: 30.0, // Approximate 100m at typical zoom
+          circleRadius: 60.0, // Approximate 100m at zoom 17
           circleColor: '#f97316',
           circleOpacity: 0.12,
           circleStrokeColor: '#f97316',
@@ -226,6 +239,92 @@ class _MobileMapLibreState extends ConsumerState<MobileMapLibre> with SingleTick
     }
   }
 
+  Future<void> _updateStopLayers() async {
+    if (_mapController == null || widget.stopCircles == null || !_styleLoaded) return;
+    try {
+      final features = widget.stopCircles!.map((stop) {
+        final stopId = stop['id'] ?? stop['stopId'] ?? stop['_id'] ?? '';
+        final isNext = widget.nextStopId == stopId;
+        final isArrived = widget.arrivedStopIds?.contains(stopId) ?? false;
+        final status = isArrived ? 'ARRIVED' : (isNext ? 'NEXT' : 'UPCOMING');
+
+        return {
+          "type": "Feature",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              (stop['lng'] as num?)?.toDouble() ?? 0.0,
+              (stop['lat'] as num?)?.toDouble() ?? 0.0,
+            ]
+          },
+          "properties": {
+            "name": stop['name'] ?? '',
+            "radiusM": stop['radiusM'] ?? 100,
+            "status": status,
+            "isNext": isNext,
+          }
+        };
+      }).toList();
+
+      await _mapController!.setGeoJsonSource('stop-circles-source', {
+        "type": "FeatureCollection",
+        "features": features,
+      });
+
+      // Update layer properties for status-based styling
+      // Note: maplibre_gl flutter expressions are sometimes limited depending on version.
+      // We will use a simple update if the package supports it, otherwise we would need multiple layers.
+      // However, for colors, we can often pass an expression.
+      
+      await _mapController!.setCircleLayerProperties(
+        'stop-circles-layer',
+        CircleLayerProperties(
+          circleColor: [
+            'match',
+            ['get', 'status'],
+            'NEXT', '#3b82f6',
+            'ARRIVED', '#10b981',
+            '#f97316'
+          ],
+          circleOpacity: [
+            'match',
+            ['get', 'status'],
+            'ARRIVED', 0.08,
+            'NEXT', 0.2,
+            0.12
+          ],
+          circleRadius: [
+            'match',
+            ['get', 'status'],
+            'NEXT', 80.0,
+            60.0
+          ],
+        ),
+      );
+
+      await _mapController!.setSymbolLayerProperties(
+        'stop-pins-layer',
+        SymbolLayerProperties(
+          iconSize: [
+             'match',
+             ['get', 'status'],
+             'NEXT', 1.0,
+             0.8
+          ],
+          iconOpacity: [
+             'match',
+             ['get', 'status'],
+             'ARRIVED', 0.5,
+             1.0
+          ]
+        ),
+      );
+
+    } catch (e) {
+      debugPrint("Error updating stop layers: $e");
+    }
+  }
+
   Future<void> _addStudentLocationLayer() async {
     if (_mapController == null || _studentLayerAdded) return;
     
@@ -240,7 +339,7 @@ class _MobileMapLibreState extends ConsumerState<MobileMapLibre> with SingleTick
         'student-location-source',
         'student-radius-layer',
         CircleLayerProperties(
-          circleRadius: 40.0, // Approximate 50m at zoom 17
+          circleRadius: 30.0, // Approximate 50m at zoom 17
           circleColor: '#3b82f6',
           circleOpacity: 0.15,
           circleStrokeColor: '#3b82f6',
@@ -305,13 +404,14 @@ class _MobileMapLibreState extends ConsumerState<MobileMapLibre> with SingleTick
         final selectedBus = buses.where((b) => b.id == widget.selectedBusId).firstOrNull;
         if (selectedBus?.location != null) {
             final loc = selectedBus!.location!;
+            final latLngPath = widget.path?.map((p) => LatLng(p[0], p[1])).toList();
             _animationTicker.updateTarget(LocationPoint(
                latitude: loc.latitude,
                longitude: loc.longitude,
                speed: selectedBus.currentSpeed,
                heading: selectedBus.currentHeading ?? loc.heading ?? 0,
                timestamp: DateTime.now(),
-            ), expectedIntervalSec: selectedBus.trackingMode == 'NEAR_STOP' ? 5 : 20);
+            ), expectedIntervalSec: selectedBus.trackingMode == 'NEAR_STOP' ? 5 : 20, path: latLngPath);
         }
       }
     });

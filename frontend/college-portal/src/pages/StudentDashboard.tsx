@@ -10,12 +10,13 @@ import MapLibreMapComponent from '../components/MapLibreMapComponent';
 import useNotification from '../hooks/useNotification';
 
 const isLiveBus = (bus: any) => {
-    // If the bus has an active trip ID, it's live (Firestore is handling movement)
+    // Canonical: bus.status === 'ON_ROUTE'
+    // Legacy Support: bus.status === 'ACTIVE' or 'LIVE' (if used by any older writers)
     if (!bus || !bus.activeTripId) return false;
 
-    // Status can be ON_ROUTE (set by backend start) or ACTIVE (legacy/alternate)
-    const isActive = bus.status === 'ON_ROUTE' || bus.status === 'ACTIVE';
-    if (!isActive) return false;
+    const isCanonicalLive = bus.status === 'ON_ROUTE';
+    const isLegacyLive = bus.status === 'ACTIVE' || bus.status === 'LIVE';
+    if (!(isCanonicalLive || isLegacyLive)) return false;
 
     // Heartbeat check for fallback (WebSocket is primary now)
     if (bus.lastUpdated || bus.lastLocationUpdate) {
@@ -28,6 +29,27 @@ const isLiveBus = (bus: any) => {
     }
 
     return true; // Live
+};
+
+const isStale = (isoString: string | any, thresholdSeconds = 120) => {
+    if (!isoString) return true;
+    try {
+        const date = new Date(isoString.toDate ? isoString.toDate() : isoString);
+        if (isNaN(date.getTime())) return true;
+        const diffInSeconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
+        return diffInSeconds > thresholdSeconds;
+    } catch (e) { return true; }
+};
+
+const haversineMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371000.0;
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
 };
 
 const StudentDashboard = () => {
@@ -299,7 +321,6 @@ const StudentDashboard = () => {
                         <MapLibreMapComponent
                             buses={buses}
                             focusedLocation={focusedBusLocation}
-                            // Stop List handled in sidebar now, but markers still useful
                             stops={(() => {
                                 const route = routes.find(r => r._id === trackedBus.assignedRouteId);
                                 if (!route || !route.stops) return [];
@@ -308,9 +329,11 @@ const StudentDashboard = () => {
                                     lng: s.longitude,
                                     name: s.stopName,
                                     id: s.stopId || s._id,
-                                    isCompleted: (trackedBus.completedStops || []).includes(s.stopId || s._id)
+                                    radiusM: s.radiusM || 100
                                 }));
                             })()}
+                            nextStopId={trackedBus.nextStopId}
+                            arrivedStopIds={trackedBus.completedStops}
                         />
                         {/* Desktop Back Button */}
                         <div className="absolute top-4 left-4 z-[1000] hidden md:block">
@@ -359,6 +382,19 @@ const StudentDashboard = () => {
 
                                 const completedStops: string[] = trackedBus.completedStops || [];
                                 const nextStopIndex = route.stops.findIndex((s: any) => !completedStops.includes(s.stopId || s._id));
+                                const nextStop = route.stops[nextStopIndex];
+
+                                // Normalize bus location
+                                const busLoc = trackedBus.location || trackedBus.currentLocation || {};
+                                const busLat = busLoc.latitude ?? busLoc.lat;
+                                const busLng = busLoc.longitude ?? busLoc.lng;
+
+                                let distanceToNextStopM = Infinity;
+                                if (nextStop && busLat !== undefined && busLng !== undefined) {
+                                    const stopLat = nextStop.latitude ?? nextStop.lat;
+                                    const stopLng = nextStop.longitude ?? nextStop.lng;
+                                    distanceToNextStopM = haversineMeters(busLat, busLng, stopLat, stopLng);
+                                }
 
                                 return (
                                     <div className="relative pl-6 space-y-8">
@@ -369,42 +405,77 @@ const StudentDashboard = () => {
                                             const isCompleted = completedStops.includes(stop.stopId || stop._id);
                                             const isNext = idx === nextStopIndex;
 
+                                            // Status derivation
+                                            let status: 'ARRIVED' | 'ARRIVING' | 'NEXT' | 'UPCOMING' = 'UPCOMING';
+                                            if (isCompleted) {
+                                                status = 'ARRIVED';
+                                            } else if (isNext) {
+                                                const ARRIVED_RADIUS_M = 100;
+                                                const ARRIVING_DISTANCE_M = 804; // 0.5 miles
+
+                                                if (distanceToNextStopM <= ARRIVED_RADIUS_M) {
+                                                    status = 'ARRIVED';
+                                                } else if (distanceToNextStopM <= ARRIVING_DISTANCE_M) {
+                                                    status = 'ARRIVING';
+                                                } else {
+                                                    status = 'NEXT';
+                                                }
+                                            }
+
                                             // Determine Icon
                                             let Icon = MapPin;
                                             if (idx === 0) Icon = Clock; // Start
                                             if (idx === route.stops.length - 1) Icon = Bus; // Destination
 
                                             return (
-                                                <div key={idx} className={`relative flex items-start gap-4 ${isCompleted ? 'opacity-60' : 'opacity-100'}`}>
+                                                <div key={idx} className={`relative flex items-start gap-4 ${status === 'ARRIVED' ? 'opacity-60' : 'opacity-100'}`}>
                                                     {/* Timeline Dot/Icon */}
-                                                    <div className={`relative z-10 w-10 h-10 rounded-full border-4 flex items-center justify-center bg-white flex-shrink-0 transition-all ${isCompleted ? 'border-green-500 text-green-500' :
-                                                        isNext ? 'border-blue-500 text-blue-500 ring-4 ring-blue-100' :
-                                                            'border-slate-300 text-slate-400'
+                                                    <div className={`relative z-10 w-10 h-10 rounded-full border-4 flex items-center justify-center bg-white flex-shrink-0 transition-all ${status === 'ARRIVED' ? 'border-green-500 text-green-500' :
+                                                        status === 'ARRIVING' ? 'border-orange-500 text-orange-500 ring-4 ring-orange-100' :
+                                                            status === 'NEXT' ? 'border-blue-500 text-blue-500 ring-4 ring-blue-100' :
+                                                                'border-slate-300 text-slate-400'
                                                         }`}>
-                                                        <Icon size={16} fill={isCompleted ? "currentColor" : "none"} />
+                                                        <Icon size={16} fill={status === 'ARRIVED' ? "currentColor" : "none"} />
                                                     </div>
 
-                                                    <div className="flex-1 bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                                                    <div className="flex-1 bg-white p-4 rounded-xl border border-slate-100 shadow-sm relative overflow-hidden">
+                                                        {status === 'ARRIVING' && (
+                                                            <div className="absolute top-0 right-0 px-2 py-0.5 bg-orange-500 text-white text-[10px] font-black uppercase rounded-bl-lg tracking-wider">
+                                                                Arriving
+                                                            </div>
+                                                        )}
                                                         <div className="flex justify-between items-start mb-1">
-                                                            <h4 className={`font-bold text-base ${isCompleted ? 'text-slate-500 line-through' : 'text-slate-800'}`}>
+                                                            <h4 className={`font-bold text-base ${status === 'ARRIVED' ? 'text-slate-500 line-through' : 'text-slate-800'}`}>
                                                                 {stop.stopName}
                                                             </h4>
                                                             <span className="text-xs font-mono text-slate-400">
-                                                                {/* Time placeholder */}
                                                                 Stop {idx + 1}
                                                             </span>
                                                         </div>
                                                         <p className="text-xs text-slate-500 mb-2 truncate max-w-[200px]">
-                                                            {stop.latitude.toFixed(4)}, {stop.longitude.toFixed(4)}
+                                                            {(stop.latitude ?? stop.lat).toFixed(4)}, {(stop.longitude ?? stop.lng).toFixed(4)}
                                                         </p>
 
-                                                        {isNext && (
+                                                        {status === 'NEXT' && (
                                                             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold">
                                                                 <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse"></span>
-                                                                Arriving Next
+                                                                Next Stop
                                                             </div>
                                                         )}
-                                                        {isCompleted && (
+                                                        {status === 'ARRIVING' && (
+                                                            <div className="mt-1 flex items-center gap-2">
+                                                                <div className="flex-1 h-1 bg-slate-100 rounded-full overflow-hidden">
+                                                                    <div
+                                                                        className="h-full bg-orange-500 animate-pulse"
+                                                                        style={{ width: `${Math.max(10, 100 - (distanceToNextStopM / 8.04))}%` }}
+                                                                    />
+                                                                </div>
+                                                                <span className="text-[10px] font-bold text-orange-600">
+                                                                    {(distanceToNextStopM / 1609.34).toFixed(1)} mi
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                        {status === 'ARRIVED' && (
                                                             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-green-50 text-green-600 rounded-lg text-xs font-bold">
                                                                 Reached
                                                             </div>
@@ -499,7 +570,6 @@ const StudentDashboard = () => {
                     <div className="flex-1 relative">
                         <MapLibreMapComponent
                             buses={buses}
-                            // Show stops for assigned bus on map
                             stops={(() => {
                                 const targetBus = assignedBus || buses.find(b => b.status === 'ON_ROUTE');
                                 if (!targetBus || !targetBus.assignedRouteId) return [];
@@ -512,8 +582,16 @@ const StudentDashboard = () => {
                                     lng: s.longitude,
                                     name: s.stopName,
                                     id: s.stopId || s._id,
-                                    isCompleted: (targetBus.completedStops || []).includes(s.stopId || s._id)
+                                    radiusM: s.radiusM || 100
                                 }));
+                            })()}
+                            nextStopId={(() => {
+                                const targetBus = assignedBus || buses.find(b => b.status === 'ON_ROUTE');
+                                return targetBus?.nextStopId;
+                            })()}
+                            arrivedStopIds={(() => {
+                                const targetBus = assignedBus || buses.find(b => b.status === 'ON_ROUTE');
+                                return targetBus?.completedStops;
                             })()}
                         />
 
@@ -726,14 +804,12 @@ const StudentDashboard = () => {
                                         <p className="text-white font-semibold">{busLocations[selectedBus._id]}</p>
                                     </div>
                                 )}
-                                {selectedBus.speed != null && isLiveBus(selectedBus) && (
-                                    <div className="flex items-center justify-between p-3 bg-slate-700/50 rounded-xl">
-                                        <span className="text-slate-400">Speed</span>
-                                        <span className="font-bold text-white">
-                                            {Math.round(selectedBus.speed ?? selectedBus.speedMph ?? selectedBus.speedMPH ?? 0)} mph
-                                        </span>
-                                    </div>
-                                )}
+                                <div className="flex items-center justify-between p-3 bg-slate-700/50 rounded-xl">
+                                    <span className="text-slate-400">Speed</span>
+                                    <span className={`font-bold ${isStale(selectedBus.lastUpdated || selectedBus.lastLocationUpdate) ? 'text-slate-500' : 'text-white'}`}>
+                                        {isStale(selectedBus.lastUpdated || selectedBus.lastLocationUpdate) ? '--' : Math.round(selectedBus.speedMph ?? selectedBus.speed ?? selectedBus.speedMPH ?? 0)} mph
+                                    </span>
+                                </div>
                             </div>
 
                             <div className="flex gap-3">

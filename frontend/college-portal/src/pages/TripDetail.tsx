@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
     Bus, User, RefreshCw, Trash2,
     ArrowLeft, Map as MapIcon, Navigation, Activity,
-    AlertCircle, CheckCircle2, StopCircle
+    AlertCircle, CheckCircle2, StopCircle, X
 } from 'lucide-react';
 import Layout from '../components/Layout';
 import MapLibreMap from '../components/MapLibreMap';
@@ -17,7 +17,7 @@ interface Trip {
     driverName: string;
     startTime: string;
     endTime: string | null;
-    status: 'ACTIVE' | 'COMPLETED';
+    status: 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
     durationMinutes: number | null;
     collegeId: string;
     distanceMeters?: number | null;
@@ -63,7 +63,12 @@ const TripDetail = () => {
             // 2. Get Path Data
             const pathResponse = await getTripPath(tripId);
             if (pathResponse.success) {
-                if (pathResponse.polyline) {
+                if (pathResponse.decodedPath && Array.isArray(pathResponse.decodedPath) && pathResponse.decodedPath.length > 0) {
+                    // PREFER backend decoded points [ {lat, lng}, ... ]
+                    const coords = pathResponse.decodedPath.map((p: any) => [p.lat, p.lng] as [number, number]);
+                    setPath(coords);
+                    setRawPathData(pathResponse.decodedPath);
+                } else if (pathResponse.polyline) {
                     const decoded = decodePolyline(pathResponse.polyline);
                     setPath(decoded);
                 } else if (Array.isArray(pathResponse.data)) {
@@ -80,6 +85,17 @@ const TripDetail = () => {
                     const pathCoords = pathPoints.map((p: any) => [p[0], p[1]] as [number, number]);
                     setRawPathData(pathPoints.map((p: any) => ({ lat: p[0], lng: p[1], speed: p[2] })));
                     setPath(pathCoords);
+                }
+
+                // If backend provided metrics, update trip state partially to ensure consistency
+                if (pathResponse.metrics && trip) {
+                    setTrip({
+                        ...trip,
+                        distanceMeters: pathResponse.metrics.distanceMeters ?? trip.distanceMeters,
+                        maxSpeedMph: pathResponse.metrics.maxSpeedMph ?? trip.maxSpeedMph,
+                        avgSpeedMph: pathResponse.metrics.avgSpeedMph ?? trip.avgSpeedMph,
+                        pointsCount: pathResponse.metrics.totalPoints ?? trip.pointsCount,
+                    });
                 }
             }
 
@@ -210,6 +226,11 @@ const TripDetail = () => {
                                             <Navigation size={12} className="fill-current" />
                                             Live Tracking
                                         </span>
+                                    ) : trip.status === 'CANCELLED' ? (
+                                        <span className="flex items-center gap-1.5 text-xs font-bold text-red-500">
+                                            <X size={12} />
+                                            Trip Cancelled
+                                        </span>
                                     ) : (
                                         <span className="flex items-center gap-1.5 text-xs font-bold text-slate-500">
                                             <CheckCircle2 size={12} />
@@ -306,14 +327,14 @@ const TripDetail = () => {
 
                 {/* Main Map View */}
                 <div className="flex-1 relative bg-slate-50">
-                    {path.length > 0 ? (
+                    {path.length >= 2 ? (
                         <MapLibreMap
                             buses={trip.status === 'ACTIVE' && path.length > 0 ? [{
                                 _id: trip.busId,
                                 busNumber: trip.busNumber,
                                 location: {
-                                    latitude: path[path.length - 1][1],
-                                    longitude: path[path.length - 1][0],
+                                    latitude: path[path.length - 1][0], // Corrected: path[i] is [lat, lng]
+                                    longitude: path[path.length - 1][1],
                                     heading: 0
                                 },
                                 speedMph: rawPathData[rawPathData.length - 1]?.speed || 0,

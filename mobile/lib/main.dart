@@ -8,7 +8,7 @@ import 'firebase_options.dart';
 import 'features/shell/app_router.dart';
 import 'core/services/location_service.dart';
 import 'data/providers.dart';
-import 'features/driver/services/driver_location_service.dart';
+import 'features/driver/services/background_tracking_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -27,7 +27,7 @@ void main() async {
     print("Firestore query successful. Documents found: ${snapshot.docs.length}");
     
     // Initialize Background Tracking Service for Drivers
-    await DriverLocationService.initialize();
+    await BackgroundTrackingService.initialize();
   } catch (e) {
     print("Firebase initialization or Firestore query failed: $e");
   }

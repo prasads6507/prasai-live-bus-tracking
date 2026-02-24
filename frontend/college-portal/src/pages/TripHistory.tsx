@@ -12,7 +12,7 @@ interface Trip {
     driverName: string;
     startTime: string;
     endTime: string | null;
-    status: 'ACTIVE' | 'COMPLETED';
+    status: 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
     durationMinutes: number | null;
 }
 
@@ -78,12 +78,28 @@ const TripHistory = () => {
         });
     };
 
-    const formatDuration = (minutes: number | null) => {
-        if (minutes === null) return '—';
-        if (minutes < 60) return `${minutes}m`;
-        const hours = Math.floor(minutes / 60);
-        const mins = minutes % 60;
-        return `${hours}h ${mins}m`;
+    const formatDuration = (minutes: number | null, startTime?: string, endTime?: string | null) => {
+        let mins = minutes;
+
+        // Fallback: Calculate if missing but we have timestamps
+        if (mins === null && startTime && endTime) {
+            try {
+                const start = new Date(startTime);
+                const end = new Date(endTime);
+                if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+                    mins = Math.round((end.getTime() - start.getTime()) / 60000);
+                }
+            } catch (e) {
+                console.warn('Failed to calculate fallback duration:', e);
+            }
+        }
+
+        if (mins === null) return '—';
+        if (mins < 0) return '—';
+        if (mins < 60) return `${mins}m`;
+        const hours = Math.floor(mins / 60);
+        const remainingMins = mins % 60;
+        return `${hours}h ${remainingMins}m`;
     };
 
     const handleBulkDelete = async () => {
@@ -162,7 +178,7 @@ const TripHistory = () => {
             'Driver': t.driverName,
             'Start Time': formatDateTime(t.startTime),
             'End Time': formatDateTime(t.endTime),
-            'Duration': formatDuration(t.durationMinutes),
+            'Duration': formatDuration(t.durationMinutes, t.startTime, t.endTime),
             'Status': t.status
         }));
 
@@ -326,16 +342,20 @@ const TripHistory = () => {
                                             <td className="px-6 py-4 text-slate-700">{trip.driverName}</td>
                                             <td className="px-6 py-4 text-slate-600">{formatDateTime(trip.startTime)}</td>
                                             <td className="px-6 py-4 text-slate-600">{formatDateTime(trip.endTime)}</td>
-                                            <td className="px-6 py-4 text-slate-600">{formatDuration(trip.durationMinutes)}</td>
+                                            <td className="px-6 py-4 text-slate-600">{formatDuration(trip.durationMinutes, trip.startTime, trip.endTime)}</td>
                                             <td className="px-6 py-4">
                                                 {trip.status === 'ACTIVE' ? (
                                                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
                                                         <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
                                                         On Trip
                                                     </span>
+                                                ) : trip.status === 'CANCELLED' ? (
+                                                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">
+                                                        Cancelled
+                                                    </span>
                                                 ) : (
                                                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600">
-                                                        Off Trip
+                                                        {trip.status === 'COMPLETED' ? 'Completed' : 'Off Trip'}
                                                     </span>
                                                 )}
                                             </td>
