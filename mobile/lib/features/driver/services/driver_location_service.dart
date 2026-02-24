@@ -1,3 +1,12 @@
+import 'dart:convert';
+import 'dart:math';
+import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:dio/dio.dart';
+import '../../../data/datasources/api_ds.dart';
+import '../../../core/utils/polyline_encoder.dart';
+
 class DriverLocationService {
   static Future<void> _retryPendingUpload() async {
     try {
@@ -122,4 +131,16 @@ class DriverLocationService {
       }
     }
   }
+
+  static double _haversineMeters(double lat1, double lon1, double lat2, double lon2) {
+    const double r = 6371000; // Earth radius in meters
+    final double dLat = _toRadians(lat2 - lat1);
+    final double dLon = _toRadians(lon2 - lon1);
+    final double a = sin(dLat / 2) * sin(dLat / 2) +
+        cos(_toRadians(lat1)) * cos(_toRadians(lat2)) * sin(dLon / 2) * sin(dLon / 2);
+    final double c = 2 * atan2(sqrt(a), sqrt(1 - a));
+    return r * c;
+  }
+
+  static double _toRadians(double degree) => degree * pi / 180;
 }

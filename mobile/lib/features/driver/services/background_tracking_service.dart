@@ -29,7 +29,6 @@ class BackgroundTrackingService {
         notificationChannelId: 'bus_tracking',
         initialNotificationTitle: 'Tracking Active',
         initialNotificationContent: 'Ready to track trip',
-        foregroundServiceType: ForegroundServiceType.location,
       ),
       iosConfiguration: IosConfiguration(
         autoStart: false,
@@ -75,7 +74,7 @@ class BackgroundTrackingService {
     final busId = prefs.getString('track_bus_id');
     final tripId = prefs.getString('track_trip_id');
 
-    if (collegeId == null || busId == null) {
+    if (collegeId == null || busId == null || tripId == null) {
       debugPrint("[Background] Context missing, stopping service.");
       service.stopSelf();
       return;
@@ -138,14 +137,14 @@ class BackgroundTrackingService {
       final intervalElapsed = elapsedMs >= (intervalSec * 1000);
 
       if (statusChanged || modeChanged || intervalElapsed) {
-        await _writeToFirestore(prefs, busId, tripId, position, newMode, newStatus, nextStopId);
+        await _writeToFirestore(prefs, busId!, tripId!, position, newMode, newStatus, nextStopId);
         lastWriteMs = now.millisecondsSinceEpoch;
         currentMode = newMode;
         currentStatus = newStatus;
         
         // E. Geofence / Stop Arrival logic
         if (distToNextStop <= nextStopRadius && statusChanged && newStatus == 'ARRIVED') {
-           await _handleArrival(prefs, collegeId, busId, tripId, nextStopId, position);
+           await _handleArrival(prefs, collegeId!, busId!, tripId!, nextStopId, position);
         }
       }
       

@@ -276,50 +276,6 @@ class _MobileMapLibreState extends ConsumerState<MobileMapLibre> with SingleTick
       // We will use a simple update if the package supports it, otherwise we would need multiple layers.
       // However, for colors, we can often pass an expression.
       
-      await _mapController!.setCircleLayerProperties(
-        'stop-circles-layer',
-        CircleLayerProperties(
-          circleColor: [
-            'match',
-            ['get', 'status'],
-            'NEXT', '#3b82f6',
-            'ARRIVED', '#10b981',
-            '#f97316'
-          ],
-          circleOpacity: [
-            'match',
-            ['get', 'status'],
-            'ARRIVED', 0.08,
-            'NEXT', 0.2,
-            0.12
-          ],
-          circleRadius: [
-            'match',
-            ['get', 'status'],
-            'NEXT', 80.0,
-            60.0
-          ],
-        ),
-      );
-
-      await _mapController!.setSymbolLayerProperties(
-        'stop-pins-layer',
-        SymbolLayerProperties(
-          iconSize: [
-             'match',
-             ['get', 'status'],
-             'NEXT', 1.0,
-             0.8
-          ],
-          iconOpacity: [
-             'match',
-             ['get', 'status'],
-             'ARRIVED', 0.5,
-             1.0
-          ]
-        ),
-      );
-
     } catch (e) {
       debugPrint("Error updating stop layers: $e");
     }

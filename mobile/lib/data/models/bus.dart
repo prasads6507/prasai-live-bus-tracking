@@ -22,6 +22,8 @@ class Bus {
   final double? speedMph;
   final String? currentStatus; // "MOVING", "ARRIVING", "ARRIVED"
   final String? trackingMode;   // "FAR", "NEAR_STOP"
+  final String? nextStopId;
+  final double? nextStopRadius;
 
   Bus({
     required this.id,
@@ -44,6 +46,8 @@ class Bus {
     this.speedMph,
     this.currentStatus,
     this.trackingMode,
+    this.nextStopId,
+    this.nextStopRadius,
   });
 
   factory Bus.fromFirestore(DocumentSnapshot doc) {
@@ -83,6 +87,8 @@ class Bus {
       speedMph: (data['speedMph'] as num? ?? data['speedMPH'] as num? ?? data['speed'] as num?)?.toDouble(),
       currentStatus: data['currentStatus'] ?? data['status'],
       trackingMode: data['trackingMode'],
+      nextStopId: data['nextStopId'],
+      nextStopRadius: (data['nextStopRadius'] as num?)?.toDouble(),
     );
   }
 }
