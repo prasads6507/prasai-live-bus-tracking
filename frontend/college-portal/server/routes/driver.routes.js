@@ -6,6 +6,7 @@ const {
     updateBusLocation,
     startTrip,
     endTrip,
+    saveTripHistory,
     historyUpload,
     checkProximity
 } = require('../controllers/driverController');
@@ -32,7 +33,7 @@ router.post('/trips/:tripId/history-upload', historyUpload);
 router.post('/notifications/proximity', checkProximity);
 
 // POST /api/driver/stop-event (Step 5E)
-router.post('/stop-event', authenticate, async (req, res) => {
+router.post('/stop-event', protect, async (req, res) => {
     try {
         const { tripId, busId, collegeId, stopId, stopName, stopAddress, type, arrivalDocId } = req.body;
 
