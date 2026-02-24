@@ -188,7 +188,6 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
           }
         });
   }
-  }
 
   void _setupLifecycleListener(String collegeId, String busId) {
     _lifecycleSubscription?.cancel();

@@ -496,7 +496,7 @@ class BackgroundTrackingService {
       });
 
       // 2. Update Bus Status
-      final busUpdate = {
+      final Map<String, dynamic> busUpdate = {
         'currentStatus': 'MOVING',
         'trackingMode': 'FAR',
         'completedStops': FieldValue.arrayUnion([stopId]),
