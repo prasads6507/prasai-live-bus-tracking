@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:dio/dio.dart';
 import '../../../data/datasources/api_ds.dart';
 import '../../../core/utils/polyline_encoder.dart';
@@ -92,7 +93,16 @@ class DriverLocationService {
           final String polyline = PolylineEncoder.encode(coords);
 
           // 3. Upload to API
-          await ApiDataSource(Dio(), FirebaseFirestore.instance).uploadTripHistory(
+          final dio = Dio();
+          final user = FirebaseAuth.instance.currentUser;
+          if (user != null) {
+            final token = await user.getIdToken();
+            if (token != null) {
+              dio.options.headers['Authorization'] = 'Bearer $token';
+            }
+          }
+
+          await ApiDataSource(dio, FirebaseFirestore.instance).uploadTripHistory(
             tripId,
             polyline: polyline,
             distanceMeters: totalDistM.round(),
