@@ -30,24 +30,26 @@ try {
         privateKeyRaw = privateKeyRaw.slice(1, -1);
     }
 
-    // Aggressive cleaning for Vercel:
-    // 1. Convert literal \n to real newlines
-    // 2. Remove any surrounding quotes (sometimes double-quotes get escaped)
-    // 3. Trim all whitespace
-    let privateKey = privateKeyRaw
-        .replace(/\\n/g, '\n')  // Handle escaped newlines
-        .replace(/\"/g, '')     // Remove any double quotes
-        .replace(/\'/g, '')     // Remove any single quotes
-        .trim();
+    // Ultimate Foolproof PEM Reconstructor for Vercel
+    // Extracts the base64 payload regardless of how mangled the user input is 
+    // (escaped newlines, spaces, quotes, missing newlines) and rebuilds a valid PEM.
+    let base64Payload = privateKeyRaw
+        .replace(/-----BEGIN PRIVATE KEY-----/g, '')
+        .replace(/-----END PRIVATE KEY-----/g, '')
+        .replace(/\\n/g, '') // remove literal \n
+        .replace(/\r/g, '')  // remove carriage returns
+        .replace(/\n/g, '')  // remove actual newlines
+        .replace(/\"/g, '')  // remove quotes
+        .replace(/\'/g, '')  // remove quotes
+        .replace(/\s+/g, ''); // remove any other whitespaces/tabs
 
-    // Final guard: Fix header if it got mangled
-    if (privateKey && !privateKey.startsWith('-----BEGIN PRIVATE KEY-----')) {
-        console.warn("[Firebase] Warning: Private key missing header, forcing format.");
-        privateKey = `-----BEGIN PRIVATE KEY-----\n${privateKey}`;
+    // A valid PEM chunks the base64 payload into 64-character lines
+    let formattedKey = '';
+    for (let i = 0; i < base64Payload.length; i += 64) {
+        formattedKey += base64Payload.substring(i, i + 64) + '\n';
     }
-    if (privateKey && !privateKey.endsWith('-----END PRIVATE KEY-----')) {
-        privateKey = `${privateKey}\n-----END PRIVATE KEY-----`;
-    }
+
+    const privateKey = `-----BEGIN PRIVATE KEY-----\n${formattedKey.trim()}\n-----END PRIVATE KEY-----\n`;
 
     if (!admin.apps.length) {
         admin.initializeApp({
