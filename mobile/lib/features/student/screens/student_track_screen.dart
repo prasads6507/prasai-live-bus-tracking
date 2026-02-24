@@ -330,96 +330,54 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
   }
 
   List<DropOffItem> _buildDropOffItems() {
-    // Prefer trip stopsSnapshot + stopProgress (real-time from Firestore)
-    if (_tripStopsSnapshot.isNotEmpty) {
-      final arrivedIds = List<String>.from(_tripStopProgress['arrivedStopIds'] ?? []);
-      final currentIndex = (_tripStopProgress['currentIndex'] as num?)?.toInt() ?? 0;
+    if (_tripStopsSnapshot.isEmpty || _currentBus?.location == null) return [];
+
+    final arrivedIds = List<String>.from(_tripStopProgress['arrivedStopIds'] ?? []);
+    final currentIndex = (_tripStopProgress['currentIndex'] as num?)?.toInt() ?? 0;
+    final busLat = _currentBus!.location!.latitude;
+    final busLng = _currentBus!.location!.longitude;
+
+    return List.generate(_tripStopsSnapshot.length, (index) {
+      final stop = _tripStopsSnapshot[index];
+      final stopId = stop['stopId'] as String? ?? '';
+      final stopLat = (stop['lat'] as num?)?.toDouble() ?? 0.0;
+      final stopLng = (stop['lng'] as num?)?.toDouble() ?? 0.0;
+      final radiusM = (stop['radiusM'] as num?)?.toDouble() ?? 100.0;
       
-      // Calculate distance to next stop for status derivation
-      double distToNextStopM = double.infinity;
-      if (currentIndex < _tripStopsSnapshot.length && _currentBus?.location != null) {
-        final nextStop = _tripStopsSnapshot[currentIndex];
-        distToNextStopM = Geolocator.distanceBetween(
-          _currentBus!.location!.latitude, 
-          _currentBus!.location!.longitude,
-          (nextStop['lat'] as num).toDouble(),
-          (nextStop['lng'] as num).toDouble(),
-        );
-      }
+      final distM = Geolocator.distanceBetween(busLat, busLng, stopLat, stopLng);
+      final isArrivedInDoc = arrivedIds.contains(stopId);
 
-      return List.generate(_tripStopsSnapshot.length, (index) {
-        final stop = _tripStopsSnapshot[index];
-        final stopId = stop['stopId'] as String? ?? '';
-        final isCompleted = arrivedIds.contains(stopId);
-        final isCurrent = index == currentIndex;
-
-        String timeLabel;
-        if (isCompleted) {
-          timeLabel = "Arrived";
-        } else if (isCurrent) {
-          final stopRadius = (stop['radiusM'] as num?)?.toDouble() ?? 100.0;
-          if (distToNextStopM <= stopRadius) {
-            timeLabel = "Arrived";
-          } else if (distToNextStopM <= 804) {
-            timeLabel = "Arriving";
-          } else {
-            timeLabel = "Next";
-          }
+      String status;
+      if (isArrivedInDoc) {
+        // Once bus crosses outside after arrived -> DEPARTED
+        status = (distM <= radiusM) ? "ARRIVED" : "DEPARTED";
+      } else {
+        if (index < currentIndex) {
+          status = "DEPARTED"; // Failsafe
+        } else if (index > currentIndex) {
+          status = "NEXT";
         } else {
-          timeLabel = stop['plannedTime'] as String? ?? 'TBD';
-        }
-
-        return DropOffItem(
-          time: timeLabel,
-          location: stop['name'] as String? ?? stop['stopName'] as String? ?? '',
-          isCompleted: isCompleted,
-          isCurrent: isCurrent,
-          isNext: isCurrent,
-          distanceM: isCurrent ? distToNextStopM : null,
-        );
-      });
-    }
-
-    // Fallback to legacy route-based logic
-    if (_currentRoute == null || _currentBus == null) return [];
-    
-    final busLoc = _currentBus!.location;
-    final completedStops = _currentBus!.completedStops.toList();
-    final stopList = _currentRoute!.stops;
-    
-    String? currentStopId;
-    
-    if (busLoc != null) {
-      for (var stop in stopList) {
-        double dist = Geolocator.distanceBetween(
-           busLoc.latitude, busLoc.longitude,
-           stop.latitude, stop.longitude
-        );
-        final stopRadius = stop.radiusM ?? 100.0;
-        if (dist <= stopRadius) {
-           currentStopId = stop.id;
-           completedStops.remove(stop.id);
-           break;
+          // Current targeted stop
+          if (distM <= radiusM) {
+            status = "ARRIVED";
+          } else if (distM <= 804.672) { // 0.5 mile
+            status = "ARRIVING";
+          } else {
+            status = "NEXT";
+          }
         }
       }
-    }
-    
-    final nextStopIndex = stopList.indexWhere((s) => s.id == currentStopId);
-    final upcomingIndex = nextStopIndex != -1 ? nextStopIndex : stopList.indexWhere((s) => !completedStops.contains(s.id));
 
-    return List.generate(stopList.length, (index) {
-      final stop = stopList[index];
-      
-      final isCompleted = completedStops.contains(stop.id);
-      final isCurrent = stop.id == currentStopId;
-      final isNext = (isCurrent || index == upcomingIndex);
-      
+      // Debug log (dev-only)
+      debugPrint("[StatusCheck] Stop: ${stop['name']}, Dist: ${distM.toStringAsFixed(1)}m, Status: $status");
+
       return DropOffItem(
-        time: isCurrent ? "Arrived" : (isCompleted ? "Done" : "TBD"), 
-        location: stop.stopName,
-        isCompleted: isCompleted,
-        isCurrent: isCurrent,
-        isNext: isNext,
+        time: status,
+        location: stop['name'] as String? ?? stop['stopName'] as String? ?? '',
+        isCompleted: status == "DEPARTED",
+        isCurrent: status == "ARRIVED" || status == "ARRIVING",
+        isNext: status == "NEXT",
+        distanceM: (status == "ARRIVING" || status == "NEXT" && index == currentIndex) ? distM : null,
       );
     });
   }

@@ -84,7 +84,7 @@ class Bus {
       currentRoadName: data['currentRoadName'] ?? data['currentStreetName'],
       currentSpeed: (data['currentSpeed'] as num?)?.toDouble(),
       currentHeading: (data['currentHeading'] as num?)?.toDouble(),
-      speedMph: (data['speedMph'] as num? ?? data['speedMPH'] as num? ?? data['speed'] as num?)?.toDouble(),
+      speedMph: (data['speedMph'] as num? ?? data['currentSpeed'] as num? ?? data['speedMPH'] as num? ?? data['speed'] as num?)?.toDouble(),
       currentStatus: data['currentStatus'] ?? data['status'],
       trackingMode: data['trackingMode'],
       nextStopId: data['nextStopId'],

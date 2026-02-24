@@ -164,12 +164,8 @@ class DropOffList extends StatelessWidget {
                           ),
                           child: Text(
                             stop.time,
-                            style: TextStyle(
-                              color: isArriving 
-                                ? Colors.orangeAccent 
-                                : (stop.isCurrent && !stop.isCompleted) 
-                                  ? AppColors.success 
-                                  : (stop.isNext ? Colors.white : Colors.white54), 
+                            style: const TextStyle(
+                              color: Colors.black, 
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
                             ),

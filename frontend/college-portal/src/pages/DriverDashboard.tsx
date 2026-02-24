@@ -324,6 +324,8 @@ const DriverDashboard = () => {
                             heading: headingVal
                         },
                         speed: speedMph,
+                        speedMph: speedMph,
+                        currentSpeed: speedMph,
                         lastUpdated: new Date().toISOString()
                     }).then(() => {
                         console.log(`[Driver] Updated Firestore: lat=${latitude.toFixed(5)} lng=${longitude.toFixed(5)} speedMph=${speedMph}`);

@@ -151,14 +151,28 @@ const updateBusLocation = async (req, res) => {
                 lastLocationUpdate: admin.firestore.FieldValue.serverTimestamp()
             };
 
-            if (speed !== undefined) updateData.speed = Math.round(speed);
+            // Speed normalization: if payload has speedMph use it directly,
+            // otherwise treat incoming 'speed' as m/s and convert to mph.
+            let speedMph = 0;
+            if (req.body.speedMph !== undefined) {
+                speedMph = Math.max(0, Math.round(req.body.speedMph));
+            } else if (speed !== undefined) {
+                speedMph = Math.max(0, Math.round(speed * 2.23694));
+            }
+            if (speed !== undefined || req.body.speedMph !== undefined) {
+                updateData.speedMph = speedMph;        // Canonical
+                updateData.currentSpeed = speedMph;    // Alias for some UIs
+                updateData.speed = speedMph;           // Legacy
+            }
+            console.log(`[Speed] Bus ${busId}: raw=${speed}, mph=${speedMph}`);
 
             if (latitude !== undefined && longitude !== undefined) {
                 const newPoint = {
                     latitude,
                     longitude,
                     heading: heading || 0,
-                    speed: Math.round(speed || 0),
+                    speed: speedMph,
+                    speedMph: speedMph,
                     timestamp: new Date().toISOString()
                 };
 
