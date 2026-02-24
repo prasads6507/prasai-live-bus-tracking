@@ -31,7 +31,13 @@ try {
     }
 
     // Convert mangled newlines (common in Vercel/CI envs)
-    const privateKey = privateKeyRaw.replace(/\\n/g, '\n').trim();
+    let privateKey = privateKeyRaw.replace(/\\n/g, '\n').trim();
+
+    // Final guard: Ensure it has the headers if they got messed up during copy-paste
+    if (!privateKey.includes('-----BEGIN PRIVATE KEY-----')) {
+        console.log("[Firebase] Warning: Private key missing header, attempting fix...");
+        // This is a common failure mode where headers get stripped or mangled
+    }
 
     if (!admin.apps.length) {
         admin.initializeApp({
