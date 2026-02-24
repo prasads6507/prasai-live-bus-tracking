@@ -276,6 +276,43 @@ const TripHistory = () => {
                     </div>
                 )}
 
+                {/* Summary Stats */}
+                {trips.length > 0 && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">
+                                <Calendar size={20} />
+                            </div>
+                            <div>
+                                <p className="text-xs text-slate-500 uppercase font-semibold">Total Trips</p>
+                                <p className="text-xl font-bold text-slate-800">{filteredTrips.length}</p>
+                            </div>
+                        </div>
+                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-green-100 text-green-600 flex items-center justify-center">
+                                <Bus size={20} />
+                            </div>
+                            <div>
+                                <p className="text-xs text-slate-500 uppercase font-semibold">Active</p>
+                                <p className="text-xl font-bold text-slate-800">
+                                    {filteredTrips.filter(t => t.status === 'ACTIVE').length}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center">
+                                <Clock size={20} />
+                            </div>
+                            <div>
+                                <p className="text-xs text-slate-500 uppercase font-semibold">Completed</p>
+                                <p className="text-xl font-bold text-slate-800">
+                                    {filteredTrips.filter(t => t.status === 'COMPLETED').length}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Status Row */}
                 <div className="flex flex-wrap items-center justify-between mb-4 gap-4">
                     <div className="text-sm text-slate-500">
@@ -429,42 +466,6 @@ const TripHistory = () => {
                     </div>
                 )}
 
-                {/* Summary Stats */}
-                {trips.length > 0 && (
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">
-                                <Calendar size={20} />
-                            </div>
-                            <div>
-                                <p className="text-xs text-slate-500 uppercase font-semibold">Total Trips</p>
-                                <p className="text-xl font-bold text-slate-800">{filteredTrips.length}</p>
-                            </div>
-                        </div>
-                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-lg bg-green-100 text-green-600 flex items-center justify-center">
-                                <Bus size={20} />
-                            </div>
-                            <div>
-                                <p className="text-xs text-slate-500 uppercase font-semibold">Active</p>
-                                <p className="text-xl font-bold text-slate-800">
-                                    {filteredTrips.filter(t => t.status === 'ACTIVE').length}
-                                </p>
-                            </div>
-                        </div>
-                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center">
-                                <Clock size={20} />
-                            </div>
-                            <div>
-                                <p className="text-xs text-slate-500 uppercase font-semibold">Completed</p>
-                                <p className="text-xl font-bold text-slate-800">
-                                    {filteredTrips.filter(t => t.status === 'COMPLETED').length}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                )}
             </div>
         </Layout>
     );
