@@ -30,13 +30,23 @@ try {
         privateKeyRaw = privateKeyRaw.slice(1, -1);
     }
 
-    // Convert mangled newlines (common in Vercel/CI envs)
-    let privateKey = privateKeyRaw.replace(/\\n/g, '\n').trim();
+    // Aggressive cleaning for Vercel:
+    // 1. Convert literal \n to real newlines
+    // 2. Remove any surrounding quotes (sometimes double-quotes get escaped)
+    // 3. Trim all whitespace
+    let privateKey = privateKeyRaw
+        .replace(/\\n/g, '\n')  // Handle escaped newlines
+        .replace(/\"/g, '')     // Remove any double quotes
+        .replace(/\'/g, '')     // Remove any single quotes
+        .trim();
 
-    // Final guard: Ensure it has the headers if they got messed up during copy-paste
-    if (!privateKey.includes('-----BEGIN PRIVATE KEY-----')) {
-        console.log("[Firebase] Warning: Private key missing header, attempting fix...");
-        // This is a common failure mode where headers get stripped or mangled
+    // Final guard: Fix header if it got mangled
+    if (privateKey && !privateKey.startsWith('-----BEGIN PRIVATE KEY-----')) {
+        console.warn("[Firebase] Warning: Private key missing header, forcing format.");
+        privateKey = `-----BEGIN PRIVATE KEY-----\n${privateKey}`;
+    }
+    if (privateKey && !privateKey.endsWith('-----END PRIVATE KEY-----')) {
+        privateKey = `${privateKey}\n-----END PRIVATE KEY-----`;
     }
 
     if (!admin.apps.length) {
