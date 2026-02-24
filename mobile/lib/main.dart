@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -11,6 +12,11 @@ import 'data/providers.dart';
 import 'features/driver/services/background_tracking_service.dart';
 import 'core/services/notification_service.dart';
 
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  debugPrint("[FCM Background] ${message.notification?.title}: ${message.notification?.body}");
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
@@ -18,6 +24,8 @@ void main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
+    
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
     // Query Firestore directly to avoid home-network IP dependencies
     // This query is added as per instruction, assuming it's for initial setup/check.
     final snapshot = await FirebaseFirestore.instance

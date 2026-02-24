@@ -2,78 +2,100 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
 
 class NotificationService {
-  static final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
+  static final FlutterLocalNotificationsPlugin _plugin =
+      FlutterLocalNotificationsPlugin();
 
   static Future<void> initialize() async {
-    const AndroidInitializationSettings initializationSettingsAndroid =
+    const AndroidInitializationSettings androidSettings =
         AndroidInitializationSettings('@mipmap/ic_launcher');
 
-    const DarwinInitializationSettings initializationSettingsIOS = DarwinInitializationSettings(
+    const DarwinInitializationSettings iosSettings =
+        DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
       requestSoundPermission: true,
     );
 
-    const InitializationSettings initializationSettings = InitializationSettings(
-      android: initializationSettingsAndroid,
-      iOS: initializationSettingsIOS,
+    const InitializationSettings settings = InitializationSettings(
+      android: androidSettings,
+      iOS: iosSettings,
     );
 
-    await _notificationsPlugin.initialize(
-      initializationSettings,
-      onDidReceiveNotificationResponse: (NotificationResponse response) {
-        // Handle notification tap
-      },
+    await _plugin.initialize(
+      settings,
+      onDidReceiveNotificationResponse: (NotificationResponse response) {},
     );
 
-    // Create channel for Android
     const AndroidNotificationChannel channel = AndroidNotificationChannel(
       'bus_events',
       'Bus Events',
-      description: 'Notifications for bus arrivals and skips',
+      description: 'Live bus arrival and stop notifications',
       importance: Importance.max,
+      playSound: true,
     );
 
-    await _notificationsPlugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+    await _plugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(channel);
   }
 
-  static Future<void> showArrivalNotification(String stopName) async {
-    await _showNotification(
-      id: 1,
+  /// Bus entered 0.5 mile radius — "Stop Name, Arriving Soon"
+  static Future<void> showArrivingNotification(String stopName) async {
+    await _show(
+      id: 10,
+      title: 'Bus Arriving Soon',
+      body: '$stopName, Arriving Soon',
+    );
+  }
+
+  /// Bus entered 100m radius — "Bus has arrived at Stop Name"
+  static Future<void> showArrivedNotification(String stopName) async {
+    await _show(
+      id: 11,
       title: 'Bus Arrived',
-      body: 'The bus has arrived at $stopName',
+      body: 'Bus has arrived at $stopName',
     );
   }
 
+  /// Bus skipped a stop
   static Future<void> showSkipNotification(String stopName) async {
-    await _showNotification(
-      id: 2,
-      title: 'Bus Heading to Next Stop',
-      body: 'Bus is now heading to its next destination (continuing from $stopName)',
+    await _show(
+      id: 12,
+      title: 'Stop Skipped',
+      body: 'Bus skipped $stopName — heading to next stop',
     );
   }
 
-  static Future<void> _showNotification({
+  // Backward compatibility alias
+  static Future<void> showArrivalNotification(String stopName) =>
+      showArrivedNotification(stopName);
+
+  static Future<void> _show({
     required int id,
     required String title,
     required String body,
   }) async {
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+    const AndroidNotificationDetails androidDetails =
+        AndroidNotificationDetails(
       'bus_events',
       'Bus Events',
-      channelDescription: 'Notifications for bus arrivals and skips',
+      channelDescription: 'Live bus arrival and stop notifications',
       importance: Importance.max,
       priority: Priority.high,
-      ticker: 'ticker',
+      ticker: 'Bus update',
+      enableVibration: true,
     );
 
-    const NotificationDetails platformDetails = NotificationDetails(
+    const NotificationDetails details = NotificationDetails(
       android: androidDetails,
-      iOS: DarwinNotificationDetails(),
+      iOS: DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      ),
     );
 
-    await _notificationsPlugin.show(id, title, body, platformDetails);
+    await _plugin.show(id, title, body, details);
   }
 }

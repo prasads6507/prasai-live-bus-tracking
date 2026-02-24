@@ -24,6 +24,8 @@ class MobileMapLibre extends ConsumerStatefulWidget {
   final List<Map<String, dynamic>>? stopCircles; // [{lat, lng, radiusM, name}]
   final String? nextStopId;
   final List<String>? arrivedStopIds;
+  final List<String>? completedStopIds;
+  final List<String>? skippedStopIds;
   final LocationPoint? liveBusLocation; // For high-freq websocket updates
 
   const MobileMapLibre({
@@ -38,6 +40,8 @@ class MobileMapLibre extends ConsumerStatefulWidget {
     this.stopCircles,
     this.nextStopId,
     this.arrivedStopIds,
+    this.completedStopIds,
+    this.skippedStopIds,
     this.liveBusLocation,
   });
 
@@ -93,7 +97,9 @@ class _MobileMapLibreState extends ConsumerState<MobileMapLibre> with SingleTick
     if (_styleLoaded && _mapController != null && 
         (widget.stopCircles != oldWidget.stopCircles || 
          widget.nextStopId != oldWidget.nextStopId || 
-         widget.arrivedStopIds != oldWidget.arrivedStopIds)) {
+         widget.arrivedStopIds != oldWidget.arrivedStopIds ||
+         widget.completedStopIds != oldWidget.completedStopIds ||
+         widget.skippedStopIds != oldWidget.skippedStopIds)) {
       _updateStopLayers();
     }
   }
@@ -246,7 +252,14 @@ class _MobileMapLibreState extends ConsumerState<MobileMapLibre> with SingleTick
         final stopId = stop['id'] ?? stop['stopId'] ?? stop['_id'] ?? '';
         final isNext = widget.nextStopId == stopId;
         final isArrived = widget.arrivedStopIds?.contains(stopId) ?? false;
-        final status = isArrived ? 'ARRIVED' : (isNext ? 'NEXT' : 'UPCOMING');
+        final isCompleted = widget.completedStopIds?.contains(stopId) ?? false;
+        final isSkipped = widget.skippedStopIds?.contains(stopId) ?? false;
+        
+        String status = 'UPCOMING';
+        if (isCompleted) status = 'COMPLETED';
+        else if (isSkipped) status = 'SKIPPED';
+        else if (isArrived) status = 'ARRIVED';
+        else if (isNext) status = 'NEXT';
 
         return {
           "type": "Feature",
@@ -270,12 +283,6 @@ class _MobileMapLibreState extends ConsumerState<MobileMapLibre> with SingleTick
         "type": "FeatureCollection",
         "features": features,
       });
-
-      // Update layer properties for status-based styling
-      // Note: maplibre_gl flutter expressions are sometimes limited depending on version.
-      // We will use a simple update if the package supports it, otherwise we would need multiple layers.
-      // However, for colors, we can often pass an expression.
-      
     } catch (e) {
       debugPrint("Error updating stop layers: $e");
     }

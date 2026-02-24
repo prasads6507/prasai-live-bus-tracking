@@ -21,10 +21,13 @@ class TrackingLifecycleManager {
 
   static Future<void> stopTrackingAndClearContext() async {
     try {
-      // 1. Stop background service
+      // 1. Force kill the background service
       await BackgroundTrackingService.stop();
+      
+      // 2. Extra safety: Clear any local notifications related to this trip
+      // NotificationService.cancelAll(); // Optional
 
-      // 2. Clear SharedPreferences keys
+      // 3. Clear all SharedPreferences keys
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('track_college_id');
       await prefs.remove('track_bus_id');
@@ -33,11 +36,12 @@ class TrackingLifecycleManager {
       await prefs.remove('next_stop_lat');
       await prefs.remove('next_stop_lng');
       await prefs.remove('next_stop_radius');
+      await prefs.remove('has_arrived_current');
       await prefs.remove('trip_history_buffer');
       
-      print("[TrackingLifecycleManager] Tracking stopped and context cleared.");
+      print("[TrackingLifecycleManager] Context cleared. GPS should teardown.");
     } catch (e) {
-      print("[TrackingLifecycleManager] Error stopping tracking: $e");
+      print("[TrackingLifecycleManager] Error during cleanup: $e");
     }
   }
 }

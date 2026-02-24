@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'dart:ui';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:geolocator/geolocator.dart';
@@ -62,12 +63,12 @@ class BackgroundTrackingService {
   }
 
   static Future<void> stop() async {
-    _isRunning = false;
+    _isRunning = false; // Guard reset
     try {
       final service = FlutterBackgroundService();
       service.invoke("stopService");
     } catch (e) {
-      debugPrint("[BackgroundTrackingService] stop() error (non-fatal): $e");
+      debugPrint("[BackgroundTrackingService] stop() error: $e");
     }
   }
 
@@ -92,9 +93,13 @@ class BackgroundTrackingService {
       
       // 2. Setup service commands
       StreamSubscription<Position>? posSubscription;
+      final Set<String> arrivingNotifiedIds = {};
+
       service.on('stopService').listen((event) async {
         debugPrint("[Background] stopService received. Cleaning up...");
         await posSubscription?.cancel();
+        // Clear static guard in case we are in the same process
+        BackgroundTrackingService._isRunning = false; 
         service.stopSelf();
       });
 
@@ -221,9 +226,15 @@ class BackgroundTrackingService {
                await prefs.setBool('has_arrived_current', false);
                await _handleStopCompletion(prefs, collegeId!, busId!, tripId!, nextStopId);
             }
-            // G. Skip logic: If we are much closer to the *subsequent* stop than the current next stop
-            else if (!hasArrivedCurrent && distToNextStop > nextStopRadius && distToNextStop < 500) {
+            // G. Skip logic: Using more reliable 500m proximity to next stop
+            else if (!hasArrivedCurrent && distToNextStop > nextStopRadius) {
               await _checkForSkip(prefs, collegeId!, busId!, tripId!, nextStopId, position, distToNextStop);
+            }
+
+            // G2. Arriving Soon Notification (Trigger once per stop at 0.5 mile)
+            if (newStatus == 'ARRIVING' && !arrivingNotifiedIds.contains(nextStopId)) {
+               arrivingNotifiedIds.add(nextStopId);
+               _notifyServer(tripId!, busId!, collegeId!, nextStopId, "ARRIVING", prefs: prefs);
             }
           }
           
@@ -340,8 +351,8 @@ class BackgroundTrackingService {
           (followingStop['lng'] as num).toDouble()
         );
 
-        // If we are significantly closer to the following stop than the current one, we skipped it
-        if (distToFollowingM < distToCurrentM && distToCurrentM > 300) {
+        // Robust Skip: If we are closer to the FOLLOWING stop and have significantly left the CURRENT stop area
+        if (distToFollowingM < distToCurrentM && distToCurrentM > 500) {
           final batch = db.batch();
           
           final skippedIds = List<String>.from(progress['skippedStopIds'] ?? []);
@@ -356,7 +367,7 @@ class BackgroundTrackingService {
               'stopProgress.skippedStopIds': skippedIds,
             });
 
-            // 2. Trigger Skip Event for Notifications (Firestore)
+            // 2. Trigger Skip Event for Notifications (Firestore fallback)
             final notifRef = db.collection('stopArrivals').doc();
             batch.set(notifRef, {
               'tripId': tripId,
@@ -366,22 +377,27 @@ class BackgroundTrackingService {
               'stopName': stops[currentIndex]['name'] ?? 'Stop',
               'type': 'SKIPPED',
               'timestamp': DateTime.now().toIso8601String(),
-              'processed': false,
+              'processed': true, // Mark true because we will also call Node API
             });
 
             // 3. Update Bus Status
             batch.update(db.collection('buses').doc(busId), {
               'nextStopId': stops[newIndex]['stopId'],
+              'currentStatus': 'ON_ROUTE',
+              'trackingMode': 'FAR',
             });
 
             await batch.commit();
 
-            // 4. Driver Notification (Local)
-            try {
-              NotificationService.showSkipNotification(stops[currentIndex]['name'] ?? 'Stop');
-            } catch (e) {
-              debugPrint("[Background] Local notif failed: $e");
-            }
+            // 4. Trigger Server FCM (Fires multicasts to students)
+            _notifyServer(tripId, busId, collegeId, currentStopId, "SKIPPED", 
+              stopName: stops[currentIndex]['name'],
+              arrivalDocId: notifRef.id,
+              prefs: prefs
+            );
+
+            // 5. Driver Notification (Local)
+            NotificationService.showSkipNotification(stops[currentIndex]['name'] ?? 'Stop');
 
             // Cache NEXT-NEXT stop
             final nextStop = stops[newIndex] as Map<String, dynamic>;
@@ -389,6 +405,7 @@ class BackgroundTrackingService {
             await prefs.setDouble('next_stop_lng', (nextStop['lng'] as num).toDouble());
             await prefs.setDouble('next_stop_radius', (nextStop['radiusM'] as num?)?.toDouble() ?? 100.0);
             await prefs.setString('next_stop_id', nextStop['stopId'] as String);
+            await prefs.setBool('has_arrived_current', false);
           }
         }
       }
@@ -431,7 +448,7 @@ class BackgroundTrackingService {
           'stopStatus.$stopId': 'ARRIVED',
         });
 
-        // 2. Trigger Event for Student Notifications
+        // 2. Trigger Event for Student Notifications (Firestore fallback)
         final notifRef = db.collection('stopArrivals').doc();
         batch.set(notifRef, {
           'tripId': tripId,
@@ -442,7 +459,7 @@ class BackgroundTrackingService {
           'type': 'ARRIVED',
           'arrivedAt': DateTime.now().toIso8601String(),
           'timestamp': DateTime.now().toIso8601String(),
-          'processed': false,
+          'processed': true, // Mark true because we will also call Node API
         });
 
         // 3. Update Bus
@@ -453,12 +470,15 @@ class BackgroundTrackingService {
 
         await batch.commit();
 
-        // 4. Driver Notification (Local)
-        try {
-          NotificationService.showArrivalNotification(stops[currentIndex]['name'] ?? 'Stop');
-        } catch (e) {
-          debugPrint("[Background] Local notif failed: $e");
-        }
+        // 4. Trigger Server FCM (Step 5F)
+        _notifyServer(tripId, busId, collegeId, stopId, "ARRIVED", 
+          stopName: stops[currentIndex]['name'],
+          arrivalDocId: notifRef.id,
+          prefs: prefs
+        );
+
+        // 5. Driver Notification (Local)
+        NotificationService.showArrivedNotification(stops[currentIndex]['name'] ?? 'Stop');
       }
     } catch (e) {
       debugPrint("[Background] HandleArrivalEntry error: $e");
@@ -554,5 +574,32 @@ class BackgroundTrackingService {
     } else {
       return {'mode': 'FAR', 'status': 'ON_ROUTE'};
     }
+  }
+
+  /// Fire-and-forget call to the Node.js server to multicast FCM notifications
+  static void _notifyServer(String tripId, String busId, String collegeId, String stopId, String type, {String? stopName, String? arrivalDocId, SharedPreferences? prefs}) async {
+     try {
+       final apiBase = prefs?.getString('api_base_url') ?? "https://transit-hub-api.vercel.app";
+       final token = prefs?.getString('auth_token'); // Driver's JWT if available
+
+       final dio = Dio(BaseOptions(
+         connectTimeout: const Duration(seconds: 5),
+         headers: token != null ? {'Authorization': 'Bearer $token'} : null,
+       ));
+
+       final response = await dio.post("$apiBase/api/driver/stop-event", data: {
+         'tripId': tripId,
+         'busId': busId,
+         'collegeId': collegeId,
+         'stopId': stopId,
+         'stopName': stopName ?? 'Stop',
+         'type': type,
+         'arrivalDocId': arrivalDocId
+       });
+
+       debugPrint("[NotifyServer] Result: ${response.statusCode} - ${response.data}");
+     } catch (e) {
+       debugPrint("[NotifyServer] FAILED for $type at $stopId: $e");
+     }
   }
 }

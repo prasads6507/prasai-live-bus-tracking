@@ -63,6 +63,7 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
   Map<String, dynamic> _tripEta = {};
   String? _tripDirection;
   StreamSubscription? _notifSubscription;
+  final Set<String> _processedNotifIds = {};
 
   @override
   void initState() {
@@ -177,13 +178,15 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
             _setupLifecycleListener(collegeId, bus.id);
             _setupNotificationListener(bus.activeTripId!);
           } else {
-            // Trip ended - Kill all GPS/Tracking and stop metrics
+            // Trip ended - Kill all GPS/Tracking
             _liveBusLocation = null;
             _metricsTimer?.cancel();
             _metricsTimer = null;
             TrackingLifecycleManager.stopTrackingAndClearContext();
             _positionStream?.cancel();
             _positionStream = null;
+            _notifSubscription?.cancel();
+            _notifSubscription = null;
             if (mounted) setState(() {});
           }
         });
@@ -215,11 +218,17 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
           for (var change in snapshot.docChanges) {
             if (change.type == DocumentChangeType.added) {
               final data = change.doc.data() as Map<String, dynamic>;
-              final stopName = data['stopName'] ?? 'Stop';
+              final stopName = data['stopName'] ?? data['location'] ?? 'Stop';
               final type = data['type'] ?? 'ARRIVED';
+              final arrivalId = data['arrivalId'] ?? change.doc.id;
 
-              if (type == 'ARRIVED' || type == 'ARRIVING') {
-                NotificationService.showArrivalNotification(stopName);
+              if (_processedNotifIds.contains(arrivalId)) continue;
+              _processedNotifIds.add(arrivalId);
+
+              if (type == 'ARRIVED') {
+                NotificationService.showArrivedNotification(stopName);
+              } else if (type == 'ARRIVING') {
+                NotificationService.showArrivingNotification(stopName);
               } else if (type == 'SKIPPED') {
                 NotificationService.showSkipNotification(stopName);
               }
@@ -387,54 +396,48 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
 
     final arrivedIds = List<String>.from(_tripStopProgress['arrivedStopIds'] ?? []);
     final skippedIds = List<String>.from(_tripStopProgress['skippedStopIds'] ?? []);
+    final completedIds = List<String>.from(_tripStopProgress['completedStopIds'] ?? []);
     final currentIndex = (_tripStopProgress['currentIndex'] as num?)?.toInt() ?? 0;
+    
     final busLat = _currentBus!.location!.latitude;
     final busLng = _currentBus!.location!.longitude;
 
     return List.generate(_tripStopsSnapshot.length, (index) {
       final stop = _tripStopsSnapshot[index];
-      final stopId = stop['stopId'] as String? ?? '';
+      final stopId = stop['stopId'] as String? ?? stop['id'] as String? ?? '';
       final stopLat = (stop['lat'] as num?)?.toDouble() ?? 0.0;
       final stopLng = (stop['lng'] as num?)?.toDouble() ?? 0.0;
       final radiusM = (stop['radiusM'] as num?)?.toDouble() ?? 100.0;
       
       final distM = Geolocator.distanceBetween(busLat, busLng, stopLat, stopLng);
-      final isArrivedInDoc = arrivedIds.contains(stopId);
-      final isSkippedInDoc = skippedIds.contains(stopId);
+      final isArrived = arrivedIds.contains(stopId);
+      final isSkipped = skippedIds.contains(stopId);
+      final isCompleted = completedIds.contains(stopId);
 
       String status;
-      if (isSkippedInDoc) {
+      if (isCompleted) {
+        status = "COMPLETED";
+      } else if (isSkipped) {
         status = "SKIPPED";
-      } else if (isArrivedInDoc) {
-        // Once bus crosses outside after arrived -> DEPARTED
-        status = (distM <= radiusM) ? "ARRIVED" : "DEPARTED";
+      } else if (isArrived) {
+        status = "ARRIVED";
       } else {
         if (index < currentIndex) {
-          status = "DEPARTED"; // Failsafe
-        } else if (index > currentIndex) {
-          status = "NEXT";
+          status = "COMPLETED"; // Failsafe
+        } else if (index == currentIndex) {
+          status = (distM <= 804) ? "ARRIVING" : "NEXT";
         } else {
-          // Current targeted stop
-          if (distM <= radiusM) {
-            status = "ARRIVED";
-          } else if (distM <= 804.672) { // 0.5 mile
-            status = "ARRIVING";
-          } else {
-            status = "NEXT";
-          }
+          status = "NEXT";
         }
       }
-
-      // Debug log (dev-only)
-      debugPrint("[StatusCheck] Stop: ${stop['name']}, Dist: ${distM.toStringAsFixed(1)}m, Status: $status");
 
       return DropOffItem(
         time: status,
         location: stop['name'] as String? ?? stop['stopName'] as String? ?? '',
-        isCompleted: status == "DEPARTED",
+        isCompleted: status == "COMPLETED" || status == "SKIPPED",
         isCurrent: status == "ARRIVED" || status == "ARRIVING",
         isNext: status == "NEXT",
-        distanceM: (status == "ARRIVING" || status == "NEXT" && index == currentIndex) ? distM : null,
+        distanceM: (status == "ARRIVING" || (status == "NEXT" && index == currentIndex)) ? distM : null,
       );
     });
   }
@@ -506,6 +509,12 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
               arrivedStopIds: _tripStopProgress['arrivedStopIds'] != null 
                   ? List<String>.from(_tripStopProgress['arrivedStopIds']) 
                   : _currentBus?.completedStops.map((e) => e.toString()).toList(),
+              completedStopIds: _tripStopProgress['completedStopIds'] != null
+                  ? List<String>.from(_tripStopProgress['completedStopIds'])
+                  : null,
+              skippedStopIds: _tripStopProgress['skippedStopIds'] != null
+                  ? List<String>.from(_tripStopProgress['skippedStopIds'])
+                  : null,
             ),
 
           // Top overlay: Back, Speed/Road, Track Live

@@ -8,27 +8,40 @@ import { getStreetName } from '../services/geocoding';
 import Layout from '../components/Layout';
 import MapLibreMap, { getBusLatLng } from '../components/MapLibreMap';
 
+const getBusLastUpdateIso = (bus: any): string | null => {
+    if (bus.lastLocationUpdate) {
+        try {
+            if (typeof bus.lastLocationUpdate.toDate === 'function') {
+                return bus.lastLocationUpdate.toDate().toISOString();
+            }
+            if (typeof bus.lastLocationUpdate === 'string') return bus.lastLocationUpdate;
+            if (bus.lastLocationUpdate.seconds) {
+                return new Date(bus.lastLocationUpdate.seconds * 1000).toISOString();
+            }
+        } catch (e) { /* fall through */ }
+    }
+    return bus.lastUpdated ?? null;
+};
+
 const isLiveBus = (bus: any) => {
     // If the bus has an active trip ID, it's live (relay is handling movement)
     if (!bus.activeTripId) return false;
 
     // Canonical: bus.status === 'ON_ROUTE'
-    // Legacy Support: bus.status === 'ACTIVE' or 'LIVE' (if used by any older writers)
     const isCanonicalLive = bus.status === 'ON_ROUTE';
     const isLegacyLive = bus.status === 'ACTIVE' || bus.status === 'LIVE';
     if (!(isCanonicalLive || isLegacyLive)) return false;
 
-    // Use a much longer heartbeat for "Offline" fallback, since we rely on WebSockets now
-    if (bus.lastUpdated || bus.lastLocationUpdate) {
+    const lastUpdateIso = getBusLastUpdateIso(bus);
+    if (lastUpdateIso) {
         try {
-            const dateStr = bus.lastUpdated || (bus.lastLocationUpdate.toDate ? bus.lastLocationUpdate.toDate().toISOString() : bus.lastLocationUpdate);
-            const lastUpdate = new Date(dateStr);
+            const lastUpdate = new Date(lastUpdateIso);
             const diffMinutes = (new Date().getTime() - lastUpdate.getTime()) / 60000;
             return diffMinutes < 30; // 30 mins instead of 5
-        } catch (e) { return true; } // If parse fails but we have tripId, assume live
+        } catch (e) { return true; }
     }
 
-    return true; // We have activeTripId, so it's live
+    return true;
 };
 
 const Dashboard = () => {
@@ -372,65 +385,71 @@ const isStale = (isoString: string, thresholdSeconds = 120) => {
     } catch (e) { return true; }
 };
 
-const BusCard = ({ bus, address }: { bus: any, address?: string }) => (
-    <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition-shadow group">
-        <div className="flex items-start justify-between mb-3">
-            <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm ${bus.status === 'ON_ROUTE' ? 'bg-green-100 text-green-600' : 'bg-blue-50 text-blue-600'
-                    }`}>
-                    {bus.busNumber?.slice(0, 2) || 'BS'}
-                </div>
-                <div>
-                    <h4 className="font-bold text-slate-800">{bus.busNumber}</h4>
-                    <p className="text-xs text-slate-500 flex items-center gap-1">
-                        <User size={10} />
-                        {bus.driverName || 'Unassigned'}
-                    </p>
-                </div>
-            </div>
-            <span className={`px-2 py-1 rounded-full text-xs font-bold ${isLiveBus(bus) ? 'bg-green-100 text-green-700 animate-pulse' :
-                bus.status === 'ACTIVE' ? 'bg-blue-100 text-blue-700' :
-                    bus.status === 'MAINTENANCE' ? 'bg-orange-100 text-orange-700' :
-                        'bg-slate-100 text-slate-600'
-                }`}>
-                {isLiveBus(bus) ? 'LIVE' : bus.status || 'Unknown'}
-            </span>
-        </div>
-        <div className="space-y-2">
-            {bus.status === 'ON_ROUTE' && getBusLatLng(bus) ? (
-                <div className="flex flex-col gap-2 text-sm bg-green-50 p-2 rounded-lg">
-                    <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-                        <span className="text-slate-500 font-medium">Speed</span>
-                        <span className={`font-semibold ${isStale(bus.lastUpdated) ? 'text-slate-400' : 'text-green-700'}`}>
-                            {isStale(bus.lastUpdated) ? '--' : Math.round(bus.speedMph ?? bus.speed ?? bus.speedMPH ?? 0)} mph
-                        </span>
+const BusCard = ({ bus, address }: { bus: any, address?: string }) => {
+    const lastUpdateIso = getBusLastUpdateIso(bus);
+    const stale = isStale(lastUpdateIso ?? '', 120);
+    const speedMph = Math.round(bus.speedMph ?? bus.currentSpeed ?? bus.speed ?? bus.speedMPH ?? 0);
+
+    return (
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition-shadow group">
+            <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm ${bus.status === 'ON_ROUTE' ? 'bg-green-100 text-green-600' : 'bg-blue-50 text-blue-600'
+                        }`}>
+                        {bus.busNumber?.slice(0, 2) || 'BS'}
                     </div>
-                    <div className="flex items-center gap-2">
-                        <MapPin size={14} className="text-green-500" />
-                        <div className="text-green-600 text-xs font-medium truncate max-w-[200px]" title={address}>
-                            {address || `${getBusLatLng(bus)![1].toFixed(4)}, ${getBusLatLng(bus)![0].toFixed(4)}`}
+                    <div>
+                        <h4 className="font-bold text-slate-800">{bus.busNumber}</h4>
+                        <p className="text-xs text-slate-500 flex items-center gap-1">
+                            <User size={10} />
+                            {bus.driverName || 'Unassigned'}
+                        </p>
+                    </div>
+                </div>
+                <span className={`px-2 py-1 rounded-full text-xs font-bold ${isLiveBus(bus) ? 'bg-green-100 text-green-700 animate-pulse' :
+                        bus.status === 'ACTIVE' ? 'bg-blue-100 text-blue-700' :
+                            bus.status === 'MAINTENANCE' ? 'bg-orange-100 text-orange-700' :
+                                'bg-slate-100 text-slate-600'
+                    }`}>
+                    {isLiveBus(bus) ? 'LIVE' : bus.status || 'Unknown'}
+                </span>
+            </div>
+            <div className="space-y-2">
+                {bus.status === 'ON_ROUTE' && getBusLatLng(bus) ? (
+                    <div className="flex flex-col gap-2 text-sm bg-green-50 p-2 rounded-lg">
+                        <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                            <span className="text-slate-500 font-medium">Speed</span>
+                            <span className={`font-semibold ${stale ? 'text-slate-400' : 'text-green-700'}`}>
+                                {stale ? '--' : speedMph} mph
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <MapPin size={14} className="text-green-500" />
+                            <div className="text-green-600 text-xs font-medium truncate max-w-[200px]" title={address}>
+                                {address || `${getBusLatLng(bus)![1].toFixed(4)}, ${getBusLatLng(bus)![0].toFixed(4)}`}
+                            </div>
                         </div>
                     </div>
-                </div>
-            ) : (
-                <div className="flex items-center gap-2 text-sm text-slate-500">
-                    <MapPin size={14} className="text-slate-400" />
-                    <span>{getBusLatLng(bus) ? 'Parked' : 'No GPS Data'}</span>
-                </div>
-            )}
-        </div>
-        <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-400">
-                Updated: {getRelativeTime(bus.lastUpdated)}
-            </span>
-            {isLiveBus(bus) && (
-                <span className="text-xs font-bold text-green-600 flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-green-500 animate-ping"></span>
-                    Tracking
+                ) : (
+                    <div className="flex items-center gap-2 text-sm text-slate-500">
+                        <MapPin size={14} className="text-slate-400" />
+                        <span>{getBusLatLng(bus) ? 'Parked' : 'No GPS Data'}</span>
+                    </div>
+                )}
+            </div>
+            <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                <span className="text-xs font-medium text-slate-400">
+                    Updated: {getRelativeTime(lastUpdateIso ?? '')}
                 </span>
-            )}
+                {isLiveBus(bus) && (
+                    <span className="text-xs font-bold text-green-600 flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-green-500 animate-ping"></span>
+                        Tracking
+                    </span>
+                )}
+            </div>
         </div>
-    </div>
-);
+    );
+};
 
 export default Dashboard;

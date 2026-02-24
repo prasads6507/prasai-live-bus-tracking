@@ -1,5 +1,7 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../data/providers.dart';
 import '../../../../data/repositories/auth_repo.dart';
@@ -59,6 +61,9 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
       await prefs.setString('college_slug', collegeSlug);
       await prefs.setString('college_name', collegeName);
       
+      // 5. Register FCM Token (Step 5C)
+      await _registerFcmToken(user.uid);
+      
       state = const AsyncValue.data(null);
     } catch (e, st) {
       // Ensure we are signed out if validation fails
@@ -80,6 +85,22 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
       state = const AsyncValue.data(null);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
+    }
+  }
+  Future<void> _registerFcmToken(String uid) async {
+    try {
+      final messaging = FirebaseMessaging.instance;
+      await messaging.requestPermission();
+      final token = await messaging.getToken();
+      if (token != null) {
+        await FirebaseFirestore.instance
+            .collection('students')
+            .doc(uid)
+            .set({'fcmToken': token}, SetOptions(merge: true));
+        print("FCM Token registered for $uid: $token");
+      }
+    } catch (e) {
+      print("Error registering FCM token: $e");
     }
   }
 }

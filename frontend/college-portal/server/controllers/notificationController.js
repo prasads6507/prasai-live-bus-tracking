@@ -1,5 +1,5 @@
 
-const { db, messaging } = require('../config/firebase');
+const { admin, db, messaging } = require('../config/firebase');
 
 /**
  * Send notification to all students assigned to a trip's route
@@ -200,8 +200,101 @@ const sendStopArrivalNotification = async (tripId, busId, collegeId, routeId, st
     }
 };
 
+const sendStopEventNotification = async (tripId, busId, collegeId, stopId, stopName, stopAddress, type, arrivalDocId) => {
+    try {
+        if (!messaging) {
+            console.warn('[FCM] messaging not initialized');
+            return;
+        }
+
+        console.log(`[StopEvent] type=${type} stop="${stopName}" trip=${tripId}`);
+
+        // Prevent duplicate sends
+        if (arrivalDocId) {
+            const doc = await db.collection('stopArrivals').doc(arrivalDocId).get();
+            if (doc.exists && doc.data().processed === true) {
+                console.log(`[StopEvent] Already processed: ${arrivalDocId}`);
+                return;
+            }
+        }
+
+        // Get routeId from trip
+        const tripDoc = await db.collection('trips').doc(tripId).get();
+        if (!tripDoc.exists) return;
+        const routeId = tripDoc.data().routeId;
+
+        // Build notification text
+        let title, body;
+        const displayLocation = stopAddress || stopName;
+        if (type === 'ARRIVING') {
+            title = 'Bus Arriving Soon';
+            body = `${displayLocation}, Arriving Soon`;
+        } else if (type === 'ARRIVED') {
+            title = 'Bus Arrived';
+            body = `Bus has arrived at ${stopName}`;
+        } else if (type === 'SKIPPED') {
+            title = 'Stop Skipped';
+            body = `Bus skipped ${stopName} and is heading to the next stop`;
+        } else {
+            return;
+        }
+
+        // Get FCM tokens for all students on this route
+        const studentsSnap = await db.collection('students')
+            .where('collegeId', '==', collegeId)
+            .where('assignedRouteId', '==', routeId)
+            .get();
+
+        const tokens = [];
+        studentsSnap.forEach(doc => {
+            const token = doc.data().fcmToken;
+            if (token && typeof token === 'string' && token.length > 10) tokens.push(token);
+        });
+
+        if (tokens.length > 0) {
+            // Send in batches of 500 (FCM multicast limit)
+            for (let i = 0; i < tokens.length; i += 500) {
+                const batch = tokens.slice(i, i + 500);
+                try {
+                    const msg = {
+                        notification: { title, body },
+                        data: { tripId: tripId || '', busId: busId || '', stopId: stopId || '', type },
+                        android: { notification: { channelId: 'bus_events', priority: 'high', sound: 'default' } },
+                        apns: { payload: { aps: { sound: 'default', badge: 1 } } },
+                        tokens: batch,
+                    };
+                    const result = await messaging.sendEachForMulticast(msg);
+                    console.log(`[StopEvent] FCM batch sent=${result.successCount} failed=${result.failureCount}`);
+                } catch (fcmErr) {
+                    console.error('[StopEvent] FCM batch error:', fcmErr.message);
+                }
+            }
+        }
+
+        // Write to notifications collection for admin Live Alerts panel
+        await db.collection('notifications').add({
+            type, busId, tripId, collegeId, stopId, stopName,
+            message: body,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            read: false,
+        });
+
+        // Mark as processed to prevent re-sending
+        if (arrivalDocId) {
+            await db.collection('stopArrivals').doc(arrivalDocId).update({
+                processed: true,
+                notifiedAt: new Date().toISOString(),
+            });
+        }
+
+    } catch (err) {
+        console.error('[StopEvent] Error:', err.message);
+    }
+};
+
 module.exports = {
     sendBusStartedNotification,
     checkProximityAndNotify,
-    sendStopArrivalNotification
+    sendStopArrivalNotification,
+    sendStopEventNotification
 };

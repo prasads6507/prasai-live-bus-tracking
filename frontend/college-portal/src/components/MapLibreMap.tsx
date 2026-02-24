@@ -7,6 +7,21 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { calculateBearing } from '../utils/mapUtils';
 import { BsBusFront } from 'react-icons/bs';
 
+const getBusLastUpdateIso = (bus: any): string | null => {
+    if (bus.lastLocationUpdate) {
+        try {
+            if (typeof bus.lastLocationUpdate.toDate === 'function') {
+                return bus.lastLocationUpdate.toDate().toISOString();
+            }
+            if (typeof bus.lastLocationUpdate === 'string') return bus.lastLocationUpdate;
+            if (bus.lastLocationUpdate.seconds) {
+                return new Date(bus.lastLocationUpdate.seconds * 1000).toISOString();
+            }
+        } catch (e) { /* fall through */ }
+    }
+    return bus.lastUpdated ?? null;
+};
+
 interface MapLibreMapProps {
     buses: any[];
     focusedLocation?: { lat: number, lng: number } | null;
@@ -250,8 +265,8 @@ const MapLibreMap = ({ buses, focusedLocation, followBus: externalFollowBus, pat
                         <div className="flex items-center gap-2">
                             <span>Bus {bus.busNumber || 'Unknown'} • {bus.driverName || 'No Driver'}</span>
                             {isLive && (
-                                <span className={isStale(bus.lastUpdated) ? 'text-dashboard-muted' : 'text-dashboard-primary'}>
-                                    {isStale(bus.lastUpdated) ? '--' : Math.round(bus.speedMph ?? bus.speed ?? bus.speedMPH ?? bus.currentSpeed ?? 0)} mph
+                                <span className={isStale(getBusLastUpdateIso(bus) ?? '', 120) ? 'text-dashboard-muted' : 'text-dashboard-primary'}>
+                                    {isStale(getBusLastUpdateIso(bus) ?? '', 120) ? '--' : Math.round(bus.speedMph ?? bus.currentSpeed ?? bus.speed ?? 0)} mph
                                 </span>
                             )}
                         </div>
