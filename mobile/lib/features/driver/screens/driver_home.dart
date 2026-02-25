@@ -26,6 +26,7 @@ import '../widgets/telemetry_card.dart';
 import '../../../data/datasources/api_ds.dart';
 import 'package:dio/dio.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../core/config/env.dart';
 
 class DriverHomeScreen extends ConsumerStatefulWidget {
   const DriverHomeScreen({super.key});
