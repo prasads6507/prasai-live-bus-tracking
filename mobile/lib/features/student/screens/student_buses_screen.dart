@@ -250,9 +250,36 @@ class _StudentBusesScreenState extends ConsumerState<StudentBusesScreen> {
                                   ),
                                   onPressed: () async {
                                     if (profile != null) {
-                                      // Toggle favorite — StreamProvider will auto-update UI
+                                      final currentFavorites = profile.favoriteBusIds;
+                                      final isCurrentlyFav = currentFavorites.contains(bus.id);
+                                      
+                                      if (!isCurrentlyFav && currentFavorites.isNotEmpty) {
+                                        // Already has a different favorite — confirm switch
+                                        final confirmed = await showDialog<bool>(
+                                          context: context,
+                                          builder: (ctx) => AlertDialog(
+                                            title: const Text("Switch Favorite Bus?"),
+                                            content: Text(
+                                              "You can only favorite one bus at a time. "
+                                              "This will replace your current favorite with Bus ${bus.busNumber}."
+                                            ),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () => Navigator.of(ctx).pop(false),
+                                                child: const Text("Cancel"),
+                                              ),
+                                              TextButton(
+                                                onPressed: () => Navigator.of(ctx).pop(true),
+                                                child: const Text("Switch"),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                        if (confirmed != true) return;
+                                      }
+                                      
                                       await ref.read(firestoreDataSourceProvider).toggleFavoriteBus(
-                                        profile.id, bus.id, !isFavorite,
+                                        profile.id, bus.id, !isCurrentlyFav,
                                       );
                                     }
                                   },

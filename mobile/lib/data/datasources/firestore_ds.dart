@@ -656,26 +656,23 @@ class FirestoreDataSource {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // BUG FIX: toggleFavoriteBus
+  // SINGLE BUS FAVORITE ENFORCEMENT
   //
-  // Previous code had TWO critical bugs:
-  //   a) It could save favoriteBusIds to the `users` collection if a student
-  //      doc didn't exist — but the server ONLY queries `students`.
-  //   b) When favoriting, it used `'favoriteBusIds': [busId]` which REPLACES
-  //      the entire array instead of appending.
-  //
-  // Fix: ALWAYS write to `students/{uid}` and use arrayUnion.
+  // Students can only favorite ONE bus at a time.
+  // When favoriting: REPLACE array entirely with [busId]
+  // When unfavoriting: set array to empty []
   // ─────────────────────────────────────────────────────────────────────────
   Future<void> toggleFavoriteBus(String uid, String busId, bool isFavorite) async {
     final studentRef = _firestore.collection('students').doc(uid);
 
     if (isFavorite) {
+      // REPLACE entire array — student can only have ONE favorite bus
       await studentRef.set({
-        'favoriteBusIds': FieldValue.arrayUnion([busId])
+        'favoriteBusIds': [busId]
       }, SetOptions(merge: true));
     } else {
       await studentRef.update({
-        'favoriteBusIds': FieldValue.arrayRemove([busId])
+        'favoriteBusIds': []
       });
     }
   }

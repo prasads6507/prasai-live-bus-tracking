@@ -16,11 +16,16 @@ import 'features/auth/controllers/auth_controller.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  // IMPORTANT: In a background isolate, you must re-initialize before using anything
-  // Flutter already ensures Firebase is initialized before this is called.
-  // We need to initialize local notifications here too.
-  await NotificationService.initialize();
-  await NotificationService.handleBackgroundMessage(message);
+  // On Android, FCM automatically shows notifications that have a
+  // `notification` payload when the app is in background/terminated.
+  // We only need to manually display data-only messages here.
+  // Re-initializing local notifications to show them via our custom channel.
+  if (message.notification == null) {
+    // Data-only message — show it manually via our local notification
+    await NotificationService.initialize();
+    await NotificationService.handleBackgroundMessage(message);
+  }
+  // If message.notification != null, Android already displayed it — do nothing.
 }
 
 void main() async {

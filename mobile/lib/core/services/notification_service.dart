@@ -6,7 +6,11 @@ class NotificationService {
   static final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
 
+  static bool _initialized = false;
+
   static Future<void> initialize() async {
+    if (_initialized) return;
+
     const AndroidInitializationSettings androidSettings =
         AndroidInitializationSettings('@mipmap/ic_launcher');
 
@@ -25,12 +29,11 @@ class NotificationService {
     await _plugin.initialize(
       settings,
       onDidReceiveNotificationResponse: (NotificationResponse response) {
-        // TODO: Navigate to track screen when notification tapped
-        // You can use a GlobalKey<NavigatorState> here to navigate
         debugPrint('[Notification] Tapped: ${response.payload}');
       },
     );
 
+    // Create high-importance notification channel for Android
     const AndroidNotificationChannel channel = AndroidNotificationChannel(
       'bus_events',
       'Bus Events',
@@ -39,10 +42,28 @@ class NotificationService {
       playSound: true,
     );
 
-    await _plugin
+    final androidPlugin = _plugin
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(channel);
+            AndroidFlutterLocalNotificationsPlugin>();
+
+    if (androidPlugin != null) {
+      await androidPlugin.createNotificationChannel(channel);
+      // CRITICAL: Request POST_NOTIFICATIONS permission on Android 13+
+      final granted = await androidPlugin.requestNotificationsPermission();
+      debugPrint('[NotificationService] Android notification permission granted: $granted');
+    }
+
+    // Also request from Firebase Messaging (covers iOS + fallback)
+    final messagingSettings = await FirebaseMessaging.instance.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+      provisional: false,
+    );
+    debugPrint('[NotificationService] FCM permission: ${messagingSettings.authorizationStatus}');
+
+    _initialized = true;
+    debugPrint('[NotificationService] Initialized successfully');
   }
 
   // ─── Specific Notification Types ─────────────────────────────────────────
