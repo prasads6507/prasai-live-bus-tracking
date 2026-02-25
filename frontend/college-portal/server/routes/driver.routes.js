@@ -10,7 +10,7 @@ const {
     historyUpload,
     checkProximity
 } = require('../controllers/driverController');
-const { sendStopEventNotification } = require('../controllers/notificationController');
+const { sendStopEventNotification, sendTripEndedNotification } = require('../controllers/notificationController');
 const { protect, authorize } = require('../middleware/auth');
 const tenantIsolation = require('../middleware/tenantIsolation');
 
@@ -49,6 +49,25 @@ router.post('/stop-event', protect, async (req, res) => {
             .catch(err => console.error('[StopEvent Route] Async error:', err.message));
 
         res.status(202).json({ success: true, message: 'Stop event accepted' });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// POST /api/driver/trip-ended-notify
+router.post('/trip-ended-notify', protect, async (req, res) => {
+    try {
+        const { tripId, busId, collegeId } = req.body;
+
+        if (!tripId || !busId || !collegeId) {
+            return res.status(400).json({ success: false, message: 'Missing required fields' });
+        }
+
+        // Fire and forget
+        sendTripEndedNotification(tripId, busId, collegeId)
+            .catch(err => console.error('[TripEndedRoute] Error:', err.message));
+
+        res.status(202).json({ success: true, message: 'Trip ended notification queued' });
     } catch (err) {
         res.status(500).json({ success: false, message: 'Server error' });
     }

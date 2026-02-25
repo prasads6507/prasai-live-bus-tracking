@@ -36,6 +36,7 @@ class TrackingLifecycleManager {
       await prefs.remove('next_stop_lat');
       await prefs.remove('next_stop_lng');
       await prefs.remove('next_stop_radius');
+      await prefs.remove('next_stop_name');
       // Note: trip_history_buffer is no longer deleted here. 
       // It is securely deleted only after a successful upload by DriverLocationService.
       

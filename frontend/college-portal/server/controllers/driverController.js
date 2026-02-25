@@ -12,7 +12,7 @@ const checkInit = (res) => {
     }
     return true;
 };
-const { sendBusStartedNotification, checkProximityAndNotify } = require('./notificationController');
+const { sendBusStartedNotification, checkProximityAndNotify, sendTripEndedNotification } = require('./notificationController');
 
 // @desc    Get available buses for the driver's college
 // @route   GET /api/driver/buses
@@ -274,6 +274,10 @@ const endTrip = async (req, res) => {
         await batch.commit();
         console.log('Trip ended atomically with canonical statuses.');
 
+        // Notify students whose favorite bus this was
+        sendTripEndedNotification(tripId, busId, tripData.collegeId || req.collegeId)
+            .catch(err => console.error('[endTrip] Trip ended notification failed:', err));
+
         res.status(200).json({ success: true, message: 'Trip ended successfully' });
     } catch (error) {
         console.error('Error ending trip:', error);
@@ -398,7 +402,8 @@ const startTrip = async (req, res) => {
         console.log('Trip started atomically:', tripId, `with ${stopsSnapshot.length} stops (${tripDirection})`);
 
         // Send 'Bus Started' Notification (Phase 4.2)
-        sendBusStartedNotification(tripId, busId, req.collegeId, effectiveRouteId)
+        const busNumberInfo = busData.busNumber || busData.number || busId;
+        sendBusStartedNotification(tripId, busId, req.collegeId, busNumberInfo)
             .catch(err => console.error('Failed to send bus start notification:', err));
 
         res.status(201).json({ success: true, message: 'Trip started', tripId, stopsCount: stopsSnapshot.length, direction: tripDirection });

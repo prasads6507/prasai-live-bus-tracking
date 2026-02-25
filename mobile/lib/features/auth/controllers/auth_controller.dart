@@ -90,17 +90,36 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
   Future<void> _registerFcmToken(String uid) async {
     try {
       final messaging = FirebaseMessaging.instance;
-      await messaging.requestPermission();
+      await messaging.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+      
       final token = await messaging.getToken();
       if (token != null) {
-        await FirebaseFirestore.instance
-            .collection('students')
-            .doc(uid)
-            .set({'fcmToken': token}, SetOptions(merge: true));
-        print("FCM Token registered for $uid: $token");
+        await _saveFcmToken(uid, token);
       }
+
+      // Listen for token refresh
+      messaging.onTokenRefresh.listen((newToken) async {
+        await _saveFcmToken(uid, newToken);
+      });
+
     } catch (e) {
       print("Error registering FCM token: $e");
+    }
+  }
+
+  Future<void> _saveFcmToken(String uid, String token) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('students')
+          .doc(uid)
+          .set({'fcmToken': token}, SetOptions(merge: true));
+      print("FCM Token saved for $uid");
+    } catch (e) {
+      print("Error saving FCM token: $e");
     }
   }
 }

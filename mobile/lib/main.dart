@@ -14,7 +14,11 @@ import 'core/services/notification_service.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  debugPrint("[FCM Background] ${message.notification?.title}: ${message.notification?.body}");
+  // IMPORTANT: In a background isolate, you must re-initialize before using anything
+  // Flutter already ensures Firebase is initialized before this is called.
+  // We need to initialize local notifications here too.
+  await NotificationService.initialize();
+  await NotificationService.handleBackgroundMessage(message);
 }
 
 void main() async {
@@ -85,6 +89,20 @@ class _MyAppState extends ConsumerState<MyApp> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkLocation();
+      _setupFcmListeners();
+    });
+  }
+
+  void _setupFcmListeners() {
+    // FOREGROUND: App is open and visible
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      NotificationService.handleForegroundMessage(message);
+    });
+
+    // Handle notification TAP when app was in background (not killed)
+    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+      debugPrint('[FCM] Notification tapped from background: ${message.data}');
+      // Navigation handling could go here
     });
   }
 

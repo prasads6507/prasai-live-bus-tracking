@@ -4,54 +4,73 @@ const { admin, db, messaging } = require('../config/firebase');
 /**
  * Send notification to all students assigned to a trip's route
  */
-const sendBusStartedNotification = async (tripId, busId, collegeId, routeId) => {
+const sendBusStartedNotification = async (tripId, busId, collegeId, busNumber) => {
     try {
-        console.log(`[Notification] Sending 'Bus Started' for trip ${tripId}`);
-
-        // 1. Get students subscribed to this route (or all students in college if logic differs, but usually route-based)
-        // For simplicity in this app, we might notifying all students who have this bus as 'assigned'? 
-        // Or students who have favorited?
-        // Let's assume we notify students whose 'routeId' matches.
+        console.log(`[Notification] Sending 'Bus Started' for bus ${busId} (${busNumber})`);
 
         const studentsSnapshot = await db.collection('students')
             .where('collegeId', '==', collegeId)
-            .where('assignedRouteId', '==', routeId)
+            .where('favoriteBusIds', 'array-contains', busId)
             .get();
 
         if (studentsSnapshot.empty) {
-            console.log(`[Notification] No students found for route ${routeId}`);
+            console.log(`[Notification] No students have favorited bus ${busId}`);
             return;
         }
 
         const tokens = [];
         studentsSnapshot.forEach(doc => {
             const data = doc.data();
-            if (data.fcmToken) {
+            if (data.fcmToken && typeof data.fcmToken === 'string' && data.fcmToken.length > 10) {
                 tokens.push(data.fcmToken);
             }
         });
 
         if (tokens.length === 0) {
-            console.log(`[Notification] No FCM tokens found for route ${routeId}`);
+            console.log(`[Notification] No valid FCM tokens for bus ${busId} favorites`);
             return;
         }
 
-        // 2. Send Multicast Message
-        const message = {
-            notification: {
-                title: 'Bus Started',
-                body: 'Your bus has started its trip and is on the way.'
-            },
-            data: {
-                tripId: tripId,
-                busId: busId,
-                type: 'BUS_STARTED'
-            },
-            tokens: tokens
-        };
+        // Send in batches of 500
+        for (let i = 0; i < tokens.length; i += 500) {
+            const batch = tokens.slice(i, i + 500);
+            const message = {
+                notification: {
+                    title: 'Bus Started 🚌',
+                    body: `Bus ${busNumber || busId} has started its trip. Track it live!`
+                },
+                data: {
+                    tripId: tripId || '',
+                    busId: busId || '',
+                    type: 'BUS_STARTED'
+                },
+                android: {
+                    notification: {
+                        channelId: 'bus_events',
+                        priority: 'high',
+                        sound: 'default'
+                    }
+                },
+                apns: { payload: { aps: { sound: 'default', badge: 1 } } },
+                tokens: batch
+            };
+            try {
+                const result = await messaging.sendEachForMulticast(message);
+                console.log(`[BusStarted] FCM sent=${result.successCount} failed=${result.failureCount}`);
+                await cleanupStaleTokens(result, batch, db, admin);
+            } catch (fcmErr) {
+                console.error('[BusStarted] FCM error:', fcmErr.message);
+            }
+        }
 
-        const response = await messaging.sendMulticast(message);
-        console.log(`[Notification] Sent ${response.successCount} messages. Failed: ${response.failureCount}`);
+        // Log to notifications collection
+        await db.collection('notifications').add({
+            type: 'BUS_STARTED',
+            busId, tripId, collegeId,
+            message: `Bus ${busNumber} has started its trip`,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            read: false,
+        });
 
     } catch (error) {
         console.error('[Notification] Error sending bus started notification:', error);
@@ -72,6 +91,38 @@ const getDistanceFromLatLonInKm = (lat1, lon1, lat2, lon2) => {
         Math.sin(dLon / 2) * Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
+};
+
+/**
+ * Identify and delete invalid FCM tokens from Firestore to prevent memory leaks.
+ */
+const cleanupStaleTokens = async (result, tokensBatch, db, admin) => {
+    if (result.failureCount > 0) {
+        const failedTokens = [];
+        result.responses.forEach((resp, idx) => {
+            if (!resp.success) {
+                const errCode = resp.error?.code;
+                if (errCode === 'messaging/invalid-registration-token' ||
+                    errCode === 'messaging/registration-token-not-registered') {
+                    failedTokens.push(tokensBatch[idx]);
+                }
+            }
+        });
+
+        if (failedTokens.length > 0) {
+            console.log(`[FCM] Removing ${failedTokens.length} stale tokens`);
+            const batch = db.batch();
+            const studentsRef = db.collection('students');
+
+            for (const staleToken of failedTokens) {
+                const staleSnap = await studentsRef.where('fcmToken', '==', staleToken).get();
+                staleSnap.forEach(doc => {
+                    batch.update(doc.ref, { fcmToken: admin.firestore.FieldValue.delete() });
+                });
+            }
+            await batch.commit();
+        }
+    }
 };
 
 /**
@@ -218,31 +269,26 @@ const sendStopEventNotification = async (tripId, busId, collegeId, stopId, stopN
             }
         }
 
-        // Get routeId from trip
-        const tripDoc = await db.collection('trips').doc(tripId).get();
-        if (!tripDoc.exists) return;
-        const routeId = tripDoc.data().routeId;
-
         // Build notification text
         let title, body;
-        const displayLocation = stopAddress || stopName;
+        const displayLocation = stopName || stopAddress || 'your stop';
         if (type === 'ARRIVING') {
-            title = 'Bus Arriving Soon';
+            title = 'Bus Arriving Soon 🚍';
             body = `${displayLocation}, Arriving Soon`;
         } else if (type === 'ARRIVED') {
-            title = 'Bus Arrived';
-            body = `Bus has arrived at ${stopName}`;
+            title = 'Bus Arrived ✅';
+            body = `Bus has arrived at ${displayLocation}`;
         } else if (type === 'SKIPPED') {
-            title = 'Stop Skipped';
-            body = `Bus skipped ${stopName} and is heading to the next stop`;
+            title = 'Stop Skipped ⏭';
+            body = `Bus skipped ${displayLocation} — heading to next stop`;
         } else {
             return;
         }
 
-        // Get FCM tokens for all students on this route
+        // FIXED: Query by favoriteBusIds, not assignedRouteId
         const studentsSnap = await db.collection('students')
             .where('collegeId', '==', collegeId)
-            .where('assignedRouteId', '==', routeId)
+            .where('favoriteBusIds', 'array-contains', busId)
             .get();
 
         const tokens = [];
@@ -250,6 +296,8 @@ const sendStopEventNotification = async (tripId, busId, collegeId, stopId, stopN
             const token = doc.data().fcmToken;
             if (token && typeof token === 'string' && token.length > 10) tokens.push(token);
         });
+
+        console.log(`[StopEvent] Found ${tokens.length} tokens for bus ${busId} favorites`);
 
         if (tokens.length > 0) {
             // Send in batches of 500 (FCM multicast limit)
@@ -265,6 +313,7 @@ const sendStopEventNotification = async (tripId, busId, collegeId, stopId, stopN
                     };
                     const result = await messaging.sendEachForMulticast(msg);
                     console.log(`[StopEvent] FCM batch sent=${result.successCount} failed=${result.failureCount}`);
+                    await cleanupStaleTokens(result, batch, db, admin);
                 } catch (fcmErr) {
                     console.error('[StopEvent] FCM batch error:', fcmErr.message);
                 }
@@ -292,9 +341,90 @@ const sendStopEventNotification = async (tripId, busId, collegeId, stopId, stopN
     }
 };
 
+/**
+ * NEW: Notify all students who favorited this bus that the trip has ended.
+ * Called from endTrip controller and auto-end in background service.
+ */
+const sendTripEndedNotification = async (tripId, busId, collegeId) => {
+    try {
+        if (!messaging) {
+            console.warn('[FCM] messaging not initialized for trip ended');
+            return;
+        }
+
+        console.log(`[TripEnded] Sending 'Trip Ended' for bus ${busId}, trip ${tripId}`);
+
+        // Get bus number for the notification body
+        let busNumber = busId;
+        try {
+            const busDoc = await db.collection('buses').doc(busId).get();
+            if (busDoc.exists) {
+                const d = busDoc.data();
+                busNumber = d.busNumber || d.number || busId;
+            }
+        } catch (_) { }
+
+        // Query by favorite — same pattern as above
+        const studentsSnap = await db.collection('students')
+            .where('collegeId', '==', collegeId)
+            .where('favoriteBusIds', 'array-contains', busId)
+            .get();
+
+        if (studentsSnap.empty) {
+            console.log(`[TripEnded] No students favorited bus ${busId}`);
+            return;
+        }
+
+        const tokens = [];
+        studentsSnap.forEach(doc => {
+            const token = doc.data().fcmToken;
+            if (token && typeof token === 'string' && token.length > 10) tokens.push(token);
+        });
+
+        if (tokens.length === 0) {
+            console.log(`[TripEnded] No valid FCM tokens for bus ${busId}`);
+            return;
+        }
+
+        const title = 'Trip Completed 🏁';
+        const body = `Bus ${busNumber} has completed its trip for today.`;
+
+        for (let i = 0; i < tokens.length; i += 500) {
+            const batch = tokens.slice(i, i + 500);
+            try {
+                const msg = {
+                    notification: { title, body },
+                    data: { tripId: tripId || '', busId: busId || '', type: 'TRIP_ENDED' },
+                    android: { notification: { channelId: 'bus_events', priority: 'high', sound: 'default' } },
+                    apns: { payload: { aps: { sound: 'default', badge: 1 } } },
+                    tokens: batch,
+                };
+                const result = await messaging.sendEachForMulticast(msg);
+                console.log(`[TripEnded] FCM batch sent=${result.successCount} failed=${result.failureCount}`);
+                await cleanupStaleTokens(result, batch, db, admin);
+            } catch (fcmErr) {
+                console.error('[TripEnded] FCM batch error:', fcmErr.message);
+            }
+        }
+
+        // Log to notifications collection
+        await db.collection('notifications').add({
+            type: 'TRIP_ENDED',
+            busId, tripId, collegeId,
+            message: body,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            read: false,
+        });
+
+    } catch (error) {
+        console.error('[TripEnded] Error:', error.message);
+    }
+};
+
 module.exports = {
     sendBusStartedNotification,
     checkProximityAndNotify,
     sendStopArrivalNotification,
-    sendStopEventNotification
+    sendStopEventNotification,
+    sendTripEndedNotification
 };

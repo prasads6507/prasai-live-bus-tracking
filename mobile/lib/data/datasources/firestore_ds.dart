@@ -4,6 +4,7 @@ import '../models/trip.dart';
 import '../models/location_point.dart';
 import '../models/route.dart';
 import '../models/user_profile.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class FirestoreDataSource {
   final FirebaseFirestore _firestore;
@@ -542,6 +543,22 @@ class FirestoreDataSource {
       'lastUpdated': DateTime.now().toIso8601String(),
       'lastLocationUpdate': FieldValue.serverTimestamp(),
     });
+
+    // 4. Cache First Stop for Background Service
+    if (stopsSnapshot.isNotEmpty) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final firstStop = stopsSnapshot.first;
+        await prefs.setDouble('next_stop_lat', (firstStop['lat'] as num).toDouble());
+        await prefs.setDouble('next_stop_lng', (firstStop['lng'] as num).toDouble());
+        await prefs.setDouble('next_stop_radius', (firstStop['radiusM'] as num?)?.toDouble() ?? 100.0);
+        await prefs.setString('next_stop_id', firstStop['stopId'] as String);
+        await prefs.setString('next_stop_name', (firstStop['name'] as String?) ?? 'Stop');
+        await prefs.setBool('has_arrived_current', false);
+      } catch (e) {
+        print("Error caching first stop: $e");
+      }
+    }
     
     await batch.commit();
     return tripId;

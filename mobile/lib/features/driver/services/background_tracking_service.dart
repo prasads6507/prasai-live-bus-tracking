@@ -186,6 +186,7 @@ class BackgroundTrackingService {
           final nextStopLng = prefs.getDouble('next_stop_lng');
           final nextStopId = prefs.getString('next_stop_id') ?? '';
           final nextStopRadius = prefs.getDouble('next_stop_radius') ?? 100.0;
+          final nextStopName = prefs.getString('next_stop_name') ?? 'Stop';
 
           double distToNextStop = double.infinity;
           if (nextStopLat != null && nextStopLng != null) {
@@ -233,7 +234,11 @@ class BackgroundTrackingService {
             // G2. Arriving Soon Notification (Trigger once per stop at 0.5 mile)
             if (newStatus == 'ARRIVING' && !arrivingNotifiedIds.contains(nextStopId)) {
                arrivingNotifiedIds.add(nextStopId);
-               _notifyServer(tripId!, busId!, collegeId!, nextStopId, "ARRIVING", prefs: prefs);
+               _notifyServer(
+                 tripId!, busId!, collegeId!, nextStopId, "ARRIVING",
+                 stopName: nextStopName,
+                 prefs: prefs,
+               );
             }
           }
           
@@ -401,6 +406,7 @@ class BackgroundTrackingService {
             await prefs.setDouble('next_stop_lng', (nextStop['lng'] as num).toDouble());
             await prefs.setDouble('next_stop_radius', (nextStop['radiusM'] as num?)?.toDouble() ?? 100.0);
             await prefs.setString('next_stop_id', nextStop['stopId'] as String);
+            await prefs.setString('next_stop_name', (nextStop['name'] as String?) ?? 'Stop');
             await prefs.setBool('has_arrived_current', false);
           }
         }
@@ -524,6 +530,7 @@ class BackgroundTrackingService {
         await prefs.setDouble('next_stop_lng', (nextStop['lng'] as num).toDouble());
         await prefs.setDouble('next_stop_radius', (nextStop['radiusM'] as num?)?.toDouble() ?? 100.0);
         await prefs.setString('next_stop_id', nextStop['stopId'] as String);
+        await prefs.setString('next_stop_name', (nextStop['name'] as String?) ?? 'Stop');
         await prefs.setBool('has_arrived_current', false);
 
         batch.update(db.collection('buses').doc(busId), busUpdate);
@@ -531,6 +538,14 @@ class BackgroundTrackingService {
       } else {
         // AUTO-END
         debugPrint("[Background] AUTO-ENDING TRIP at final stop");
+
+        // Notify students that trip ended
+        try {
+          _notifyServer(tripId, busId, collegeId, '', 'TRIP_ENDED', prefs: prefs);
+        } catch (e) {
+          debugPrint('[Background] Trip ended notification failed: $e');
+        }
+
         batch.update(tripRef, {
           'status': 'COMPLETED',
           'isActive': false,
@@ -598,17 +613,25 @@ class BackgroundTrackingService {
          headers: token != null ? {'Authorization': 'Bearer $token'} : null,
        ));
 
-       final response = await dio.post("$apiBase/api/driver/stop-event", data: {
-         'tripId': tripId,
-         'busId': busId,
-         'collegeId': collegeId,
-         'stopId': stopId,
-         'stopName': stopName ?? 'Stop',
-         'type': type,
-         'arrivalDocId': arrivalDocId
-       });
-
-       debugPrint("[NotifyServer] Result: ${response.statusCode} - ${response.data}");
+       if (type == 'TRIP_ENDED') {
+         await dio.post("$apiBase/api/driver/trip-ended-notify", data: {
+           'tripId': tripId,
+           'busId': busId,
+           'collegeId': collegeId,
+         });
+         debugPrint("[NotifyServer] TRIP_ENDED notified successfully");
+       } else {
+         final response = await dio.post("$apiBase/api/driver/stop-event", data: {
+           'tripId': tripId,
+           'busId': busId,
+           'collegeId': collegeId,
+           'stopId': stopId,
+           'stopName': stopName ?? 'Stop',
+           'type': type,
+           'arrivalDocId': arrivalDocId
+         });
+         debugPrint("[NotifyServer] Result: ${response.statusCode} - ${response.data}");
+       }
      } catch (e) {
        debugPrint("[NotifyServer] FAILED for $type at $stopId: $e");
      }
