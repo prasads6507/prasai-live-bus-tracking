@@ -449,7 +449,10 @@ const studentLogin = async (req, res) => {
                 return res.status(401).json({ message: 'Invalid credentials. Use your Register Number as your initial password.' });
             }
             // Return token + flag for first login
-            const firebaseCustomToken = await auth.createCustomToken(student.studentId);
+            const firebaseCustomToken = await auth.createCustomToken(student.studentId, {
+                role: 'STUDENT',
+                collegeId: student.collegeId
+            });
             return res.json({
                 _id: student.studentId,
                 name: student.name,
@@ -465,7 +468,10 @@ const studentLogin = async (req, res) => {
             if (!(await matchPassword(password, student.passwordHash))) {
                 return res.status(401).json({ message: 'Invalid email or password' });
             }
-            const firebaseCustomToken = await auth.createCustomToken(student.studentId);
+            const firebaseCustomToken = await auth.createCustomToken(student.studentId, {
+                role: 'STUDENT',
+                collegeId: student.collegeId
+            });
             return res.json({
                 _id: student.studentId,
                 name: student.name,

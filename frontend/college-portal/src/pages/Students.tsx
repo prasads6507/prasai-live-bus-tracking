@@ -220,9 +220,9 @@ const Students = () => {
     };
 
     const filteredStudents = students.filter(s =>
-        s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        s.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        s.registerNumber.toLowerCase().includes(searchQuery.toLowerCase())
+        (s.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (s.email || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (s.registerNumber || '').toLowerCase().includes(searchQuery.toLowerCase())
     );
 
     return (
@@ -324,11 +324,11 @@ const Students = () => {
                                 <div className="flex items-center justify-between mb-4">
                                     <div className="flex items-center gap-3">
                                         <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center text-blue-600 font-bold text-lg">
-                                            {student.name.charAt(0).toUpperCase()}
+                                            {(student.name || 'U').charAt(0).toUpperCase()}
                                         </div>
                                         <div>
-                                            <h3 className="font-semibold text-slate-800">{student.name}</h3>
-                                            <p className="text-sm text-slate-500">{student.registerNumber}</p>
+                                            <h3 className="font-semibold text-slate-800">{student.name || 'N/A'}</h3>
+                                            <p className="text-sm text-slate-500">{student.registerNumber || 'N/A'}</p>
                                         </div>
                                     </div>
                                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -338,7 +338,10 @@ const Students = () => {
                                     </div>
                                 </div>
                                 <div className="space-y-2 text-sm">
-                                    <div className="flex items-center gap-2 text-slate-600"><Mail size={14} className="text-slate-400" />{student.email}</div>
+                                    <div className="flex items-center gap-2 text-slate-600">
+                                        <Mail size={14} className="text-slate-400" />
+                                        {student.email || 'No Email'}
+                                    </div>
                                     {student.rollNumber && <div className="flex items-center gap-2 text-slate-600"><Hash size={14} className="text-slate-400" />{student.rollNumber}</div>}
                                     {student.phone && <div className="flex items-center gap-2 text-slate-600"><Phone size={14} className="text-slate-400" />{student.phone}</div>}
                                 </div>

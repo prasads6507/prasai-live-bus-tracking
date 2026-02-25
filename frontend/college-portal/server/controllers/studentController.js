@@ -43,6 +43,13 @@ const createStudent = async (req, res) => {
             return res.status(400).json({ message: 'Student with this register number already exists' });
         }
 
+        // Check if email exists in users collection (Driver/Admin)
+        const userSnapshot = await db.collection('users').where('email', '==', email).limit(1).get();
+        if (!userSnapshot.empty) {
+            const userData = userSnapshot.docs[0].data();
+            return res.status(400).json({ message: `This email is already registered as a ${userData.role}.` });
+        }
+
         const studentId = 'student-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
 
         const studentData = {
@@ -200,6 +207,14 @@ const createBulkStudents = async (req, res) => {
 
                 if (existingRegNos.has(registerNumber)) {
                     results.errors.push({ student, error: `Register Number ${registerNumber} already exists` });
+                    continue;
+                }
+
+                // Check if email exists in users collection (Driver/Admin)
+                const userSnapshot = await db.collection('users').where('email', '==', email).limit(1).get();
+                if (!userSnapshot.empty) {
+                    const userData = userSnapshot.docs[0].data();
+                    results.errors.push({ student, error: `Email ${email} is already registered as a ${userData.role}.` });
                     continue;
                 }
 

@@ -10,7 +10,9 @@ import 'features/shell/app_router.dart';
 import 'core/services/location_service.dart';
 import 'data/providers.dart';
 import 'features/driver/services/background_tracking_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'core/services/notification_service.dart';
+import 'features/auth/controllers/auth_controller.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {

@@ -187,8 +187,8 @@ const Drivers = () => {
     };
 
     const filteredDrivers = drivers.filter(driver =>
-        driver.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        driver.email.toLowerCase().includes(searchQuery.toLowerCase())
+        (driver.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (driver.email || '').toLowerCase().includes(searchQuery.toLowerCase())
     );
 
     return (
@@ -279,11 +279,11 @@ const Drivers = () => {
                                             <td className="p-5">
                                                 <div className="flex items-center gap-3">
                                                     <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold">
-                                                        {driver.name.charAt(0)}
+                                                        {(driver.name || 'D').charAt(0)}
                                                     </div>
                                                     <div>
-                                                        <p className="font-bold text-slate-800">{driver.name}</p>
-                                                        <p className="text-xs text-slate-400">ID: {driver._id.slice(-6)}</p>
+                                                        <p className="font-bold text-slate-800">{driver.name || 'Unknown Driver'}</p>
+                                                        <p className="text-xs text-slate-400">ID: {driver._id ? driver._id.slice(-6) : 'N/A'}</p>
                                                     </div>
                                                 </div>
                                             </td>

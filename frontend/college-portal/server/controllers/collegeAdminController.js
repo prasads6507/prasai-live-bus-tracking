@@ -297,6 +297,12 @@ const createBulkUsers = async (req, res) => {
             }
 
             try {
+                // Check if email exists in students collection
+                const studentSnapshot = await db.collection('students').where('email', '==', user.email).limit(1).get();
+                if (!studentSnapshot.empty) {
+                    results.errors.push({ user, error: 'This email is already registered as a STUDENT.' });
+                    continue;
+                }
                 // 1. Create in Firebase Auth first (for login compatibility)
                 const authUser = await admin.auth().createUser({
                     email: user.email,
@@ -356,6 +362,11 @@ const createUser = async (req, res) => {
     }
 
     try {
+        // Check if email exists in students collection
+        const studentSnapshot = await db.collection('students').where('email', '==', email).limit(1).get();
+        if (!studentSnapshot.empty) {
+            return res.status(400).json({ message: 'This email is already registered as a STUDENT.' });
+        }
         // 1. Create in Firebase Auth (ensures login works on mobile)
         const authUser = await admin.auth().createUser({
             email,
