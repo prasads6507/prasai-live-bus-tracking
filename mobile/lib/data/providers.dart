@@ -18,7 +18,24 @@ import 'models/user_profile.dart';
 // External Services
 final firebaseAuthProvider = Provider<FirebaseAuth>((ref) => FirebaseAuth.instance);
 final firestoreProvider = Provider<FirebaseFirestore>((ref) => FirebaseFirestore.instance);
-final dioProvider = Provider<Dio>((ref) => Dio());
+final dioProvider = Provider<Dio>((ref) {
+  final dio = Dio();
+  dio.interceptors.add(InterceptorsWrapper(
+    onRequest: (options, handler) async {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final token = prefs.getString('auth_token');
+        if (token != null) {
+          options.headers['Authorization'] = 'Bearer $token';
+        }
+      } catch (e) {
+        print("Error getting token for Dio: $e");
+      }
+      return handler.next(options);
+    },
+  ));
+  return dio;
+});
 final sharedPreferencesProvider = Provider<SharedPreferences>((ref) => throw UnimplementedError());
 
 // Authentication state stream

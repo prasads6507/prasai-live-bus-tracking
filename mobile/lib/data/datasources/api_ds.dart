@@ -22,12 +22,13 @@ class ApiDataSource {
 
   Future<void> startTrip(String collegeId, String busId, String driverId, String routeId) async {
     await _dio.post(
-      '${Env.apiUrl}/api/driver/trip/start',
+      '${Env.apiUrl}/api/driver/trip/start/$busId',
       data: {
         'collegeId': collegeId,
         'busId': busId,
         'driverId': driverId,
         'routeId': routeId,
+        'tripId': 'trip-$busId-${DateTime.now().millisecondsSinceEpoch}', // Generate a tripId if not provided
       },
     );
   }
@@ -41,6 +42,39 @@ class ApiDataSource {
       },
     );
   }
+
+  Future<void> notifyTripStarted({
+    required String collegeId,
+    required String busId,
+    required String tripId,
+    String? busNumber,
+  }) async {
+    await _dio.post(
+      '${Env.apiUrl}/api/driver/trip-started-notify',
+      data: {
+        'collegeId': collegeId,
+        'busId': busId,
+        'tripId': tripId,
+        'busNumber': busNumber,
+      },
+    );
+  }
+
+  Future<void> notifyTripEnded({
+    required String collegeId,
+    required String busId,
+    required String tripId,
+  }) async {
+    await _dio.post(
+      '${Env.apiUrl}/api/driver/trip-ended-notify',
+      data: {
+        'collegeId': collegeId,
+        'busId': busId,
+        'tripId': tripId,
+      },
+    );
+  }
+
   Future<Map<String, dynamic>> login(String email, String password, String orgSlug) async {
     final response = await _dio.post(
       '${Env.apiUrl}/api/auth/login',

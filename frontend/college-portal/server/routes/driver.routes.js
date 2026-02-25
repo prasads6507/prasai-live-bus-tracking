@@ -32,6 +32,27 @@ router.post('/trips/:tripId/end', endTrip);
 router.post('/trips/:tripId/history-upload', historyUpload);
 router.post('/notifications/proximity', checkProximity);
 
+// POST /api/driver/trip-started-notify
+router.post('/trip-started-notify', protect, async (req, res) => {
+    try {
+        const { tripId, busId, collegeId, busNumber } = req.body;
+
+        if (!tripId || !busId || !collegeId) {
+            return res.status(400).json({ success: false, message: 'Missing required fields' });
+        }
+
+        const { sendBusStartedNotification } = require('../controllers/notificationController');
+        
+        // Fire and forget
+        sendBusStartedNotification(tripId, busId, collegeId, busNumber || busId)
+            .catch(err => console.error('[TripStartedRoute] Error:', err.message));
+
+        res.status(202).json({ success: true, message: 'Trip started notification queued' });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
 // POST /api/driver/stop-event (Step 5E)
 router.post('/stop-event', protect, async (req, res) => {
     try {

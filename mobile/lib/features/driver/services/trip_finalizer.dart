@@ -47,7 +47,14 @@ class TripFinalizer {
       await DriverLocationService.uploadBufferedHistory(tripId);
 
       // 3. Call endTrip API (Idempotent)
+      final prefsForToken = await SharedPreferences.getInstance();
+      final token = prefsForToken.getString('auth_token');
+      
       final dio = Dio();
+      if (token != null) {
+        dio.options.headers['Authorization'] = 'Bearer $token';
+      }
+      
       final apiDS = ApiDataSource(dio, FirebaseFirestore.instance);
       final firestoreDS = FirestoreDataSource(FirebaseFirestore.instance);
 

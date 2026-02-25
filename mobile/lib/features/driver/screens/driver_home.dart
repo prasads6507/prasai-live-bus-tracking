@@ -957,7 +957,7 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
                   setState(() => _isLoading = true);
                   try {
                     final profile = ref.read(userProfileProvider).asData?.value;
-                    final tripId = await ref.read(firestoreDataSourceProvider).startTrip(
+                    final tripId = await ref.read(trackingRepositoryProvider).startTrip(
                       collegeId: widget.collegeId,
                       busId: widget.busId,
                       driverId: widget.driverId,
