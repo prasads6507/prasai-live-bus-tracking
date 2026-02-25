@@ -177,8 +177,13 @@ const checkProximityAndNotify = async (busId, location, collegeId, routeId) => {
                 tokens: tokensToSend
             };
 
-            const response = await messaging.sendMulticast(message);
-            console.log(`[Proximity] Sent ${response.successCount} notifications.`);
+            try {
+                const response = await messaging.sendEachForMulticast(message);
+                console.log(`[Proximity] Sent ${response.successCount} notifications.`);
+                await cleanupStaleTokens(response, tokensToSend, db, admin);
+            } catch (fcmErr) {
+                console.error('[Proximity] FCM error:', fcmErr.message);
+            }
 
             // Save to Firestore for Admin Alerts (Phase 4.4)
             await db.collection('notifications').add({
@@ -242,8 +247,13 @@ const sendStopArrivalNotification = async (tripId, busId, collegeId, routeId, st
             tokens: tokens
         };
 
-        const response = await messaging.sendMulticast(message);
-        console.log(`[Notification] Stop arrival: Sent ${response.successCount}, Failed: ${response.failureCount}`);
+        try {
+            const response = await messaging.sendEachForMulticast(message);
+            console.log(`[Notification] Stop arrival: Sent ${response.successCount}, Failed: ${response.failureCount}`);
+            await cleanupStaleTokens(response, tokens, db, admin);
+        } catch (fcmErr) {
+            console.error('[Notification] Stop arrival FCM error:', fcmErr.message);
+        }
 
     } catch (error) {
         console.error('[Notification] Error sending stop arrival notification:', error);

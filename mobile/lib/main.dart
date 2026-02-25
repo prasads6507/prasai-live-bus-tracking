@@ -90,20 +90,57 @@ class _MyAppState extends ConsumerState<MyApp> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkLocation();
       _setupFcmListeners();
+      _registerTokenIfLoggedIn();
     });
   }
 
-  void _setupFcmListeners() {
+  void _registerTokenIfLoggedIn() {
+    final user = FirebaseAuth.instance.currentUser;
+    final collegeId = ref.read(selectedCollegeIdProvider);
+    if (user != null && collegeId != null) {
+      debugPrint('[FCM] Session restored, ensuring token is registered...');
+      // We don't need to await this
+      ref.read(authControllerProvider.notifier).registerFcmTokenForSession(user.uid, collegeId);
+    }
+  }
+
+  void _setupFcmListeners() async {
+    // 1. Initial message (Killed state)
+    final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
+    if (initialMessage != null) {
+      _handleNotificationTap(initialMessage, 'KILLED');
+    }
+
+    // 2. Foreground presentation for iOS (critical for sound/alert)
+    await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+
     // FOREGROUND: App is open and visible
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       NotificationService.handleForegroundMessage(message);
     });
 
-    // Handle notification TAP when app was in background (not killed)
+    // 3. Handle notification TAP when app was in background (not killed)
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      debugPrint('[FCM] Notification tapped from background: ${message.data}');
-      // Navigation handling could go here
+      _handleNotificationTap(message, 'BACKGROUND');
     });
+  }
+
+  void _handleNotificationTap(RemoteMessage message, String source) {
+    debugPrint('[FCM] Notification tapped from $source: ${message.data}');
+    
+    final busId = message.data['busId'];
+    final tripId = message.data['tripId'];
+
+    if (busId != null) {
+      // Navigate to tracking screen
+      // Assuming your router handles deep links or has a way to navigate by path
+      final router = ref.read(routerProvider);
+      router.push('/student/track/$busId?tripId=${tripId ?? ""}');
+    }
   }
 
   Future<void> _checkLocation() async {
