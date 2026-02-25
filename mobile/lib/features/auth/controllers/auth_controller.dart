@@ -93,6 +93,10 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
       state = AsyncValue.error(e, st);
     }
   }
+
+  Future<void> registerFcmTokenForSession(String uid, String collegeId) => 
+      _registerFcmToken(uid, collegeId);
+
   // ─────────────────────────────────────────────────────────────────────────
   // BUG FIX: _registerFcmToken / _saveFcmToken
   //
