@@ -11,7 +11,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import '../../../../firebase_options.dart';
 import 'trip_finalizer.dart';
-import '../../../../core/services/notification_service.dart';
 
 // ─── ADAPTIVE TRACKING CONSTANTS ───
 const double _ARRIVING_DISTANCE_M = 804.0;   // 0.5 mile
@@ -396,9 +395,6 @@ class BackgroundTrackingService {
               prefs: prefs
             );
 
-            // 5. Driver Notification (Local)
-            NotificationService.showSkipNotification(stops[currentIndex]['name'] ?? 'Stop');
-
             // Cache NEXT-NEXT stop
             final nextStop = stops[newIndex] as Map<String, dynamic>;
             await prefs.setDouble('next_stop_lat', (nextStop['lat'] as num).toDouble());
@@ -476,9 +472,6 @@ class BackgroundTrackingService {
           arrivalDocId: notifRef.id,
           prefs: prefs
         );
-
-        // 5. Driver Notification (Local)
-        NotificationService.showArrivedNotification(stops[currentIndex]['name'] ?? 'Stop');
       }
     } catch (e) {
       debugPrint("[Background] HandleArrivalEntry error: $e");
@@ -532,6 +525,9 @@ class BackgroundTrackingService {
         await prefs.setDouble('next_stop_radius', (nextStop['radiusM'] as num?)?.toDouble() ?? 100.0);
         await prefs.setString('next_stop_id', nextStop['stopId'] as String);
         await prefs.setBool('has_arrived_current', false);
+
+        batch.update(db.collection('buses').doc(busId), busUpdate);
+        await batch.commit();
       } else {
         // AUTO-END
         debugPrint("[Background] AUTO-ENDING TRIP at final stop");
@@ -544,11 +540,21 @@ class BackgroundTrackingService {
         await prefs.setString('pending_bus_id', busId);
         await prefs.setString('pending_college_id', collegeId);
         
+        batch.update(db.collection('buses').doc(busId), busUpdate);
+        await batch.commit(); // Ensure firestore is updated before finalization
+
+        try {
+           await TripFinalizer.finalizeTrip(
+             collegeId: collegeId,
+             busId: busId,
+             tripId: tripId,
+           );
+        } catch(e) {
+           debugPrint("[Background] Auto-finalize failed, will retry: $e");
+        }
+
         FlutterBackgroundService().invoke("stopService");
       }
-
-      batch.update(db.collection('buses').doc(busId), busUpdate);
-      await batch.commit();
 
     } catch (e) {
       debugPrint("[Background] HandleStopCompletion error: $e");
