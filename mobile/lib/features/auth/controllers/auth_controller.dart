@@ -66,8 +66,8 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
         await prefs.setString('auth_token', jwtToken);
       }
       
-      // 5. Register FCM Token (Step 5C)
-      await _registerFcmToken(user.uid);
+      // 5. Register FCM Token — pass collegeId so it is saved alongside the token
+      await _registerFcmToken(user.uid, collegeId);
       
       state = const AsyncValue.data(null);
     } catch (e, st) {
@@ -93,7 +93,17 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
       state = AsyncValue.error(e, st);
     }
   }
-  Future<void> _registerFcmToken(String uid) async {
+  // ─────────────────────────────────────────────────────────────────────────
+  // BUG FIX: _registerFcmToken / _saveFcmToken
+  //
+  // Previous code saved ONLY the FCM token to students/{uid}, without saving
+  // the collegeId field. The server's Firestore query filters by BOTH:
+  //   .where('collegeId', '==', collegeId)
+  //   .where('favoriteBusIds', 'array-contains', busId)
+  //
+  // Fix: Also save collegeId when writing the FCM token.
+  // ─────────────────────────────────────────────────────────────────────────
+  Future<void> _registerFcmToken(String uid, String collegeId) async {
     try {
       final messaging = FirebaseMessaging.instance;
       await messaging.requestPermission(
@@ -104,12 +114,12 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
       
       final token = await messaging.getToken();
       if (token != null) {
-        await _saveFcmToken(uid, token);
+        await _saveFcmToken(uid, token, collegeId);
       }
 
       // Listen for token refresh
       messaging.onTokenRefresh.listen((newToken) async {
-        await _saveFcmToken(uid, newToken);
+        await _saveFcmToken(uid, newToken, collegeId);
       });
 
     } catch (e) {
@@ -117,15 +127,24 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
     }
   }
 
-  Future<void> _saveFcmToken(String uid, String token) async {
+  Future<void> _saveFcmToken(String uid, String token, String collegeId) async {
+    final ref = FirebaseFirestore.instance.collection('students').doc(uid);
     try {
-      await FirebaseFirestore.instance
-          .collection('students')
-          .doc(uid)
-          .set({'fcmToken': token}, SetOptions(merge: true));
-      print("FCM Token saved for $uid");
-    } catch (e) {
-      print("Error saving FCM token: $e");
+      await ref.update({
+        'fcmToken': token,
+        'collegeId': collegeId,   // ← CRITICAL: required for server query
+      });
+      print("FCM Token updated for $uid (college: $collegeId)");
+    } catch (updateErr) {
+      try {
+        await ref.set({
+          'fcmToken': token,
+          'collegeId': collegeId,
+        }, SetOptions(merge: true));
+        print("FCM Token set (new doc) for $uid (college: $collegeId)");
+      } catch (setErr) {
+        print("Error saving FCM token: $updateErr | $setErr");
+      }
     }
   }
 }

@@ -36,8 +36,12 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       // Students can update their own doc (favoriteBusIds, fcmToken, lastLocation)
       allow update: if isOwner(studentId);
-      // Create/delete via Admin SDK only (admin portal manages students)
-      allow create, delete: if false;
+      // BUG FIX: Students must be able to write their own fcmToken and
+      // collegeId. Previously only `update` was allowed, which blocked
+      // set+merge when the doc was first created from the mobile app.
+      allow create: if isOwner(studentId);
+      // Delete via Admin SDK only (admin portal manages students)
+      allow delete: if false;
     }
 
     // ─── Buses ───────────────────────────────────────────────────────
