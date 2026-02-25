@@ -204,11 +204,10 @@ const sendStopArrivalNotification = async (tripId, busId, collegeId, routeId, st
     try {
         console.log(`[Notification] Bus arrived at stop "${stopName}" (${stopId}) on route ${routeId}`);
 
-        // Find students assigned to this route AND this specific stop
+        // Find students who have favorited this bus
         const studentsSnapshot = await db.collection('students')
             .where('collegeId', '==', collegeId)
-            .where('assignedRouteId', '==', routeId)
-            .where('assignedStopId', '==', stopId)
+            .where('favoriteBusIds', 'array-contains', busId)
             .get();
 
         if (studentsSnapshot.empty) {
