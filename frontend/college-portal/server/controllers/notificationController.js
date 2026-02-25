@@ -15,7 +15,7 @@ const sendBusStartedNotification = async (tripId, busId, collegeId, routeId) => 
 
         const studentsSnapshot = await db.collection('students')
             .where('collegeId', '==', collegeId)
-            .where('routeId', '==', routeId)
+            .where('assignedRouteId', '==', routeId)
             .get();
 
         if (studentsSnapshot.empty) {
@@ -85,7 +85,7 @@ const checkProximityAndNotify = async (busId, location, collegeId, routeId) => {
         // 1. Get students for this route who have a known last location
         const studentsSnapshot = await db.collection('students')
             .where('collegeId', '==', collegeId)
-            .where('routeId', '==', routeId)
+            .where('assignedRouteId', '==', routeId)
             .get();
 
         if (studentsSnapshot.empty) return;
@@ -212,8 +212,8 @@ const sendStopEventNotification = async (tripId, busId, collegeId, stopId, stopN
         // Prevent duplicate sends
         if (arrivalDocId) {
             const doc = await db.collection('stopArrivals').doc(arrivalDocId).get();
-            if (doc.exists && doc.data().processed === true) {
-                console.log(`[StopEvent] Already processed: ${arrivalDocId}`);
+            if (doc.exists && doc.data().fcmSent === true) {
+                console.log(`[StopEvent] FCM already sent for: ${arrivalDocId}`);
                 return;
             }
         }
@@ -282,7 +282,7 @@ const sendStopEventNotification = async (tripId, busId, collegeId, stopId, stopN
         // Mark as processed to prevent re-sending
         if (arrivalDocId) {
             await db.collection('stopArrivals').doc(arrivalDocId).update({
-                processed: true,
+                fcmSent: true,
                 notifiedAt: new Date().toISOString(),
             });
         }

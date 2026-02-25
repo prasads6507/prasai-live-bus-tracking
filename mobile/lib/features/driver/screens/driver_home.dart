@@ -851,14 +851,26 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
 
         // Auto-stop logic if ended externally
         if (!isTripActive && _locationUpdateSubscription != null) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
             if (_locationUpdateSubscription != null) {
                debugPrint("Ending trip externally initiated (Admin/System)");
+               final prefs = await SharedPreferences.getInstance();
+               final lastTripId = prefs.getString('track_trip_id');
+               
+               if (lastTripId != null) {
+                 debugPrint("[DriverContent] Sending buffered history for externally ended trip $lastTripId");
+                 await TripFinalizer.finalizeTrip(
+                   collegeId: widget.collegeId,
+                   busId: widget.busId,
+                   tripId: lastTripId,
+                 );
+               }
+
                _stopTracking();
                if (mounted) {
                  ScaffoldMessenger.of(context).showSnackBar(
                    const SnackBar(
-                     content: Text("Trip ended by administrator."),
+                     content: Text("Trip ended externally (e.g. by Administrator)."),
                      backgroundColor: Colors.orange,
                    ),
                  );

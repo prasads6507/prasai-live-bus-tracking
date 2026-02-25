@@ -36,8 +36,8 @@ class TrackingLifecycleManager {
       await prefs.remove('next_stop_lat');
       await prefs.remove('next_stop_lng');
       await prefs.remove('next_stop_radius');
-      await prefs.remove('has_arrived_current');
-      await prefs.remove('trip_history_buffer');
+      // Note: trip_history_buffer is no longer deleted here. 
+      // It is securely deleted only after a successful upload by DriverLocationService.
       
       print("[TrackingLifecycleManager] Context cleared. GPS should teardown.");
     } catch (e) {

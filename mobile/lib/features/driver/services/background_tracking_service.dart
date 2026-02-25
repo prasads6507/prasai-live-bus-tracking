@@ -531,7 +531,12 @@ class BackgroundTrackingService {
       } else {
         // AUTO-END
         debugPrint("[Background] AUTO-ENDING TRIP at final stop");
-        batch.update(tripRef, {'status': 'COMPLETED', 'isActive': false});
+        batch.update(tripRef, {
+          'status': 'COMPLETED',
+          'isActive': false,
+          'endTime': DateTime.now().toIso8601String(),
+          'endedAt': FieldValue.serverTimestamp(),
+        });
         busUpdate['status'] = 'IDLE';
         busUpdate['activeTripId'] = null;
         
