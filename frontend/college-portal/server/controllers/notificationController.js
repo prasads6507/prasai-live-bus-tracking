@@ -6,12 +6,12 @@ const { admin, db, messaging } = require('../config/firebase');
  */
 const sendBusStartedNotification = async (tripId, busId, collegeId, busNumber) => {
     try {
-        console.log(`[Notification] Sending 'Bus Started' for bus ${busId} (${busNumber})`);
-
+        console.log(`[Notification] Sending 'Bus Started' for bus ${busId} (${busNumber}) at college ${collegeId}`);
         const studentsSnapshot = await db.collection('students')
             .where('collegeId', '==', collegeId)
             .where('favoriteBusIds', 'array-contains', busId)
             .get();
+        console.log(`[Notification] Found ${studentsSnapshot.size} students for bus ${busId}`);
 
         if (studentsSnapshot.empty) {
             console.log(`[Notification] No students have favorited bus ${busId}`);
@@ -257,7 +257,7 @@ const sendStopEventNotification = async (tripId, busId, collegeId, stopId, stopN
             return;
         }
 
-        console.log(`[StopEvent] type=${type} stop="${stopName}" trip=${tripId}`);
+        console.log(`[StopEvent] type=${type} stop="${stopName}" trip=${tripId} bus=${busId} college=${collegeId}`);
 
         // Prevent duplicate sends
         if (arrivalDocId) {
@@ -289,6 +289,7 @@ const sendStopEventNotification = async (tripId, busId, collegeId, stopId, stopN
             .where('collegeId', '==', collegeId)
             .where('favoriteBusIds', 'array-contains', busId)
             .get();
+        console.log(`[StopEvent] Query found ${studentsSnap.size} students manually`);
 
         const tokens = [];
         studentsSnap.forEach(doc => {
