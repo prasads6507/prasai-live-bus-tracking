@@ -679,20 +679,20 @@ class FirestoreDataSource {
 
   /// Streams user profile for real-time updates (favorites, etc.)
   Stream<UserProfile?> streamUserProfile(String collegeId, String uid) {
-    // Try students collection first, then users
-    return _firestore.collection('students').doc(uid).snapshots().asyncMap((studentDoc) async {
-      if (studentDoc.exists) {
-        final data = studentDoc.data() as Map<String, dynamic>?;
-        if (data != null && data['collegeId'] == collegeId) {
-          return UserProfile.fromFirestore(studentDoc);
-        }
-      }
-      // Fallback to users collection
-      final userDoc = await _firestore.collection('users').doc(uid).get();
+    // 1. Try 'users' collection first (Admins, Drivers)
+    return _firestore.collection('users').doc(uid).snapshots().asyncMap((userDoc) async {
       if (userDoc.exists) {
         final data = userDoc.data() as Map<String, dynamic>?;
         if (data != null && data['collegeId'] == collegeId) {
           return UserProfile.fromFirestore(userDoc);
+        }
+      }
+      // 2. Fallback to 'students' collection
+      final studentDoc = await _firestore.collection('students').doc(uid).get();
+      if (studentDoc.exists) {
+        final data = studentDoc.data() as Map<String, dynamic>?;
+        if (data != null && data['collegeId'] == collegeId) {
+          return UserProfile.fromFirestore(studentDoc);
         }
       }
       return null;

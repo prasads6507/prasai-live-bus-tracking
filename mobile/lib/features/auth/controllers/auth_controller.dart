@@ -66,8 +66,8 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
         await prefs.setString('auth_token', jwtToken);
       }
       
-      // 5. Register FCM Token — pass collegeId so it is saved alongside the token
-      await _registerFcmToken(user.uid, collegeId);
+      // 5. Register FCM Token — pass collegeId and userDoc so it can determine role
+      await _registerFcmToken(user.uid, collegeId, userDoc);
       
       state = const AsyncValue.data(null);
     } catch (e, st) {
@@ -94,20 +94,25 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
     }
   }
 
-  Future<void> registerFcmTokenForSession(String uid, String collegeId) => 
-      _registerFcmToken(uid, collegeId);
+  Future<void> registerFcmTokenForSession(String uid, String collegeId) async {
+    try {
+      final userDoc = await _authRepository.getUserInCollege(collegeId, uid);
+      if (userDoc.exists) {
+        await _registerFcmToken(uid, collegeId, userDoc);
+      }
+    } catch (e) {
+      print("Error during session token registration: $e");
+    }
+  }
 
   // ─────────────────────────────────────────────────────────────────────────
   // BUG FIX: _registerFcmToken / _saveFcmToken
   //
-  // Previous code saved ONLY the FCM token to students/{uid}, without saving
-  // the collegeId field. The server's Firestore query filters by BOTH:
-  //   .where('collegeId', '==', collegeId)
-  //   .where('favoriteBusIds', 'array-contains', busId)
-  //
-  // Fix: Also save collegeId when writing the FCM token.
+  // Previous code saved ONLY the FCM token to students/{uid}, which created
+  // fake student records for drivers.
+  // Fix: Save to 'users' if role is DRIVER/ADMIN, else 'students'.
   // ─────────────────────────────────────────────────────────────────────────
-  Future<void> _registerFcmToken(String uid, String collegeId) async {
+  Future<void> _registerFcmToken(String uid, String collegeId, DocumentSnapshot userDoc) async {
     try {
       final messaging = FirebaseMessaging.instance;
       await messaging.requestPermission(
@@ -116,14 +121,20 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
         sound: true,
       );
       
+      final data = userDoc.data() as Map<String, dynamic>?;
+      final role = (data?['role'] as String?)?.toUpperCase() ?? 'STUDENT';
+      // Drivers/Admins are in 'users', Students are in 'students'
+      final collection = (role == 'DRIVER' || role == 'ADMIN' || role == 'COLLEGE_ADMIN') 
+          ? 'users' : 'students';
+
       final token = await messaging.getToken();
       if (token != null) {
-        await _saveFcmToken(uid, token, collegeId);
+        await _saveFcmToken(uid, token, collegeId, collection);
       }
 
       // Listen for token refresh
       messaging.onTokenRefresh.listen((newToken) async {
-        await _saveFcmToken(uid, newToken, collegeId);
+        await _saveFcmToken(uid, newToken, collegeId, collection);
       });
 
     } catch (e) {
@@ -131,23 +142,25 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
     }
   }
 
-  Future<void> _saveFcmToken(String uid, String token, String collegeId) async {
-    final ref = FirebaseFirestore.instance.collection('students').doc(uid);
+  Future<void> _saveFcmToken(String uid, String token, String collegeId, String collection) async {
+    final ref = FirebaseFirestore.instance.collection(collection).doc(uid);
     try {
+      // Use update to avoid overwriting existing fields like role/name
       await ref.update({
         'fcmToken': token,
-        'collegeId': collegeId,   // ← CRITICAL: required for server query
+        'collegeId': collegeId,
       });
-      print("FCM Token updated for $uid (college: $collegeId)");
+      print("FCM Token updated for $uid in $collection");
     } catch (updateErr) {
+      // If doc doesn't exist, we must use set with merge
       try {
         await ref.set({
           'fcmToken': token,
           'collegeId': collegeId,
         }, SetOptions(merge: true));
-        print("FCM Token set (new doc) for $uid (college: $collegeId)");
+        print("FCM Token set (merge) for $uid in $collection");
       } catch (setErr) {
-        print("Error saving FCM token: $updateErr | $setErr");
+        print("Error saving FCM token to $collection: $updateErr | $setErr");
       }
     }
   }
