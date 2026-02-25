@@ -11,17 +11,23 @@ class AuthDataSource {
 
   User? get currentUser => _firebaseAuth.currentUser;
 
-  Future<UserCredential> signInWithApi(String email, String password, String orgSlug) async {
+  Future<Map<String, dynamic>> signInWithApi(String email, String password, String orgSlug) async {
     // 1. Authenticate with Backend API
     final loginResponse = await _apiDataSource.login(email, password, orgSlug);
     
     final customToken = loginResponse['firebaseCustomToken'] as String?;
+    final jwtToken = loginResponse['token'] as String?;
+
     if (customToken == null) {
       throw 'Server did not return a valid custom token.';
     }
 
     // 2. Sign in to Firebase with the Custom Token
-    return _firebaseAuth.signInWithCustomToken(customToken);
+    final credential = await _firebaseAuth.signInWithCustomToken(customToken);
+    return {
+      'credential': credential,
+      'token': jwtToken,
+    };
   }
 
   Future<UserCredential> signInDirect(String email, String password) async {

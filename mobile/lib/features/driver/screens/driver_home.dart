@@ -748,6 +748,7 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
       await prefs.setString('track_college_id', widget.collegeId);
       await prefs.setString('track_bus_id', widget.busId);
       await prefs.setString('track_trip_id', tripId);
+      await prefs.setString('api_base_url', Env.apiUrl);
       debugPrint("[DriverContent] Tracking keys saved: college=${widget.collegeId}, bus=${widget.busId}, trip=$tripId");
     } catch (e) {
       debugPrint("[DriverContent] Failed to save tracking keys (CRITICAL): $e");

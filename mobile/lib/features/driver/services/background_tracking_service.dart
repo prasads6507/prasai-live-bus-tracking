@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import '../../../../firebase_options.dart';
+import '../../../../core/config/env.dart';
 import 'trip_finalizer.dart';
 
 // ─── ADAPTIVE TRACKING CONSTANTS ───
@@ -605,7 +606,7 @@ class BackgroundTrackingService {
   /// Fire-and-forget call to the Node.js server to multicast FCM notifications
   static void _notifyServer(String tripId, String busId, String collegeId, String stopId, String type, {String? stopName, String? arrivalDocId, SharedPreferences? prefs}) async {
      try {
-       final apiBase = prefs?.getString('api_base_url') ?? "https://transit-hub-api.vercel.app";
+       final apiBase = prefs?.getString('api_base_url') ?? Env.apiUrl;
        final token = prefs?.getString('auth_token'); // Driver's JWT if available
 
        final dio = Dio(BaseOptions(

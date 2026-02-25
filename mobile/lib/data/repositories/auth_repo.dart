@@ -21,14 +21,18 @@ class AuthRepository {
     return _firestoreDataSource.getUserInCollege(collegeId, uid);
   }
 
-  Future<UserCredential> signIn(String email, String password, String orgSlug) async {
+  Future<Map<String, dynamic>> signIn(String email, String password, String orgSlug) async {
     try {
       // 1. Try API login first (Crucial for Custom Tokens and UID parity)
       return await _authDataSource.signInWithApi(email, password, orgSlug);
     } catch (e) {
       print('API login failed: $e. Falling back to Direct login...');
       // 2. Fallback to direct Firebase Auth
-      return await _authDataSource.signInDirect(email, password);
+      final credential = await _authDataSource.signInDirect(email, password);
+      return {
+        'credential': credential,
+        'token': null,
+      };
     }
   }
 

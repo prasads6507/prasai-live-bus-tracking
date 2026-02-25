@@ -27,7 +27,9 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
     state = const AsyncValue.loading();
     try {
       // 1. Firebase Sign In
-      final userCredential = await _authRepository.signIn(email, password, collegeSlug);
+      final loginResult = await _authRepository.signIn(email, password, collegeSlug);
+      final userCredential = loginResult['credential'];
+      final jwtToken = loginResult['token'];
       final user = userCredential.user;
 
       if (user == null) {
@@ -60,6 +62,9 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
       await prefs.setString(_collegeIdKey, collegeId);
       await prefs.setString('college_slug', collegeSlug);
       await prefs.setString('college_name', collegeName);
+      if (jwtToken != null) {
+        await prefs.setString('auth_token', jwtToken);
+      }
       
       // 5. Register FCM Token (Step 5C)
       await _registerFcmToken(user.uid);
@@ -82,6 +87,7 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
       await prefs.remove(_collegeIdKey);
       await prefs.remove('college_slug');
       await prefs.remove('college_name');
+      await prefs.remove('auth_token');
       state = const AsyncValue.data(null);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
