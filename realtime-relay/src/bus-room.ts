@@ -62,7 +62,7 @@ export class BusRoom {
                 {
                     headers: {
                         'Content-Type': 'application/json',
-                        'Access-Control-Allow-Origin': '*',
+                        'Access-Control-Allow-Origin': this.env.CORS_ORIGIN || '*',
                     },
                 }
             );
@@ -264,4 +264,5 @@ export interface Env {
     BUS_ROOM: DurableObjectNamespace;
     RELAY_HMAC_SECRET: string;
     TOKEN_TTL_SECONDS: string;
+    CORS_ORIGIN?: string;
 }

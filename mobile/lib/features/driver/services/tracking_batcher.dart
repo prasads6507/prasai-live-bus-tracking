@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import '../../../data/models/location_point.dart';
 import '../../../data/repositories/tracking_repo.dart';
 import '../../../data/datasources/firestore_ds.dart';
@@ -52,7 +53,7 @@ class TrackingBatcher {
         }
       }
     } catch (e) {
-      print('Failed to send tracking update: $e');
+      debugPrint('Failed to send tracking update: $e');
     }
   }
 }

@@ -44,16 +44,14 @@ const populateBusRoutes = async (buses) => {
 // @access  Private (Driver)
 const getDriverBuses = async (req, res) => {
     try {
-        console.log('--- GET DRIVER BUSES ---');
-        console.log('User:', req.user.email, 'Role:', req.user.role, 'Token CollegeId:', req.user.collegeId);
-        console.log('Req CollegeId:', req.collegeId);
+
 
         const busesSnapshot = await db.collection('buses')
             .where('collegeId', '==', req.collegeId)
             .where('assignedDriverId', '==', req.user.id)
             .get();
 
-        console.log(`Found ${busesSnapshot.size} buses for college ${req.collegeId}`);
+
 
         let buses = busesSnapshot.docs.map(doc => ({
             _id: doc.id,
@@ -82,7 +80,7 @@ const searchDriverBuses = async (req, res) => {
         const { q } = req.query;
         if (!q) return res.status(400).json({ success: false, message: 'Query required' });
 
-        console.log(`--- SEARCH DRIVER BUSES: ${q} ---`);
+
 
         // Note: Firestore doesn't support native partial text search strings easily.
         // We will fetch all buses for the college (usually manageable size) and filter in memory,
@@ -137,8 +135,7 @@ const updateBusLocation = async (req, res) => {
                 throw new Error('Bus not found');
             }
 
-            // SMOKING GUN LOG FOR PROBLEM 2!
-            console.log(`[GPS CHECK] Endpoint busId: ${busId} | Firestore doc.id: ${busDoc.id} | Match: ${busId === busDoc.id}`);
+
 
             const busData = busDoc.data();
             const isActiveTrip = !!busData.activeTripId;
@@ -164,7 +161,7 @@ const updateBusLocation = async (req, res) => {
                 updateData.currentSpeed = speedMph;    // Alias for some UIs
                 updateData.speed = speedMph;           // Legacy
             }
-            console.log(`[Speed] Bus ${busId}: raw=${speed}, mph=${speedMph}`);
+
 
             if (latitude !== undefined && longitude !== undefined) {
                 const newPoint = {
@@ -176,10 +173,14 @@ const updateBusLocation = async (req, res) => {
                     timestamp: new Date().toISOString()
                 };
 
+                // H-2 FIX: Include speed and timestamp in location object for consistency with background service
                 updateData.location = {
                     latitude,
                     longitude,
-                    heading: heading || 0
+                    heading: heading || 0,
+                    speed: speedMph,
+                    speedMph: speedMph,
+                    timestamp: new Date().toISOString()
                 };
 
                 // Maintain strictly a 5-point buffer
@@ -208,7 +209,7 @@ const endTrip = async (req, res) => {
     const { tripId } = req.params;
     const { busId } = req.body;
 
-    console.log(`--- END TRIP: ${tripId} (Bus: ${busId}) ---`);
+
 
     if (!busId) return res.status(400).json({ success: false, message: 'Bus ID required' });
 
@@ -224,7 +225,7 @@ const endTrip = async (req, res) => {
 
         // 0. Idempotency Check: If already ended, return success
         if (tripData.status === 'COMPLETED' || tripData.status === 'CANCELLED' || tripData.isActive === false) {
-            console.log(`Trip ${tripId} is already finalized (Status: ${tripData.status}). Returning success.`);
+
             return res.status(200).json({ success: true, message: 'Trip already ended.' });
         }
 
@@ -263,7 +264,6 @@ const endTrip = async (req, res) => {
             currentSpeed: 0,
             speed: 0,
             speedMph: 0,
-            liveTrail: [],
             liveTrackBuffer: [],
             trackingMode: admin.firestore.FieldValue.delete(),
             nextStopId: admin.firestore.FieldValue.delete(),
@@ -272,7 +272,7 @@ const endTrip = async (req, res) => {
         });
 
         await batch.commit();
-        console.log('Trip ended atomically with canonical statuses.');
+
 
         // Notify students whose favorite bus this was
         sendTripEndedNotification(tripId, busId, tripData.collegeId || req.collegeId)
@@ -294,7 +294,7 @@ const startTrip = async (req, res) => {
         const { tripId, routeId, direction } = req.body;
         const tripDirection = direction || 'pickup'; // 'pickup' or 'dropoff'
 
-        console.log(`--- START TRIP: ${tripId} for Bus ${busId} (Route: ${routeId || 'Default'}, Direction: ${tripDirection}) ---`);
+
 
         // Verify bus exists and belongs to college
         const busRef = db.collection('buses').doc(busId);
@@ -399,7 +399,7 @@ const startTrip = async (req, res) => {
 
         await batch.commit();
 
-        console.log('Trip started atomically:', tripId, `with ${stopsSnapshot.length} stops (${tripDirection})`);
+
 
         // Send 'Bus Started' Notification (Phase 4.2)
         const busNumberInfo = busData.busNumber || busData.number || busId;
@@ -426,8 +426,7 @@ const saveTripHistory = async (req, res) => {
         const { busId } = req.params;
         const { tripId, latitude, longitude, speed, heading, timestamp } = req.body;
 
-        console.log(`--- SAVE TRIP HISTORY: ${tripId} ---`);
-        console.log('Location:', { latitude, longitude, speed, heading });
+
 
         // Verify bus exists and belongs to college
         const busRef = db.collection('buses').doc(busId);
@@ -443,48 +442,27 @@ const saveTripHistory = async (req, res) => {
 
         const tripRef = db.collection('trips').doc(tripId);
 
-        // Transaction to append to path array (keeps correct order and fits single-doc requirement)
-        await db.runTransaction(async (transaction) => {
-            const tDoc = await transaction.get(tripRef);
+        // C-3 FIX: Use arrayUnion + increment instead of read-then-rewrite.
+        // Old approach: read full path array + write [existing..., newPoint] = O(n²) data transfer.
+        // New approach: constant-time write, no read required.
+        const newPoint = {
+            lat: latitude,
+            lng: longitude,
+            latitude,
+            longitude,
+            speed: Math.round(speed || 0),
+            heading: heading || 0,
+            timestamp: timestamp || new Date().toISOString(),
+            recordedAt: new Date().toISOString()
+        };
 
-            const newPoint = {
-                lat: latitude,
-                lng: longitude,
-                latitude, // Keep for backward visibility
-                longitude, // Keep for backward visibility
-                speed: Math.round(speed || 0),
-                heading: heading || 0,
-                timestamp: timestamp || new Date().toISOString(),
-                recordedAt: new Date().toISOString()
-            };
-
-            if (!tDoc.exists) {
-                // Initialize trip doc if it doesn't exist (safety)
-                transaction.set(tripRef, {
-                    tripId,
-                    busId,
-                    collegeId: req.collegeId,
-                    path: [newPoint],
-                    totalPoints: 1,
-                    status: 'ACTIVE',
-                    startTime: new Date().toISOString(),
-                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
-                });
-            } else {
-                const data = tDoc.data();
-                const existingPath = data.path || [];
-
-                // Firestore limit check (1MB) - roughly ~5000-8000 points. 
-                // A typical trip of 500 points is very safe (~50KB).
-                transaction.update(tripRef, {
-                    path: [...existingPath, newPoint],
-                    totalPoints: (existingPath.length + 1),
-                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
-                });
-            }
+        await tripRef.update({
+            path: admin.firestore.FieldValue.arrayUnion(newPoint),
+            totalPoints: admin.firestore.FieldValue.increment(1),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
         });
 
-        console.log('History point appended to path array in root trip doc');
+
         res.status(201).json({ success: true, message: 'History saved' });
     } catch (error) {
         console.error('Error saving trip history:', error);
@@ -500,7 +478,7 @@ const historyUpload = async (req, res) => {
         const { tripId } = req.params;
         const { polyline, distanceMeters, durationSeconds, maxSpeedMph, avgSpeedMph, pointsCount, path } = req.body;
 
-        console.log(`--- HISTORY UPLOAD: ${tripId} (${pointsCount} points) ---`);
+
 
         if (!tripId) {
             return res.status(400).json({ success: false, message: 'tripId is required' });
@@ -539,7 +517,7 @@ const historyUpload = async (req, res) => {
 
         await tripRef.update(updateData);
 
-        console.log(`History uploaded for trip ${tripId}: ${pointsCount} points, ${distanceMeters}m`);
+
         res.status(200).json({ success: true, message: 'Trip history uploaded' });
     } catch (error) {
         console.error('Error uploading trip history:', error);

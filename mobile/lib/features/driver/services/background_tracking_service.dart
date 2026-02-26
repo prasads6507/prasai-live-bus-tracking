@@ -577,10 +577,14 @@ class BackgroundTrackingService {
            debugPrint("[Background] Auto-finalize failed, will retry: $e");
         }
 
+        // C-4 FIX: Explicitly reset _isRunning so a new trip can be started afterward.
+        // The stopService listener may not fire in the same isolate context during auto-end.
+        BackgroundTrackingService._isRunning = false;
+        
         // Logic to stop self from background isolate safely
         // Historically FlutterBackgroundService().invoke("stopService") worked, 
-        // but now throws "Only main isolate". Using stopSelf() directly is safer.
-        // The service logic in onStart already cleans up subscriptions.
+        // but now throws "Only main isolate". The service logic in onStart already cleans up subscriptions.
+        FlutterBackgroundService().invoke("stopService");
       }
 
     } catch (e) {

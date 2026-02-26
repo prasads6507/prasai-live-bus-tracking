@@ -144,8 +144,8 @@ export const startNewTrip = async (busId: string, tripId: string) => {
 };
 
 export const endCurrentTrip = async (busId: string, tripId: string) => {
-    console.log(`API CALL: POST /driver/trip/end/${busId}`, { tripId });
-    const response = await api.post(`/driver/trip/end/${busId}`, { tripId });
+    // L-5 FIX: Correct endpoint is /driver/trips/:tripId/end with { busId } in body
+    const response = await api.post(`/driver/trips/${tripId}/end`, { busId });
     return response.data;
 };
 

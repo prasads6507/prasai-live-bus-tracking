@@ -72,7 +72,7 @@ class FirestoreDataSource {
         'currentHeading': lastPoint.heading ?? 0.0,
         'liveTrackBuffer': trimmedBuffer,
         'status': 'ON_ROUTE',
-        'trackingMode': 'NEAR_STOP',
+        // trackingMode is managed by the background service; do not overwrite here
       };
 
       transaction.update(docRef, updateData);
@@ -213,6 +213,7 @@ class FirestoreDataSource {
       'currentHeading': lastPoint.heading ?? 0.0,
       'lastUpdated': DateTime.now().toIso8601String(),
       'status': 'ON_ROUTE',
+      // trackingMode is managed by the background service; do not overwrite here
     });
   }
   /// Updates the bus's road/street name
@@ -522,15 +523,13 @@ class FirestoreDataSource {
       'eta': eta,
     };
 
-    // 1. Write to ROOT trips collection (canonical source for portal & path data)
+    // 1. Write to ROOT trips collection ONLY (canonical source for portal & path data)
+    // C-5 FIX: Removed subcollection write — it caused data inconsistency with server-started trips
+    // which only write to the root collection. The subcollection is not queried by any active code.
     final rootTripRef = _firestore.collection('trips').doc(tripId);
     batch.set(rootTripRef, tripData);
 
-    // 2. Also write to bus subcollection (backward compatibility)
-    final subTripRef = _firestore.collection('buses').doc(busId).collection('trips').doc(tripId);
-    batch.set(subTripRef, tripData);
-    
-    // 3. Update Bus Status
+    // 2. Update Bus Status
     final busRef = _firestore.collection('buses').doc(busId);
     batch.update(busRef, {
       'status': 'ON_ROUTE',
@@ -635,7 +634,6 @@ class FirestoreDataSource {
           'nextStopId': null,
           'completedStops': [],
           'liveTrackBuffer': [],
-          'liveTrail': [],
           'lastUpdated': DateTime.now().toIso8601String(),
         });
       }

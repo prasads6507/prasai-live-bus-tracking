@@ -3,7 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../../../core/theme/colors.dart';
 import '../../../../core/theme/typography.dart';
@@ -64,6 +63,7 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
   String? _tripDirection;
   StreamSubscription? _notifSubscription;
   final Set<String> _processedNotifIds = {};
+  String? _currentTripId; // Guard: only re-subscribe when tripId actually changes
 
   @override
   void initState() {
@@ -176,13 +176,18 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
             _fetchRouteForTrip(collegeId, bus.id);
           }
 
-          // Subscribe to trip document for stopsSnapshot + stopProgress + eta
+          // C-1 FIX: Only re-subscribe when the tripId actually changes, not on every bus update.
+          // Re-subscribing on every update resets _processedNotifIds causing duplicate notifications.
           if (bus.activeTripId != null) {
-            _subscribeTripProgress(bus.activeTripId!);
-            _setupLifecycleListener(collegeId, bus.id);
-            _setupNotificationListener(bus.activeTripId!);
+            if (_currentTripId != bus.activeTripId) {
+              _currentTripId = bus.activeTripId;
+              _subscribeTripProgress(bus.activeTripId!);
+              _setupLifecycleListener(collegeId, bus.id);
+              _setupNotificationListener(bus.activeTripId!);
+            }
           } else {
             // Trip ended - Kill all GPS/Tracking
+            _currentTripId = null;
             _liveBusLocation = null;
             _metricsTimer?.cancel();
             _metricsTimer = null;
@@ -466,7 +471,7 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.directions_bus_filled, size: 72, color: AppColors.textTertiary.withOpacity(0.4)),
+                  Icon(Icons.directions_bus_filled, size: 72, color: AppColors.textTertiary.withValues(alpha: 0.4)),
                   const SizedBox(height: 16),
                   Text(
                     "Bus not started yet",
@@ -549,9 +554,9 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       decoration: BoxDecoration(
-                        color: AppColors.background.withOpacity(0.95),
+                        color: AppColors.background.withValues(alpha: 0.95),
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: AppColors.divider.withOpacity(0.5), width: 1.0),
+                        border: Border.all(color: AppColors.divider.withValues(alpha: 0.5), width: 1.0),
                         boxShadow: [
                           BoxShadow(color: Colors.black12, blurRadius: 10, spreadRadius: 1)
                         ]
@@ -562,7 +567,7 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
                           Container(
                             padding: const EdgeInsets.all(6),
                             decoration: BoxDecoration(
-                              color: AppColors.primary.withOpacity(0.15),
+                              color: AppColors.primary.withValues(alpha: 0.15),
                               shape: BoxShape.circle,
                             ),
                             child: const Icon(Icons.location_on, color: AppColors.primary, size: 18),
@@ -708,10 +713,10 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: (color ?? AppColors.surface).withOpacity(0.95),
+          color: (color ?? AppColors.surface).withValues(alpha: 0.95),
           shape: BoxShape.circle,
           boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8, spreadRadius: 1),
+            BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 8, spreadRadius: 1),
           ],
         ),
         child: Icon(icon, color: iconColor ?? AppColors.textPrimary, size: 20),

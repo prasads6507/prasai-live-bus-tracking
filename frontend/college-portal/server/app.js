@@ -19,7 +19,9 @@ console.log("Firebase Mode: Database connection handled via Admin SDK");
 // Middleware
 app.use(helmet());
 app.use(cors({
-    origin: process.env.CORS_ORIGIN || '*',
+    origin: process.env.NODE_ENV === 'production'
+        ? (process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : false)
+        : (process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : '*'),
     credentials: true
 }));
 app.use(express.json());
