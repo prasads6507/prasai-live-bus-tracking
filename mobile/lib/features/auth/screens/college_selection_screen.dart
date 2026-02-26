@@ -72,6 +72,22 @@ class _CollegeSelectionScreenState extends ConsumerState<CollegeSelectionScreen>
     super.dispose();
   }
 
+  void _selectAndNavigate(Map<String, dynamic> college) {
+    HapticFeedback.selectionClick();
+    setState(() {
+      _selectedCollege = college;
+      _searchController.text = college['collegeName'];
+      _searchResults = [];
+    });
+    
+    // Update providers
+    ref.read(selectedCollegeIdProvider.notifier).state = college['collegeId'];
+    ref.read(selectedCollegeProvider.notifier).state = college;
+    
+    // Navigate immediately
+    context.go('/login', extra: college);
+  }
+
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
@@ -204,14 +220,7 @@ class _CollegeSelectionScreenState extends ConsumerState<CollegeSelectionScreen>
                                 child: Padding(
                                   padding: const EdgeInsets.only(bottom: 10),
                                   child: GestureDetector(
-                                    onTap: () {
-                                      HapticFeedback.selectionClick();
-                                      setState(() {
-                                        _selectedCollege = college;
-                                        _searchController.text = college['collegeName'];
-                                        _searchResults = [];
-                                      });
-                                    },
+                                    onTap: () => _selectAndNavigate(college),
                                     child: AnimatedContainer(
                                       duration: const Duration(milliseconds: 200),
                                       padding: const EdgeInsets.all(16),
@@ -301,13 +310,13 @@ class _CollegeSelectionScreenState extends ConsumerState<CollegeSelectionScreen>
                         ? 'Continue as ${_selectedCollege!['collegeName']} →'
                         : 'Continue to Login',
                     trailingIcon: _selectedCollege != null ? Icons.arrow_forward_rounded : null,
-                    onPressed: _selectedCollege != null
-                        ? () {
-                            ref.read(selectedCollegeIdProvider.notifier).state = _selectedCollege!['collegeId'];
-                            ref.read(selectedCollegeProvider.notifier).state = _selectedCollege;
-                            context.go('/login', extra: _selectedCollege);
-                          }
-                        : null,
+                    onPressed: () {
+                      if (_selectedCollege != null) {
+                        _selectAndNavigate(_selectedCollege!);
+                      } else {
+                        context.go('/login');
+                      }
+                    },
                   ),
                   const SizedBox(height: 32),
                 ],
