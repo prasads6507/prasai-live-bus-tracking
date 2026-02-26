@@ -847,6 +847,10 @@ class _DriverContent extends ConsumerStatefulWidget {
   final String collegeId;
   final bool isMaintenance;
   final String? originalBusId;
+  final String busId;
+  final String routeId;
+  final String driverId;
+  final String direction;
   final VoidCallback onBack;
   final VoidCallback onChangeRoute;
 

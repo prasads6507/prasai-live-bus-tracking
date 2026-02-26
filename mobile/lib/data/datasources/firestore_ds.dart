@@ -452,9 +452,9 @@ class FirestoreDataSource {
   }) async {
     // 0. GUARDIAN: Ensure driver doesn't have another active trip already
     final activeTripsSnap = await _firestore.collection('trips')
-        .where('collegeId', '==', collegeId)
-        .where('driverId', '==', driverId)
-        .where('status', '==', 'ACTIVE')
+        .where('collegeId', isEqualTo: collegeId)
+        .where('driverId', isEqualTo: driverId)
+        .where('status', isEqualTo: 'ACTIVE')
         .get();
 
     if (activeTripsSnap.docs.isNotEmpty) {
