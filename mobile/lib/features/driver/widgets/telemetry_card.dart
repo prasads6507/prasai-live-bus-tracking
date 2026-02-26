@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import '../../../../core/theme/colors.dart';
-import '../../../../core/theme/typography.dart';
-import '../../../../core/widgets/glass_card.dart';
+import '../../../core/theme/colors.dart';
+import '../../../core/theme/typography.dart';
+import '../../../core/widgets/pulsing_dot.dart';
 
 class DriverStatusCard extends StatelessWidget {
   final double speed;
@@ -22,18 +22,18 @@ class DriverStatusCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: isTracking ? null : AppColors.surface,
-        gradient: isTracking 
+        color: isTracking ? null : AppColors.bgCard,
+        gradient: isTracking
             ? const LinearGradient(
                 colors: [Color(0xFF22C55E), Color(0xFF10B981)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               )
             : null,
-        borderRadius: BorderRadius.circular(32),
-        border: isTracking ? null : Border.all(color: AppColors.divider.withOpacity(0.5)),
+        borderRadius: BorderRadius.circular(24),
+        border: isTracking ? null : Border.all(color: AppColors.borderSubtle),
         boxShadow: [
           if (isTracking)
             BoxShadow(
@@ -42,57 +42,49 @@ class DriverStatusCard extends StatelessWidget {
               offset: const Offset(0, 10),
             )
           else
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 15,
-              offset: const Offset(0, 5),
-            ),
+            AppShadows.cardShadow,
         ],
       ),
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          // Background Icon Decoration
+          // Watermark icon
           Positioned(
             right: -20,
             bottom: -20,
             child: Opacity(
-              opacity: 0.1,
+              opacity: 0.08,
               child: Transform.rotate(
                 angle: 0.2,
                 child: Icon(
                   Icons.navigation_rounded,
-                  size: 140,
+                  size: 130,
                   color: isTracking ? Colors.white : AppColors.textTertiary,
                 ),
               ),
             ),
           ),
-          
+
           Column(
             children: [
               // Status Badge
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: isTracking ? Colors.white.withOpacity(0.2) : AppColors.surfaceElevated,
-                  borderRadius: BorderRadius.circular(20),
+                  color: isTracking ? Colors.white.withOpacity(0.2) : AppColors.bgSurface,
+                  borderRadius: BorderRadius.circular(100),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: isTracking ? Colors.white : AppColors.textTertiary,
-                        shape: BoxShape.circle,
-                      ),
+                    PulsingDot(
+                      color: isTracking ? Colors.white : AppColors.textTertiary,
+                      size: 6,
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 6),
                     Text(
                       'CURRENT STATUS',
-                      style: AppTypography.textTheme.labelSmall?.copyWith(
+                      style: AppTypography.caption.copyWith(
                         color: isTracking ? Colors.white : AppColors.textTertiary,
                         fontWeight: FontWeight.bold,
                         letterSpacing: 1.0,
@@ -101,38 +93,33 @@ class DriverStatusCard extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
-              
+              const SizedBox(height: 12),
+
               // Status Title
               Text(
                 isTracking ? 'ON TRIP' : 'READY FOR TRIP',
-                style: AppTypography.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w900,
+                style: AppTypography.h1.copyWith(
                   color: isTracking ? Colors.white : AppColors.textPrimary,
-                  letterSpacing: -0.5,
                 ),
               ),
-              const SizedBox(height: 24),
-              
+              const SizedBox(height: 20),
+
               // Speedometer
               if (isTracking)
                 Column(
                   children: [
                     Text(
                       speed.toStringAsFixed(0),
-                      style: const TextStyle(
-                        fontSize: 80,
-                        fontWeight: FontWeight.w900,
-                        height: 1.0,
+                      style: AppTypography.display.copyWith(
+                        fontSize: 72,
                         color: Colors.white,
-                        letterSpacing: -4,
+                        height: 1.0,
                       ),
                     ),
                     Text(
                       "mph",
-                      style: AppTypography.textTheme.labelSmall?.copyWith(
+                      style: AppTypography.caption.copyWith(
                         color: Colors.white70,
-                        fontSize: 10,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -140,44 +127,30 @@ class DriverStatusCard extends StatelessWidget {
                 )
               else
                 Container(
-                  width: 80,
-                  height: 80,
+                  width: 72,
+                  height: 72,
                   decoration: BoxDecoration(
-                    color: AppColors.background.withOpacity(0.5),
+                    color: AppColors.bgSurface,
                     shape: BoxShape.circle,
                   ),
-                  child: const Center(
-                    child: Icon(Icons.navigation_rounded, size: 40, color: AppColors.textTertiary),
-                  ),
+                  child: const Icon(Icons.navigation_rounded, size: 36, color: AppColors.textTertiary),
                 ),
-              
-              const SizedBox(height: 32),
-              
-              // Metrics Grid
+
+              const SizedBox(height: 24),
+
+              // Metrics strip
               if (isTracking)
                 Container(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(16),
                   ),
                   child: Row(
                     children: [
-                      _MetricItem(
-                        label: 'LAST UPDATE',
-                        value: lastUpdateTime,
-                        isDark: false,
-                      ),
-                      Container(
-                        width: 1,
-                        height: 32,
-                        color: Colors.white.withOpacity(0.2),
-                      ),
-                      _MetricItem(
-                        label: 'LOCATION',
-                        value: currentRoad,
-                        isDark: false,
-                      ),
+                      _MetricItem(label: 'LAST UPDATE', value: lastUpdateTime),
+                      Container(width: 1, height: 28, color: Colors.white.withOpacity(0.2)),
+                      _MetricItem(label: 'LOCATION', value: currentRoad),
                     ],
                   ),
                 ),
@@ -192,13 +165,8 @@ class DriverStatusCard extends StatelessWidget {
 class _MetricItem extends StatelessWidget {
   final String label;
   final String value;
-  final bool isDark;
 
-  const _MetricItem({
-    required this.label,
-    required this.value,
-    this.isDark = true,
-  });
+  const _MetricItem({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -207,21 +175,16 @@ class _MetricItem extends StatelessWidget {
         children: [
           Text(
             label,
-            style: const TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
+            style: AppTypography.caption.copyWith(
               color: Colors.white70,
               letterSpacing: 0.5,
+              fontWeight: FontWeight.bold,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             value,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
+            style: AppTypography.label.copyWith(color: Colors.white),
             textAlign: TextAlign.center,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,

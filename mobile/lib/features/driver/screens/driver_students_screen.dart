@@ -23,35 +23,30 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
     final result = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Call Student"),
-        content: Text("Do you want to make a call to ${student.name ?? 'the student'}?\n\nPhone: $phone"),
+        backgroundColor: AppColors.bgSurface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text("Call Student", style: AppTypography.h2),
+        content: Text(
+          "Call ${student.name ?? 'the student'}?\n\nPhone: $phone",
+          style: AppTypography.bodyMd,
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text("No"),
+            child: Text("Cancel", style: TextStyle(color: AppColors.textSecondary)),
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text("Yes"),
+            child: Text("Call", style: TextStyle(color: AppColors.primary)),
           ),
         ],
       ),
     );
 
-    if (result == true) {
-      if (phone != "Not provided") {
-        final uri = Uri.parse("tel:$phone");
-        if (await canLaunchUrl(uri)) {
-          await launchUrl(uri);
-        } else {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Cannot launch phone app.")));
-          }
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No valid phone number for this student.")));
-        }
+    if (result == true && phone != "Not provided") {
+      final uri = Uri.parse("tel:$phone");
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri);
       }
     }
   }
@@ -59,6 +54,7 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
   void _showDetailsSheet(BuildContext context, UserProfile student) {
     showModalBottomSheet(
       context: context,
+      backgroundColor: AppColors.bgSurface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -71,24 +67,23 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
             children: [
               Center(
                 child: Container(
-                  width: 40,
-                  height: 4,
+                  width: 40, height: 4,
                   decoration: BoxDecoration(
-                    color: AppColors.divider,
+                    color: AppColors.borderMid,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
               ),
               const SizedBox(height: 24),
-              Text("Student Details", style: AppTypography.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+              Text("Student Details", style: AppTypography.h2),
               const SizedBox(height: 24),
-              _buildDetailRow(Icons.person, "Name", student.name ?? "Student"),
+              _buildDetailRow(Icons.person_rounded, "Name", student.name ?? "Student"),
               const SizedBox(height: 16),
-              _buildDetailRow(Icons.phone, "Phone", student.phone ?? "Not Available"),
+              _buildDetailRow(Icons.phone_rounded, "Phone", student.phone ?? "Not Available"),
               const SizedBox(height: 16),
-              _buildDetailRow(Icons.email, "Email", student.email),
+              _buildDetailRow(Icons.email_rounded, "Email", student.email),
               const SizedBox(height: 16),
-              _buildDetailRow(Icons.directions_bus, "Assigned Bus", student.assignedBusId ?? "Not Assigned"),
+              _buildDetailRow(Icons.directions_bus_rounded, "Assigned Bus", student.assignedBusId ?? "Not Assigned"),
               const SizedBox(height: 32),
             ],
           ),
@@ -100,14 +95,21 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
   Widget _buildDetailRow(IconData icon, String label, String value) {
     return Row(
       children: [
-        Icon(icon, color: AppColors.primary, size: 24),
-        const SizedBox(width: 16),
+        Container(
+          width: 36, height: 36,
+          decoration: BoxDecoration(
+            color: AppColors.primarySoft,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: AppColors.primary, size: 18),
+        ),
+        const SizedBox(width: 14),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-              Text(value, style: const TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w500)),
+              Text(label, style: AppTypography.caption),
+              Text(value, style: AppTypography.bodyLg.copyWith(color: AppColors.textPrimary)),
             ],
           ),
         ),
@@ -121,163 +123,137 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
     final studentsAsync = ref.watch(studentsProvider(collegeId ?? ""));
 
     return AppScaffold(
-      appBar: AppBar(
-        title: const Text('Students'),
-        centerTitle: false,
-      ),
-      body: Column(
-        children: [
-          // Search Bar
-          Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: TextField(
-              decoration: InputDecoration(
-                hintText: 'Search by name or email...',
-                prefixIcon: const Icon(Icons.search, color: AppColors.textSecondary),
-                filled: true,
-                fillColor: AppColors.surface,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: const BorderSide(color: AppColors.divider),
+      body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Title
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+              child: Text('Students', style: AppTypography.h1),
+            ),
+            const SizedBox(height: 16),
+
+            // Search Bar
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: AppColors.bgCard,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.borderSubtle),
                 ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: const BorderSide(color: AppColors.divider),
+                child: TextField(
+                  style: AppTypography.bodyLg.copyWith(color: AppColors.textPrimary),
+                  decoration: InputDecoration(
+                    hintText: 'Search by name or email...',
+                    prefixIcon: const Icon(Icons.search_rounded, color: AppColors.primary, size: 20),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  onChanged: (value) => setState(() => _searchQuery = value.toLowerCase()),
                 ),
               ),
-              onChanged: (value) {
-                setState(() {
-                  _searchQuery = value.toLowerCase();
-                });
-              },
             ),
-          ),
-          
-          Expanded(
-            child: studentsAsync.when(
-              data: (students) {
-                if (students.isEmpty) {
-                  return const Center(child: Text("No students available."));
-                }
-
-                // Filter students
-                final filteredStudents = students.where((s) {
-                  final sName = (s.name ?? "").toLowerCase();
-                  final sEmail = s.email.toLowerCase();
-                  return sName.contains(_searchQuery) || sEmail.contains(_searchQuery);
-                }).toList();
-
-                if (filteredStudents.isEmpty) {
-                  return const Center(child: Text("No matching students found."));
-                }
-
-                return ListView.separated(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  itemCount: filteredStudents.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 16),
-                  itemBuilder: (context, index) {
-                    final student = filteredStudents[index];
-
-                    return Container(
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: AppColors.divider),
-                        boxShadow: [
-                           BoxShadow(
-                             color: Colors.black.withOpacity(0.05), 
-                             blurRadius: 10, 
-                             offset: const Offset(0, 4),
-                           ),
+            const SizedBox(height: 16),
+            
+            Expanded(
+              child: studentsAsync.when(
+                data: (students) {
+                  if (students.isEmpty) {
+                    return Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.people_outline_rounded, size: 48, color: AppColors.textTertiary),
+                          const SizedBox(height: 12),
+                          Text("No students available", style: AppTypography.bodyMd),
                         ],
                       ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(20.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                    );
+                  }
+
+                  final filteredStudents = students.where((s) {
+                    final sName = (s.name ?? "").toLowerCase();
+                    final sEmail = s.email.toLowerCase();
+                    return sName.contains(_searchQuery) || sEmail.contains(_searchQuery);
+                  }).toList();
+
+                  if (filteredStudents.isEmpty) {
+                    return Center(child: Text("No matching students", style: AppTypography.bodyMd));
+                  }
+
+                  return ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+                    itemCount: filteredStudents.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    itemBuilder: (context, index) {
+                      final student = filteredStudents[index];
+                      final initials = student.name != null && student.name!.isNotEmpty
+                          ? student.name![0].toUpperCase()
+                          : 'S';
+
+                      return Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: AppColors.bgCard,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: AppColors.borderSubtle),
+                        ),
+                        child: Row(
                           children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Row(
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.all(12),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.primary.withOpacity(0.1),
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: const Icon(Icons.person, color: AppColors.primary, size: 28),
-                                    ),
-                                    const SizedBox(width: 16),
-                                    Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          student.name ?? "Student",
-                                          style: AppTypography.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-                                        ),
-                                        Text(
-                                          student.email,
-                                          style: AppTypography.textTheme.labelMedium?.copyWith(
-                                            color: AppColors.textSecondary,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ],
+                            CircleAvatar(
+                              radius: 22,
+                              backgroundColor: AppColors.primarySoft,
+                              child: Text(initials, style: AppTypography.h3.copyWith(color: AppColors.primary)),
                             ),
-                            const SizedBox(height: 20),
-                            
-                            // Actions
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: OutlinedButton.icon(
-                                    onPressed: () => _showDetailsSheet(context, student),
-                                    icon: const Icon(Icons.info_outline),
-                                    label: const Text("View Details", style: TextStyle(fontWeight: FontWeight.bold)),
-                                    style: OutlinedButton.styleFrom(
-                                      foregroundColor: AppColors.primary,
-                                      side: const BorderSide(color: AppColors.primary),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                      padding: const EdgeInsets.symmetric(vertical: 16),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: ElevatedButton.icon(
-                                    onPressed: () => _showCallDialog(context, student),
-                                    icon: const Icon(Icons.phone),
-                                    label: const Text("Make Call", style: TextStyle(fontWeight: FontWeight.bold)),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: AppColors.primary,
-                                      foregroundColor: Colors.white,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                      padding: const EdgeInsets.symmetric(vertical: 16),
-                                      elevation: 4,
-                                      shadowColor: AppColors.primary.withOpacity(0.4),
-                                    ),
-                                  ),
-                                ),
-                              ],
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(student.name ?? "Student", style: AppTypography.bodyLg.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
+                                  Text(student.email, style: AppTypography.caption),
+                                ],
+                              ),
                             ),
+                            // Quick actions
+                            GestureDetector(
+                              onTap: () => _showDetailsSheet(context, student),
+                              child: Container(
+                                width: 34, height: 34,
+                                decoration: BoxDecoration(
+                                  color: AppColors.bgSurface,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(Icons.info_outline_rounded, color: AppColors.textSecondary, size: 16),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            if (student.phone != null)
+                              GestureDetector(
+                                onTap: () => _showCallDialog(context, student),
+                                child: Container(
+                                  width: 34, height: 34,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primarySoft,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Icon(Icons.phone_rounded, color: AppColors.primary, size: 16),
+                                ),
+                              ),
                           ],
                         ),
-                      ),
-                    );
-                  },
-                );
-              },
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (err, stack) => Center(child: Text("Error: $err")),
+                      );
+                    },
+                  );
+                },
+                loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
+                error: (err, stack) => Center(child: Text("Error: $err", style: AppTypography.bodyMd)),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/colors.dart';
+import '../../../core/theme/typography.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/primary_button.dart';
 import '../../../data/providers.dart';
@@ -16,10 +18,20 @@ class CollegeSelectionScreen extends ConsumerStatefulWidget {
 
 class _CollegeSelectionScreenState extends ConsumerState<CollegeSelectionScreen> {
   final _searchController = TextEditingController();
+  final _focusNode = FocusNode();
   List<Map<String, dynamic>> _searchResults = [];
   Map<String, dynamic>? _selectedCollege;
   bool _isLoading = false;
+  bool _isFocused = false;
   Timer? _debounce;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(() {
+      setState(() => _isFocused = _focusNode.hasFocus);
+    });
+  }
 
   void _onSearchChanged(String query) {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
@@ -42,9 +54,11 @@ class _CollegeSelectionScreenState extends ConsumerState<CollegeSelectionScreen>
       final results = await ref.read(apiDataSourceProvider).searchColleges(query);
       setState(() => _searchResults = results);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error searching: $e'), backgroundColor: AppColors.error),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error searching: $e'), backgroundColor: AppColors.error),
+        );
+      }
     } finally {
       setState(() => _isLoading = false);
     }
@@ -54,201 +68,344 @@ class _CollegeSelectionScreenState extends ConsumerState<CollegeSelectionScreen>
   void dispose() {
     _debounce?.cancel();
     _searchController.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
-      body: Stack(
-        children: [
-          // Background Gradient decoration matching web
-          Positioned(
-            top: -150,
-            left: -150,
-            child: Container(
-              width: 400,
-              height: 400,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppColors.primary.withOpacity(0.08),
+      body: SafeArea(
+        child: Stack(
+          children: [
+            // Radial accent glow
+            Positioned(
+              top: -100,
+              left: -100,
+              child: Container(
+                width: 400,
+                height: 400,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      AppColors.primary.withOpacity(0.08),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
               ),
             ),
-          ),
-          
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 80),
-                Center(
-                  child: Container(
-                    width: 80,
-                    height: 80,
+
+            // Decorative animated route line
+            Positioned(
+              top: 30,
+              left: 20,
+              right: 20,
+              child: _AnimatedRouteLine(),
+            ),
+
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 60),
+
+                  // Title
+                  Center(
+                    child: Text(
+                      'Find Your Institution',
+                      style: AppTypography.h1,
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Center(
+                    child: Text(
+                      'Search to get started',
+                      style: AppTypography.bodyMd,
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+
+                  // Glowing Search Bar
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: AppColors.primary.withOpacity(0.2)),
-                    ),
-                    child: const Icon(Icons.business, color: AppColors.primary, size: 40),
-                  ),
-                ),
-                const SizedBox(height: 32),
-                Center(
-                  child: Text(
-                    'Find Your Organization',
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary,
-                        ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Center(
-                  child: Text(
-                    'Search for your institution to access the portal',
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-                const SizedBox(height: 40),
-                
-                // Search Input
-                TextField(
-                  controller: _searchController,
-                  onChanged: _onSearchChanged,
-                  style: const TextStyle(color: AppColors.textPrimary),
-                  decoration: InputDecoration(
-                    filled: true,
-                    fillColor: AppColors.surfaceElevated.withOpacity(0.5),
-                    hintText: 'Type your organization name...',
-                    hintStyle: TextStyle(color: AppColors.textSecondary.withOpacity(0.5)),
-                    prefixIcon: const Icon(Icons.search, color: AppColors.textSecondary),
-                    suffixIcon: _isLoading 
-                        ? const Padding(
-                            padding: EdgeInsets.all(12.0),
-                            child: SizedBox(
-                              width: 16, height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          )
-                        : null,
-                    border: OutlineInputBorder(
+                      color: AppColors.bgCard,
                       borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(color: AppColors.surfaceElevated),
+                      border: Border.all(
+                        color: _isFocused ? AppColors.primary : AppColors.borderSubtle,
+                        width: _isFocused ? 1.5 : 1,
+                      ),
+                      boxShadow: _isFocused
+                          ? [BoxShadow(color: AppColors.primary.withOpacity(0.15), blurRadius: 16)]
+                          : [],
                     ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: const BorderSide(color: AppColors.primary),
-                    ),
-                  ),
-                ),
-                
-                const SizedBox(height: 24),
-                
-                // Results List
-                Expanded(
-                  child: _searchResults.isEmpty && _searchController.text.isNotEmpty && !_isLoading
-                    ? Center(child: Text('No organizations found', style: TextStyle(color: AppColors.textSecondary)))
-                    : ListView.builder(
-                        padding: EdgeInsets.zero,
-                        itemCount: _searchResults.length,
-                        itemBuilder: (context, index) {
-                          final college = _searchResults[index];
-                          final isSelected = _selectedCollege?['collegeId'] == college['collegeId'];
-                          
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: InkWell(
-                              onTap: () {
-                                setState(() {
-                                  _selectedCollege = college;
-                                  _searchController.text = college['collegeName'];
-                                  _searchResults = [];
-                                });
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  color: isSelected 
-                                      ? AppColors.primary.withOpacity(0.1) 
-                                      : AppColors.surfaceElevated.withOpacity(0.3),
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(
-                                    color: isSelected ? AppColors.primary : Colors.transparent,
+                    child: TextField(
+                      controller: _searchController,
+                      focusNode: _focusNode,
+                      onChanged: _onSearchChanged,
+                      style: AppTypography.bodyLg.copyWith(color: AppColors.textPrimary),
+                      decoration: InputDecoration(
+                        prefixIcon: const Icon(Icons.search_rounded, color: AppColors.primary, size: 22),
+                        suffixIcon: _isLoading
+                            ? const Padding(
+                                padding: EdgeInsets.all(14.0),
+                                child: SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: AppColors.primary,
                                   ),
                                 ),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: 40, height: 40,
-                                      decoration: BoxDecoration(
-                                        color: AppColors.primary.withOpacity(0.1),
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                      child: const Icon(Icons.school, color: AppColors.primary, size: 20),
+                              )
+                            : null,
+                        hintText: 'Type your college name...',
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // Results header
+                  if (_searchResults.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Text(
+                        'RESULTS',
+                        style: AppTypography.caption.copyWith(
+                          color: AppColors.textTertiary,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                    ),
+
+                  // Results List
+                  Expanded(
+                    child: _searchResults.isEmpty && _searchController.text.isNotEmpty && !_isLoading
+                        ? Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.search_off_rounded, size: 48, color: AppColors.textTertiary),
+                                const SizedBox(height: 12),
+                                Text('No institutions found', style: AppTypography.bodyMd),
+                              ],
+                            ),
+                          )
+                        : ListView.builder(
+                            padding: EdgeInsets.zero,
+                            itemCount: _searchResults.length,
+                            itemBuilder: (context, index) {
+                              final college = _searchResults[index];
+                              final isSelected = _selectedCollege?['collegeId'] == college['collegeId'];
+
+                              return TweenAnimationBuilder<double>(
+                                tween: Tween(begin: 0.0, end: 1.0),
+                                duration: Duration(milliseconds: 300 + (index * 50)),
+                                curve: Curves.easeOut,
+                                builder: (context, value, child) {
+                                  return Opacity(
+                                    opacity: value,
+                                    child: Transform.translate(
+                                      offset: Offset(0, 20 * (1 - value)),
+                                      child: child,
                                     ),
-                                    const SizedBox(width: 16),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                  );
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.only(bottom: 10),
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      HapticFeedback.selectionClick();
+                                      setState(() {
+                                        _selectedCollege = college;
+                                        _searchController.text = college['collegeName'];
+                                        _searchResults = [];
+                                      });
+                                    },
+                                    child: AnimatedContainer(
+                                      duration: const Duration(milliseconds: 200),
+                                      padding: const EdgeInsets.all(16),
+                                      decoration: BoxDecoration(
+                                        color: isSelected
+                                            ? AppColors.primarySoft
+                                            : AppColors.bgCard,
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(
+                                          color: isSelected
+                                              ? AppColors.primary.withOpacity(0.5)
+                                              : AppColors.borderSubtle,
+                                        ),
+                                      ),
+                                      child: Row(
                                         children: [
-                                          Text(
-                                            college['collegeName'] ?? 'Unknown',
-                                            style: const TextStyle(
-                                              color: AppColors.textPrimary,
-                                              fontWeight: FontWeight.bold,
+                                          // Icon container
+                                          Container(
+                                            width: 40,
+                                            height: 40,
+                                            decoration: BoxDecoration(
+                                              color: AppColors.primarySoft,
+                                              borderRadius: BorderRadius.circular(10),
+                                            ),
+                                            child: const Icon(Icons.school_rounded, color: AppColors.primary, size: 20),
+                                          ),
+                                          const SizedBox(width: 14),
+                                          // Text
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  college['collegeName'] ?? 'Unknown',
+                                                  style: AppTypography.h3,
+                                                ),
+                                                const SizedBox(height: 2),
+                                                Row(
+                                                  children: [
+                                                    const Icon(Icons.pin_drop_rounded, size: 11, color: AppColors.textTertiary),
+                                                    const SizedBox(width: 4),
+                                                    Text(
+                                                      college['slug'] ?? '',
+                                                      style: AppTypography.caption,
+                                                    ),
+                                                  ],
+                                                ),
+                                              ],
                                             ),
                                           ),
-                                          const SizedBox(height: 4),
-                                          Row(
-                                            children: [
-                                              const Icon(Icons.pin_drop, size: 12, color: AppColors.textSecondary),
-                                              const SizedBox(width: 4),
-                                              Text(
-                                                college['slug'] ?? '',
-                                                style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                                          // Checkmark
+                                          if (isSelected)
+                                            TweenAnimationBuilder<double>(
+                                              tween: Tween(begin: 0.0, end: 1.0),
+                                              duration: const Duration(milliseconds: 300),
+                                              curve: Curves.elasticOut,
+                                              builder: (context, value, child) {
+                                                return Transform.scale(scale: value, child: child);
+                                              },
+                                              child: Container(
+                                                width: 28,
+                                                height: 28,
+                                                decoration: const BoxDecoration(
+                                                  color: AppColors.primary,
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: const Icon(Icons.check_rounded, color: AppColors.textInverse, size: 16),
                                               ),
-                                            ],
-                                          ),
+                                            )
+                                          else
+                                            const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.textTertiary),
                                         ],
                                       ),
                                     ),
-                                    const Icon(Icons.arrow_forward_ios, size: 14, color: AppColors.textSecondary),
-                                  ],
+                                  ),
                                 ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                ),
-                
-                const SizedBox(height: 16),
-                
-                // Continue Button
-                PrimaryButton(
-                  text: 'Continue to Login',
-                  onPressed: _selectedCollege != null 
-                      ? () {
-                          // Update global state before navigating to satisfy roleRedirect
-                          ref.read(selectedCollegeIdProvider.notifier).state = _selectedCollege!['collegeId'];
-                          ref.read(selectedCollegeProvider.notifier).state = _selectedCollege;
-                          
-                          context.go('/login', extra: _selectedCollege);
-                        }
-                      : null,
-                ),
-                const SizedBox(height: 40),
-              ],
+                              );
+                            },
+                          ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Continue Button
+                  PrimaryButton(
+                    text: _selectedCollege != null
+                        ? 'Continue as ${_selectedCollege!['collegeName']} →'
+                        : 'Continue to Login',
+                    trailingIcon: _selectedCollege != null ? Icons.arrow_forward_rounded : null,
+                    onPressed: _selectedCollege != null
+                        ? () {
+                            ref.read(selectedCollegeIdProvider.notifier).state = _selectedCollege!['collegeId'];
+                            ref.read(selectedCollegeProvider.notifier).state = _selectedCollege;
+                            context.go('/login', extra: _selectedCollege);
+                          }
+                        : null,
+                  ),
+                  const SizedBox(height: 32),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
+}
+
+/// Decorative animated dashed route line
+class _AnimatedRouteLine extends StatefulWidget {
+  @override
+  State<_AnimatedRouteLine> createState() => _AnimatedRouteLineState();
+}
+
+class _AnimatedRouteLineState extends State<_AnimatedRouteLine>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 3),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return CustomPaint(
+          size: const Size(double.infinity, 4),
+          painter: _DashPainter(progress: _controller.value),
+        );
+      },
+    );
+  }
+}
+
+class _DashPainter extends CustomPainter {
+  final double progress;
+  _DashPainter({required this.progress});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = AppColors.live.withOpacity(0.4)
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round;
+
+    const dashWidth = 8.0;
+    const dashGap = 6.0;
+    final totalDash = dashWidth + dashGap;
+    final offset = progress * totalDash;
+
+    double x = -offset;
+    while (x < size.width) {
+      final start = x.clamp(0.0, size.width);
+      final end = (x + dashWidth).clamp(0.0, size.width);
+      if (end > start) {
+        canvas.drawLine(Offset(start, 2), Offset(end, 2), paint);
+      }
+      x += totalDash;
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DashPainter oldDelegate) => oldDelegate.progress != progress;
 }

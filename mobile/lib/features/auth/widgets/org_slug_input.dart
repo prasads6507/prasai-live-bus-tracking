@@ -14,25 +14,32 @@ class OrgSlugInput extends StatelessWidget {
       children: [
         Text(
           'College ID (Slug)',
-          style: AppTypography.textTheme.labelSmall?.copyWith(
+          style: AppTypography.label.copyWith(
             color: AppColors.textSecondary,
           ),
         ),
         const SizedBox(height: 8),
         TextFormField(
           controller: controller,
-          style: const TextStyle(color: Colors.white),
+          style: AppTypography.bodyLg.copyWith(color: AppColors.textPrimary),
           decoration: InputDecoration(
             prefixIcon: const Icon(Icons.school_outlined, color: AppColors.textSecondary, size: 20),
             filled: true,
-            fillColor: AppColors.surfaceElevated.withOpacity(0.5),
+            fillColor: AppColors.bgCard,
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: AppColors.borderSubtle),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: AppColors.borderSubtle),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
             ),
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             hintText: 'e.g., my-college',
-            hintStyle: TextStyle(color: AppColors.textSecondary.withOpacity(0.5)),
           ),
           validator: (value) {
             if (value == null || value.isEmpty) {

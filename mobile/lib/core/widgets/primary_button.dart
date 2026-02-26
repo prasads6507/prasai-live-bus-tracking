@@ -6,6 +6,7 @@ class PrimaryButton extends StatelessWidget {
   final String text;
   final VoidCallback? onPressed;
   final bool isLoading;
+  final IconData? trailingIcon;
   final Color? backgroundColor;
 
   const PrimaryButton({
@@ -13,35 +14,56 @@ class PrimaryButton extends StatelessWidget {
     required this.text,
     required this.onPressed,
     this.isLoading = false,
+    this.trailingIcon,
     this.backgroundColor,
   });
 
   @override
   Widget build(BuildContext context) {
+    final isEnabled = onPressed != null && !isLoading;
+
     return SizedBox(
       width: double.infinity,
       height: 56,
       child: ElevatedButton(
+        onPressed: isLoading ? null : onPressed,
         style: ElevatedButton.styleFrom(
-          backgroundColor: backgroundColor ?? AppColors.primary,
+          backgroundColor: isEnabled
+              ? (backgroundColor ?? AppColors.primary)
+              : AppColors.bgCard,
+          foregroundColor: isEnabled
+              ? AppColors.textInverse
+              : AppColors.textTertiary,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(14),
           ),
           elevation: 0,
         ),
-        onPressed: isLoading ? null : onPressed,
         child: isLoading
             ? const SizedBox(
-                height: 24,
-                width: 24,
-                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-              )
-            : Text(
-                text,
-                style: AppTypography.textTheme.titleMedium?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: AppColors.textInverse,
                 ),
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    text,
+                    style: AppTypography.h3.copyWith(
+                      color: isEnabled
+                          ? AppColors.textInverse
+                          : AppColors.textTertiary,
+                    ),
+                  ),
+                  if (trailingIcon != null) ...[
+                    const SizedBox(width: 8),
+                    Icon(trailingIcon, size: 18),
+                  ],
+                ],
               ),
       ),
     );

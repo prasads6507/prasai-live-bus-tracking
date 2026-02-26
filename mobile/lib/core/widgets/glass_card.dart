@@ -6,12 +6,14 @@ class GlassCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
   final VoidCallback? onTap;
+  final bool isGlowing;
 
   const GlassCard({
     super.key,
     required this.child,
     this.padding = const EdgeInsets.all(16.0),
     this.onTap,
+    this.isGlowing = false,
   });
 
   @override
@@ -25,12 +27,13 @@ class GlassCard extends StatelessWidget {
           child: Container(
             padding: padding,
             decoration: BoxDecoration(
-              color: AppColors.surface.withOpacity(0.8),
+              color: AppColors.bgGlass,
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: Colors.white.withOpacity(0.05),
+                color: AppColors.borderSubtle,
                 width: 1,
               ),
+              boxShadow: isGlowing ? [AppShadows.primaryGlow] : [],
             ),
             child: child,
           ),

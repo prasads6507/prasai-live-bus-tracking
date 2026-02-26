@@ -168,10 +168,10 @@ class _MyAppState extends ConsumerState<MyApp> {
     final router = ref.watch(routerProvider);
 
     return MaterialApp.router(
-      title: 'Transit Hub Bus',
-      theme: AppTheme.lightTheme, 
-      darkTheme: AppTheme.lightTheme,
-      themeMode: ThemeMode.light,
+      title: 'PRASAI',
+      theme: AppTheme.darkTheme, 
+      darkTheme: AppTheme.darkTheme,
+      themeMode: ThemeMode.dark,
       routerConfig: router,
       debugShowCheckedModeBanner: false,
     );

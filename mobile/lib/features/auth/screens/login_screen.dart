@@ -4,8 +4,8 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/typography.dart';
 import '../../../core/widgets/app_scaffold.dart';
-import '../../../core/widgets/glass_card.dart';
 import '../../../core/widgets/primary_button.dart';
+import '../../../core/widgets/pulsing_dot.dart';
 import '../controllers/auth_controller.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -20,20 +20,34 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _emailFocus = FocusNode();
+  final _passwordFocus = FocusNode();
   bool _isPasswordVisible = false;
+  bool _emailFocused = false;
+  bool _passwordFocused = false;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _emailFocus.addListener(() => setState(() => _emailFocused = _emailFocus.hasFocus));
+    _passwordFocus.addListener(() => setState(() => _passwordFocused = _passwordFocus.hasFocus));
+  }
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _emailFocus.dispose();
+    _passwordFocus.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
+    setState(() => _errorMessage = null);
     if (_formKey.currentState!.validate()) {
       final email = _emailController.text.trim();
       final password = _passwordController.text.trim();
-      final slug = widget.college['slug'];
 
       await ref.read(authControllerProvider.notifier).signIn(
             email: email,
@@ -49,12 +63,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       authControllerProvider,
       (_, state) {
         if (state.hasError) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(state.error.toString()),
-              backgroundColor: AppColors.error,
-            ),
-          );
+          setState(() => _errorMessage = state.error.toString());
         }
       },
     );
@@ -64,94 +73,101 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return AppScaffold(
       body: Stack(
         children: [
-          // Background Gradient decoration matching web
-          Positioned(
-            top: -150,
-            right: -150,
+          // Gradient background
+          Positioned.fill(
             child: Container(
-              width: 400,
-              height: 400,
               decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppColors.primary.withOpacity(0.08),
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [AppColors.bgBase, AppColors.bgDeep],
+                  stops: const [0.0, 0.4],
+                ),
               ),
             ),
           ),
-          
+          // Radial glow
+          Positioned(
+            top: -60,
+            right: -60,
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    AppColors.primary.withOpacity(0.1),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+
           SafeArea(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const SizedBox(height: 20),
-                  // Back Button / Change College
+                  const SizedBox(height: 12),
+                  // Back Button
                   GestureDetector(
                     onTap: () => context.go('/college-selection'),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.arrow_back, color: AppColors.textSecondary, size: 18),
+                        const Icon(Icons.arrow_back_rounded, color: AppColors.textSecondary, size: 18),
                         const SizedBox(width: 8),
                         Text(
                           'Change Organization',
-                          style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                          style: AppTypography.bodyMd.copyWith(color: AppColors.textSecondary),
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(height: 40),
 
-                  // Header Section - Matching Web Hero
+                  // Hero Identity Zone
                   Center(
                     child: Column(
                       children: [
+                        // Glowing icon container
                         Container(
-                          width: 80,
-                          height: 80,
+                          width: 72,
+                          height: 72,
                           decoration: BoxDecoration(
-                            color: AppColors.surfaceElevated.withOpacity(0.5),
-                            borderRadius: BorderRadius.circular(24),
-                            border: Border.all(color: Colors.white.withOpacity(0.1)),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.2),
-                                blurRadius: 20,
-                                offset: const Offset(0, 10),
-                              ),
-                            ],
+                            color: AppColors.primarySoft,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+                            boxShadow: [AppShadows.primaryGlow],
                           ),
-                          child: const Icon(Icons.school, color: AppColors.primary, size: 40),
+                          child: const Icon(Icons.school_rounded, color: AppColors.primary, size: 36),
                         ),
-                        const SizedBox(height: 32),
+                        const SizedBox(height: 20),
                         Text(
                           widget.college['collegeName'] ?? 'Welcome',
-                          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.textPrimary,
-                            letterSpacing: -0.5,
-                          ),
+                          style: AppTypography.h1,
                           textAlign: TextAlign.center,
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 14),
+                        // Secure Badge
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                           decoration: BoxDecoration(
-                            color: Colors.green.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(20),
+                            color: AppColors.live.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(100),
+                            border: Border.all(color: AppColors.live.withOpacity(0.3)),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.verified_user, size: 14, color: Colors.green),
-                              const SizedBox(width: 6),
+                              const PulsingDot(color: AppColors.live, size: 6),
+                              const SizedBox(width: 8),
                               Text(
                                 'Secure Portal Active',
-                                style: TextStyle(
-                                  color: Colors.green.shade400,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                                style: AppTypography.label.copyWith(color: AppColors.live),
                               ),
                             ],
                           ),
@@ -159,74 +175,106 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ],
                     ),
                   ),
-                  
-                  const SizedBox(height: 60),
-                  
-                  // Login Form Section
+
+                  const SizedBox(height: 48),
+
+                  // Section header
                   Text(
-                    'Sign In',
-                    style: TextStyle(
-                      color: AppColors.textPrimary,
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
+                    'SIGN IN',
+                    style: AppTypography.caption.copyWith(
+                      color: AppColors.textTertiary,
+                      letterSpacing: 1.2,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Enter your credentials to access the portal',
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 15,
+                  const SizedBox(height: 20),
+
+                  // Error Banner
+                  if (_errorMessage != null)
+                    _ErrorBanner(
+                      message: _errorMessage!,
+                      onDismiss: () => setState(() => _errorMessage = null),
                     ),
-                  ),
-                  const SizedBox(height: 32),
-                  
+
+                  // Form
                   Form(
                     key: _formKey,
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildTextField(
-                          controller: _emailController,
-                          label: 'Email Address',
-                          icon: Icons.mail_outline,
-                          keyboardType: TextInputType.emailAddress,
-                        ),
-                        const SizedBox(height: 20),
-                        _buildTextField(
-                          controller: _passwordController,
-                          label: 'Password',
-                          icon: Icons.lock_outline,
-                          isPassword: !_isPasswordVisible,
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
-                              color: AppColors.textSecondary,
+                        // Email field
+                        Text('Email', style: AppTypography.label.copyWith(color: AppColors.textSecondary)),
+                        const SizedBox(height: 8),
+                        _GlowField(
+                          isFocused: _emailFocused,
+                          child: TextFormField(
+                            controller: _emailController,
+                            focusNode: _emailFocus,
+                            keyboardType: TextInputType.emailAddress,
+                            style: AppTypography.bodyLg.copyWith(color: AppColors.textPrimary),
+                            decoration: InputDecoration(
+                              prefixIcon: const Icon(Icons.mail_outline_rounded, color: AppColors.textSecondary, size: 20),
+                              hintText: 'Enter your email',
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(vertical: 16),
                             ),
-                            onPressed: () {
-                              setState(() {
-                                _isPasswordVisible = !_isPasswordVisible;
-                              });
-                            },
+                            validator: (value) =>
+                                (value == null || value.isEmpty) ? 'Please enter your email' : null,
                           ),
                         ),
-                        const SizedBox(height: 40),
+
+                        const SizedBox(height: 20),
+
+                        // Password field
+                        Text('Password', style: AppTypography.label.copyWith(color: AppColors.textSecondary)),
+                        const SizedBox(height: 8),
+                        _GlowField(
+                          isFocused: _passwordFocused,
+                          child: TextFormField(
+                            controller: _passwordController,
+                            focusNode: _passwordFocus,
+                            obscureText: !_isPasswordVisible,
+                            style: AppTypography.bodyLg.copyWith(color: AppColors.textPrimary),
+                            decoration: InputDecoration(
+                              prefixIcon: const Icon(Icons.lock_outline_rounded, color: AppColors.textSecondary, size: 20),
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _isPasswordVisible ? Icons.visibility_rounded : Icons.visibility_off_rounded,
+                                  color: AppColors.textTertiary,
+                                  size: 20,
+                                ),
+                                onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
+                              ),
+                              hintText: 'Enter your password',
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                            ),
+                            validator: (value) =>
+                                (value == null || value.isEmpty) ? 'Please enter your password' : null,
+                          ),
+                        ),
+
+                        const SizedBox(height: 36),
+
+                        // Sign In Button
                         PrimaryButton(
                           text: 'Sign In',
+                          trailingIcon: Icons.arrow_forward_rounded,
                           onPressed: _submit,
                           isLoading: state.isLoading,
                         ),
                       ],
                     ),
                   ),
-                  
+
                   const SizedBox(height: 40),
                   Center(
                     child: Text(
                       'Live Tracking Platform v1.0',
-                      style: TextStyle(
-                        color: AppColors.textSecondary.withOpacity(0.5),
-                        fontSize: 12,
-                      ),
+                      style: AppTypography.caption.copyWith(color: AppColors.textTertiary),
                     ),
                   ),
                   const SizedBox(height: 20),
@@ -238,49 +286,68 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       ),
     );
   }
+}
 
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
-    bool isPassword = false,
-    TextInputType? keyboardType,
-    Widget? suffixIcon,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: AppTypography.textTheme.labelSmall?.copyWith(
-            color: AppColors.textSecondary,
-          ),
+/// Focus-activated glow container for form fields
+class _GlowField extends StatelessWidget {
+  final bool isFocused;
+  final Widget child;
+
+  const _GlowField({required this.isFocused, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      decoration: BoxDecoration(
+        color: AppColors.bgCard,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isFocused ? AppColors.primary : AppColors.borderSubtle,
+          width: isFocused ? 1.5 : 1,
         ),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: controller,
-          obscureText: isPassword,
-          keyboardType: keyboardType,
-          style: const TextStyle(color: AppColors.textPrimary),
-          decoration: InputDecoration(
-            prefixIcon: Icon(icon, color: AppColors.textSecondary, size: 20),
-            suffixIcon: suffixIcon,
-            filled: true,
-            fillColor: AppColors.surfaceElevated,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
+        boxShadow: isFocused
+            ? [BoxShadow(color: AppColors.primary.withOpacity(0.15), blurRadius: 12)]
+            : [],
+      ),
+      child: child,
+    );
+  }
+}
+
+/// Animated error banner that appears above the form
+class _ErrorBanner extends StatelessWidget {
+  final String message;
+  final VoidCallback onDismiss;
+
+  const _ErrorBanner({required this.message, required this.onDismiss});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.error.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.error.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              message,
+              style: AppTypography.bodyMd.copyWith(color: AppColors.error),
             ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            hintText: 'Enter your $label',
-            hintStyle: TextStyle(color: AppColors.textSecondary.withOpacity(0.5)),
           ),
-          validator: (value) {
-            if (value == null || value.isEmpty) return 'Please enter $label';
-            return null;
-          },
-        ),
-      ],
+          GestureDetector(
+            onTap: onDismiss,
+            child: const Icon(Icons.close_rounded, color: AppColors.error, size: 18),
+          ),
+        ],
+      ),
     );
   }
 }

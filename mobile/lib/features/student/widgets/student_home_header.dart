@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../core/theme/colors.dart';
-import '../../../../core/theme/typography.dart';
+import '../../../core/theme/colors.dart';
+import '../../../core/theme/typography.dart';
 
 class StudentHomeHeader extends ConsumerWidget {
   final String studentName;
@@ -13,62 +13,84 @@ class StudentHomeHeader extends ConsumerWidget {
     required this.collegeName,
   });
 
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Good morning,';
+    if (hour < 17) return 'Good afternoon,';
+    return 'Good evening,';
+  }
+
+  String _getGreetingEmoji() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return '🌅';
+    if (hour < 17) return '☀️';
+    return '🌙';
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // App Bar with Organization Name
-        Container(
-          width: double.infinity,
-          padding: EdgeInsets.only(
-            top: MediaQuery.of(context).padding.top + 8,
-            left: 20,
-            right: 20,
-            bottom: 12,
-          ),
-          decoration: BoxDecoration(
-            color: AppColors.background,
-          ),
-          child: Text(
-            collegeName,
-            style: AppTypography.textTheme.titleMedium?.copyWith(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.5,
+    return Container(
+      padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).padding.top + 12, 20, 20),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppColors.bgBase, AppColors.bgDeep],
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(_getGreeting(), style: AppTypography.bodyMd),
+                    const SizedBox(width: 6),
+                    Text(_getGreetingEmoji(), style: const TextStyle(fontSize: 16)),
+                  ],
+                ),
+                Text(
+                  studentName,
+                  style: AppTypography.h1.copyWith(height: 1.1),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    const Icon(Icons.business_rounded, size: 12, color: AppColors.primary),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        collegeName,
+                        style: AppTypography.caption.copyWith(color: AppColors.primary),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-            overflow: TextOverflow.ellipsis,
-            maxLines: 1,
           ),
-        ),
-        // Greeting
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 4),
-              Text(
-                "Hello,",
-                style: AppTypography.textTheme.bodyLarge?.copyWith(
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                studentName,
-                style: AppTypography.textTheme.titleLarge?.copyWith(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 16),
-            ],
+          // Notification bell
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: AppColors.bgCard,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.borderSubtle),
+            ),
+            child: const Icon(
+              Icons.notifications_outlined,
+              color: AppColors.textPrimary,
+              size: 22,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
