@@ -303,22 +303,6 @@ class _CollegeSelectionScreenState extends ConsumerState<CollegeSelectionScreen>
                   ),
 
                   const SizedBox(height: 16),
-
-                  // Continue Button
-                  PrimaryButton(
-                    text: _selectedCollege != null
-                        ? 'Continue as ${_selectedCollege!['collegeName']} →'
-                        : 'Continue to Login',
-                    trailingIcon: _selectedCollege != null ? Icons.arrow_forward_rounded : null,
-                    onPressed: () {
-                      if (_selectedCollege != null) {
-                        _selectAndNavigate(_selectedCollege!);
-                      } else {
-                        context.go('/login');
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 32),
                 ],
               ),
             ),
