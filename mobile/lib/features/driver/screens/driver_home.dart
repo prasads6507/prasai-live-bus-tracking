@@ -27,6 +27,7 @@ import '../../../data/datasources/api_ds.dart';
 import 'package:dio/dio.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/config/env.dart';
+import '../../auth/controllers/auth_controller.dart';
 
 class DriverHomeScreen extends ConsumerStatefulWidget {
   const DriverHomeScreen({super.key});
@@ -97,10 +98,9 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
             children: [
               DriverHeader(
                 driverName: profile.name ?? "Driver",
-                isOnline: true,
+                isOnline: _selectedBusId != null,
                 onLogout: () {
-                  ref.read(authRepositoryProvider).signOut();
-                  context.go('/login');
+                  ref.read(authControllerProvider.notifier).signOut();
                 },
               ),
               // Trip Finalization Status Banner
@@ -787,7 +787,7 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
         if (data != null && mounted) {
           try {
             setState(() {
-              _currentSpeed = ((data['speed'] as num? ?? 0.0) * 2.23694).toDouble();
+              _currentSpeed = (data['speed'] as num? ?? 0.0).toDouble();
               _lastUpdate = TimeOfDay.now().format(context);
               _lastRecordedPoint = LocationPoint(
                 latitude:  (data['lat'] as num).toDouble(),

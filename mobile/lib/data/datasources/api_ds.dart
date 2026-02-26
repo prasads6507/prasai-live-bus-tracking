@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import '../../core/config/env.dart';
 import '../models/location_point.dart';
 
@@ -91,32 +92,59 @@ class ApiDataSource {
     if (query.trim().isEmpty) return [];
 
     try {
-      // Query Firestore directly to avoid home-network IP dependencies
-      final snapshot = await _firestore
+      // Query by collegeName prefix (case-sensitive, fast with index)
+      final nameQuery = await _firestore
           .collection('colleges')
           .where('status', isEqualTo: 'ACTIVE')
+          .orderBy('collegeName')
+          .startAt([query.substring(0, 1).toUpperCase()])
+          .endAt(['${query.substring(0, 1).toUpperCase()}\uf8ff'])
+          .limit(20)
           .get();
 
-      final results = <Map<String, dynamic>>[];
-      for (var doc in snapshot.docs) {
+      final results = <String, Map<String, dynamic>>{};
+      
+      for (var doc in nameQuery.docs) {
         final data = doc.data();
         final name = data['collegeName'] as String? ?? '';
         final slug = data['slug'] as String? ?? '';
         
         if (name.toLowerCase().contains(query.toLowerCase()) || 
             slug.toLowerCase().contains(query.toLowerCase())) {
-          results.add({
+          results[doc.id] = {
             'collegeId': data['collegeId'],
             'collegeName': name,
             'slug': slug,
             'status': data['status'],
-          });
+          };
         }
       }
-      return results;
+
+      // Also search by slug if few results
+      if (results.length < 5) {
+        final slugQuery = await _firestore
+            .collection('colleges')
+            .where('status', isEqualTo: 'ACTIVE')
+            .where('slug', isGreaterThanOrEqualTo: query.toLowerCase())
+            .where('slug', isLessThanOrEqualTo: '${query.toLowerCase()}\uf8ff')
+            .limit(10)
+            .get();
+        
+        for (var doc in slugQuery.docs) {
+          final data = doc.data();
+          results[doc.id] = {
+            'collegeId': data['collegeId'],
+            'collegeName': data['collegeName'] ?? '',
+            'slug': data['slug'] ?? '',
+            'status': data['status'],
+          };
+        }
+      }
+
+      return results.values.toList();
     } catch (e) {
-      print("Firestore search error: $e");
-      // Fallback to API if Firestore fails (unlikely in this context)
+      debugPrint("Firestore search error: $e");
+      // Fallback to API if Firestore fails
       final response = await _dio.get(
         '${Env.apiUrl}/api/auth/colleges/search',
         queryParameters: {'q': query},

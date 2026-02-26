@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../../../data/providers.dart';
 import '../../../core/widgets/app_scaffold.dart';
@@ -66,19 +67,48 @@ class StudentProfileScreen extends ConsumerWidget {
                 icon: Icons.directions_bus,
                 title: "My Bus",
                 subtitle: "View assigned transport",
-                onTap: () {}, // TODO
+                onTap: () {
+                  GoRouter.of(context).push('/student/buses');
+                },
               ),
               _buildProfileOption(
                 icon: Icons.notifications_outlined,
                 title: "Notifications",
                 subtitle: "Manage alerts",
-                onTap: () {}, 
+                onTap: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Manage notifications from your device Settings > Notifications."),
+                      duration: Duration(seconds: 3),
+                    ),
+                  );
+                }, 
               ),
                _buildProfileOption(
                 icon: Icons.help_outline,
                 title: "Help & Support",
                 subtitle: "Contact queries",
-                onTap: () {}, 
+                onTap: () {
+                  showDialog(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text("Help & Support"),
+                      content: const Text(
+                        "For technical support, please contact your college's transport coordinator.\n\n"
+                        "Common issues:\n"
+                        "• Bus not showing? Pull down to refresh.\n"
+                        "• Notifications not working? Check device notification settings.\n"
+                        "• Wrong college? Log out and re-select.",
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(ctx).pop(),
+                          child: const Text("OK"),
+                        ),
+                      ],
+                    ),
+                  );
+                }, 
               ),
               
               const SizedBox(height: 20),

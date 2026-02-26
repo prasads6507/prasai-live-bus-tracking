@@ -37,22 +37,13 @@ void main() async {
     );
     
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-    // Query Firestore directly to avoid home-network IP dependencies
-    // This query is added as per instruction, assuming it's for initial setup/check.
-    final snapshot = await FirebaseFirestore.instance
-        .collection('colleges')
-        .where('status', isEqualTo: 'ACTIVE')
-        .get();
-    // You might want to do something with 'snapshot' here, e.g., print its size or data.
-    print("Firestore query successful. Documents found: ${snapshot.docs.length}");
-    
     // Initialize Background Tracking Service for Drivers
     await BackgroundTrackingService.initialize();
     
     // Initialize Local Notifications
     await NotificationService.initialize();
   } catch (e) {
-    print("Firebase initialization or Firestore query failed: $e");
+    debugPrint("Firebase initialization or Firestore query failed: $e");
   }
 
     // Restore session synchronously before app starts
@@ -101,13 +92,33 @@ class _MyAppState extends ConsumerState<MyApp> {
     });
   }
 
-  void _registerTokenIfLoggedIn() {
+  void _registerTokenIfLoggedIn() async {
     final user = FirebaseAuth.instance.currentUser;
     final collegeId = ref.read(selectedCollegeIdProvider);
     if (user != null && collegeId != null) {
       debugPrint('[FCM] Session restored, ensuring token is registered...');
-      // We don't need to await this
-      ref.read(authControllerProvider.notifier).registerFcmTokenForSession(user.uid, collegeId);
+      
+      try {
+        // Fetch role from users collection (drivers/admins)
+        var userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+        String role = 'student';
+        
+        if (userDoc.exists) {
+          role = userDoc.data()?['role'] ?? 'user';
+        } else {
+          // Fallback to students collection
+          userDoc = await FirebaseFirestore.instance.collection('students').doc(user.uid).get();
+          if (userDoc.exists) {
+            role = 'student';
+          }
+        }
+        
+        ref.read(authControllerProvider.notifier).registerFcmTokenForSession(user.uid, collegeId, role);
+      } catch (e) {
+        debugPrint('[FCM] Error fetching role for token registration: $e');
+        // Default to student if error, but try to register anyway
+        ref.read(authControllerProvider.notifier).registerFcmTokenForSession(user.uid, collegeId, 'student');
+      }
     }
   }
 
@@ -140,13 +151,11 @@ class _MyAppState extends ConsumerState<MyApp> {
     debugPrint('[FCM] Notification tapped from $source: ${message.data}');
     
     final busId = message.data['busId'];
-    final tripId = message.data['tripId'];
 
-    if (busId != null) {
-      // Navigate to tracking screen
-      // Assuming your router handles deep links or has a way to navigate by path
+    if (busId != null && busId.toString().isNotEmpty) {
+      // Navigate to tracking screen using `extra:` to match the route definition
       final router = ref.read(routerProvider);
-      router.push('/student/track/$busId?tripId=${tripId ?? ""}');
+      router.push('/student/track', extra: busId);
     }
   }
 
@@ -162,7 +171,7 @@ class _MyAppState extends ConsumerState<MyApp> {
       title: 'Transit Hub Bus',
       theme: AppTheme.lightTheme, 
       darkTheme: AppTheme.lightTheme,
-      themeMode: ThemeMode.dark,
+      themeMode: ThemeMode.light,
       routerConfig: router,
       debugShowCheckedModeBanner: false,
     );

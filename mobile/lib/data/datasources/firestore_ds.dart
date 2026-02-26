@@ -1,4 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
+import 'dart:math' as math;
 import '../models/bus.dart';
 import '../models/trip.dart';
 import '../models/location_point.dart';
@@ -128,6 +130,11 @@ class FirestoreDataSource {
           currentRoadName: bus.currentRoadName,
           currentSpeed: bus.currentSpeed,
           currentHeading: bus.currentHeading,
+          speedMph: bus.speedMph,
+          currentStatus: bus.currentStatus,
+          trackingMode: bus.trackingMode,
+          nextStopId: bus.nextStopId,
+          nextStopRadius: bus.nextStopRadius,
         );
       }
     } catch (_) {}
@@ -206,7 +213,6 @@ class FirestoreDataSource {
       'currentHeading': lastPoint.heading ?? 0.0,
       'lastUpdated': DateTime.now().toIso8601String(),
       'status': 'ON_ROUTE',
-      'trackingMode': 'NEAR_STOP',
     });
   }
   /// Updates the bus's road/street name
@@ -235,7 +241,7 @@ class FirestoreDataSource {
         'totalPoints': FieldValue.increment(1),
       });
     } catch (e) {
-      print('Error saving trip history point: $e');
+      debugPrint('Error saving trip history point: $e');
     }
   }
 
@@ -281,19 +287,14 @@ class FirestoreDataSource {
         'maxSpeedMph': maxSpeedMph.round(),
       });
 
-      print('[BulkSave] ${points.length} pts → trip $tripId (${totalDistanceM.round()}m, max ${maxSpeedMph.round()} mph)');
+      debugPrint('[BulkSave] ${points.length} pts → trip $tripId (${totalDistanceM.round()}m, max ${maxSpeedMph.round()} mph)');
     } catch (e) {
-      print('Error bulk saving trip path: $e');
+      debugPrint('Error bulk saving trip path: $e');
     }
   }
 
-  static double _cosRad(double x) => 1.0 - (x * x / 2.0) + (x * x * x * x / 24.0);
-  static double _sqrtNewton(double x) {
-    if (x <= 0) return 0;
-    double g = x / 2;
-    for (int i = 0; i < 10; i++) g = (g + x / g) / 2;
-    return g;
-  }
+  static double _cosRad(double x) => math.cos(x);
+  static double _sqrtNewton(double x) => math.sqrt(x);
 
   /// Searches for buses by bus number within a college.
   Future<List<Bus>> searchBusesByNumber(String collegeId, String query) async {
@@ -344,7 +345,7 @@ class FirestoreDataSource {
         if (data != null && data['collegeId'] == collegeId) return doc;
       }
     } catch (e) {
-      print('Error checking users collection: $e');
+      debugPrint('Error checking users collection: $e');
     }
     
     // 2. Try 'students' collection (Direct ID lookup)
@@ -355,7 +356,7 @@ class FirestoreDataSource {
         if (data != null && data['collegeId'] == collegeId) return doc;
       }
     } catch (e) {
-      print('Error checking students collection: $e');
+      debugPrint('Error checking students collection: $e');
     }
     
     // 3. Final fallback: search by field
@@ -367,7 +368,7 @@ class FirestoreDataSource {
           
       if (snap.docs.isNotEmpty) return snap.docs.first;
     } catch (e) {
-      print('Error in final student fallback: $e');
+      debugPrint('Error in final student fallback: $e');
     }
 
     throw 'User record not found for UID: $uid in college: $collegeId. Please check registration status.';
@@ -378,6 +379,7 @@ class FirestoreDataSource {
         .collection('trips')
         .where('collegeId', isEqualTo: collegeId)
         .where('busId', isEqualTo: busId)
+        .where('isActive', isEqualTo: true)
         .snapshots()
         .map((snapshot) {
       if (snapshot.docs.isEmpty) return null;
@@ -401,7 +403,7 @@ class FirestoreDataSource {
       }
       return null;
     } catch (e) {
-      print('Error fetching route $routeId: $e');
+      debugPrint('Error fetching route $routeId: $e');
       return null;
     }
   }
@@ -556,7 +558,7 @@ class FirestoreDataSource {
         await prefs.setString('next_stop_name', (firstStop['name'] as String?) ?? 'Stop');
         await prefs.setBool('has_arrived_current', false);
       } catch (e) {
-        print("Error caching first stop: $e");
+        debugPrint("Error caching first stop: $e");
       }
     }
     
@@ -592,7 +594,7 @@ class FirestoreDataSource {
               final end = DateTime.now();
               durationMinutes = end.difference(start).inMinutes;
             } catch (e) {
-              print('Error parsing startTime: $e');
+              debugPrint('Error parsing startTime: $e');
             }
           }
         }
@@ -640,7 +642,7 @@ class FirestoreDataSource {
       
       await batch.commit();
     } catch (e) {
-      print('Error ending trip: $e');
+      debugPrint('Error ending trip: $e');
       // If batch fails, try a direct update on the bus to at least unlock it
       try {
         await _firestore.collection('buses').doc(busId).update({
@@ -649,7 +651,7 @@ class FirestoreDataSource {
           'currentTripId': null,
         });
       } catch (e2) {
-        print('Fallback reset failed: $e2');
+        debugPrint('Fallback reset failed: $e2');
       }
       rethrow;
     }
@@ -678,21 +680,25 @@ class FirestoreDataSource {
   }
 
   /// Streams user profile for real-time updates (favorites, etc.)
+  /// Streams user profile for real-time updates (favorites, etc.)
   Stream<UserProfile?> streamUserProfile(String collegeId, String uid) {
-    // 1. Try 'users' collection first (Admins, Drivers)
-    return _firestore.collection('users').doc(uid).snapshots().asyncMap((userDoc) async {
-      if (userDoc.exists) {
-        final data = userDoc.data() as Map<String, dynamic>?;
-        if (data != null && data['collegeId'] == collegeId) {
-          return UserProfile.fromFirestore(userDoc);
-        }
-      }
-      // 2. Fallback to 'students' collection
-      final studentDoc = await _firestore.collection('students').doc(uid).get();
+    // Try students collection first (most common)
+    final studentStream = _firestore.collection('students').doc(uid).snapshots();
+    
+    return studentStream.asyncMap((studentDoc) async {
       if (studentDoc.exists) {
         final data = studentDoc.data() as Map<String, dynamic>?;
         if (data != null && data['collegeId'] == collegeId) {
           return UserProfile.fromFirestore(studentDoc);
+        }
+      }
+      
+      // Fallback: Check users collection for drivers/admins
+      final userDoc = await _firestore.collection('users').doc(uid).get();
+      if (userDoc.exists) {
+        final data = userDoc.data() as Map<String, dynamic>?;
+        if (data != null && data['collegeId'] == collegeId) {
+          return UserProfile.fromFirestore(userDoc);
         }
       }
       return null;

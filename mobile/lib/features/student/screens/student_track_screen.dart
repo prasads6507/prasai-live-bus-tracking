@@ -139,7 +139,11 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
     final collegeId = ref.read(selectedCollegeIdProvider);
     if (collegeId == null) return;
 
-    final busId = widget.busId ?? 'BUS_001';
+    final busId = widget.busId;
+    if (busId == null || busId.isEmpty) {
+      debugPrint('[StudentTrack] No busId provided, cannot subscribe');
+      return;
+    }
 
     _busSubscription = ref.read(firestoreDataSourceProvider)
         .getBus(collegeId, busId)
@@ -212,7 +216,8 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
     _notifSubscription = FirebaseFirestore.instance
         .collection('stopArrivals')
         .where('tripId', isEqualTo: tripId)
-        .where('timestamp', isGreaterThan: DateTime.now().subtract(const Duration(minutes: 5)).toIso8601String())
+        .orderBy('timestamp', descending: true)
+        .limit(20)
         .snapshots()
         .listen((snapshot) {
           for (var change in snapshot.docChanges) {
@@ -248,6 +253,15 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
         .listen((snapshot) {
           if (!snapshot.exists || !mounted) return;
           final data = snapshot.data()!;
+          
+          // Guard: stop listening if trip is completed
+          final tripStatus = (data['status'] as String?)?.toLowerCase();
+          if (tripStatus == 'completed' || tripStatus == 'cancelled') {
+            _tripSubscription?.cancel();
+            _tripSubscription = null;
+            return;
+          }
+          
           setState(() {
             _tripStopsSnapshot = List<Map<String, dynamic>>.from(data['stopsSnapshot'] ?? []);
             _tripStopProgress = Map<String, dynamic>.from(data['stopProgress'] ?? {});
@@ -484,7 +498,7 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
           if (collegeId != null)
             MobileMapLibre(
               collegeId: collegeId,
-              selectedBusId: widget.busId ?? 'BUS_001',
+              selectedBusId: widget.busId ?? '',
               followBus: _followBus,
               focusedLocation: _mapFocusLocation,
               showStudentLocation: true,

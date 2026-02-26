@@ -125,7 +125,15 @@ class _StudentBusesScreenState extends ConsumerState<StudentBusesScreen> {
   Widget build(BuildContext context) {
     final collegeId = ref.watch(selectedCollegeIdProvider);
     final profileAsync = ref.watch(userProfileProvider);
-    final busesAsync = ref.watch(busesProvider(collegeId ?? ""));
+    
+    if (collegeId == null || collegeId.isEmpty) {
+      return AppScaffold(
+        appBar: AppBar(title: const Text('All Buses'), centerTitle: false),
+        body: const Center(child: Text("No college selected")),
+      );
+    }
+    
+    final busesAsync = ref.watch(busesProvider(collegeId));
 
     return AppScaffold(
       appBar: AppBar(

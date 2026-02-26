@@ -133,10 +133,10 @@ const checkProximityAndNotify = async (busId, location, collegeId, routeId) => {
     if (!location || !location.latitude || !location.longitude) return;
 
     try {
-        // 1. Get students for this route who have a known last location
+        // 1. Get students who have favorited THIS bus
         const studentsSnapshot = await db.collection('students')
             .where('collegeId', '==', collegeId)
-            .where('assignedRouteId', '==', routeId)
+            .where('favoriteBusIds', 'array-contains', busId)
             .get();
 
         if (studentsSnapshot.empty) return;
@@ -154,12 +154,8 @@ const checkProximityAndNotify = async (busId, location, collegeId, routeId) => {
                     student.lastLocation.longitude
                 );
 
-                // Check if nearby (and maybe check if we already notified them for this trip? 
-                // For simplicity, we just send. Client or another logic could handle duplicate suppression, 
-                // or we use a subcollection 'notifications' to track.)
                 if (dist <= NEARBY_THRESHOLD_KM) {
                     tokensToSend.push(student.fcmToken);
-                    console.log(`[Proximity] Student ${student.name} is ${dist.toFixed(2)}km away.`);
                 }
             }
         });
@@ -168,12 +164,20 @@ const checkProximityAndNotify = async (busId, location, collegeId, routeId) => {
             const message = {
                 notification: {
                     title: 'Bus Arriving Soon',
-                    body: 'Your bus is within 2km of your location.'
+                    body: 'Your favorite bus is within 2km of your location.'
                 },
                 data: {
                     busId: busId,
                     type: 'BUS_PROXIMITY'
                 },
+                android: {
+                    notification: {
+                        channelId: 'bus_events',
+                        priority: 'high',
+                        sound: 'default'
+                    }
+                },
+                apns: { payload: { aps: { sound: 'default', badge: 1 } } },
                 tokens: tokensToSend
             };
 
@@ -185,12 +189,10 @@ const checkProximityAndNotify = async (busId, location, collegeId, routeId) => {
                 console.error('[Proximity] FCM error:', fcmErr.message);
             }
 
-            // Save to Firestore for Admin Alerts (Phase 4.4)
             await db.collection('notifications').add({
                 type: 'BUS_PROXIMITY',
                 busId,
                 collegeId,
-                routeId,
                 message: `Bus is within 2km of ${tokensToSend.length} students.`,
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 read: false

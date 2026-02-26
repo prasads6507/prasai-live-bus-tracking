@@ -59,6 +59,7 @@ String? roleRedirect(
           case 'STUDENT':
             return '/student';
           case 'DRIVER':
+          case 'USER':
             return '/driver';
           case 'ADMIN':
           case 'COLLEGE_ADMIN':

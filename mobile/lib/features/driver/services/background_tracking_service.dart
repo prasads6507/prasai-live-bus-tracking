@@ -232,7 +232,7 @@ class BackgroundTrackingService {
               await _checkForSkip(prefs, collegeId!, busId!, tripId!, nextStopId, position, distToNextStop);
             }
 
-            // G2. Arriving Soon Notification (Trigger once per stop at 0.5 mile)
+              // G2. Arriving Soon Notification (Trigger once per stop at 0.5 mile)
             if (newStatus == 'ARRIVING' && !arrivingNotifiedIds.contains(nextStopId)) {
                arrivingNotifiedIds.add(nextStopId);
                _notifyServer(
@@ -473,7 +473,7 @@ class BackgroundTrackingService {
 
         await batch.commit();
 
-        // 4. Trigger Server FCM (Step 5F)
+         // 4. Trigger Server FCM (Step 5F)
         _notifyServer(tripId, busId, collegeId, stopId, "ARRIVED", 
           stopName: stops[currentIndex]['name'],
           arrivalDocId: notifRef.id,

@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -13,6 +15,13 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
   final AuthRepository _authRepository;
   final Ref _ref;
   static const String _collegeIdKey = 'selected_college_id';
+  
+  // Track token refresh listener to prevent leaks
+  StreamSubscription? _tokenRefreshSubscription;
+  // Track current session info for cleanup
+  String? _currentUid;
+  String? _currentRole;
+  String? _currentCollegeId;
 
   AuthController(this._authRepository, this._ref) : super(const AsyncValue.data(null));
 
@@ -66,8 +75,10 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
         await prefs.setString('auth_token', jwtToken);
       }
       
-      // 5. Register FCM Token — pass collegeId and userDoc so it can determine role
-      await _registerFcmToken(user.uid, collegeId, userDoc);
+      // 5. Register FCM Token — pass collegeId and user role so it is saved in the correct collection
+      final userData = userDoc.data() as Map<String, dynamic>?;
+      final userRole = userData?['role'] ?? 'student';
+      await _registerFcmToken(user.uid, collegeId, userRole);
       
       state = const AsyncValue.data(null);
     } catch (e, st) {
@@ -80,30 +91,54 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
   Future<void> signOut() async {
     state = const AsyncValue.loading();
     try {
+      // Clear FCM token from Firestore BEFORE signing out
+      await _clearFcmToken();
+      
+      // Cancel token refresh listener
+      _tokenRefreshSubscription?.cancel();
+      _tokenRefreshSubscription = null;
+      
       await _authRepository.signOut();
       _ref.read(selectedCollegeIdProvider.notifier).state = null;
       _ref.read(selectedCollegeProvider.notifier).state = null;
+      
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_collegeIdKey);
       await prefs.remove('college_slug');
       await prefs.remove('college_name');
       await prefs.remove('auth_token');
+      
+      _currentUid = null;
+      _currentRole = null;
+      _currentCollegeId = null;
+      
       state = const AsyncValue.data(null);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
     }
   }
-
-  Future<void> registerFcmTokenForSession(String uid, String collegeId) async {
+  
+  /// Clear FCM token from Firestore to prevent notifications leaking to next user
+  Future<void> _clearFcmToken() async {
+    if (_currentUid == null) return;
     try {
-      final userDoc = await _authRepository.getUserInCollege(collegeId, uid);
-      if (userDoc.exists) {
-        await _registerFcmToken(uid, collegeId, userDoc);
-      }
+      final collection = (_currentRole?.toLowerCase() == 'driver' || 
+                          _currentRole?.toLowerCase() == 'admin' || 
+                          _currentRole?.toLowerCase() == 'user')
+          ? 'users'
+          : 'students';
+      await FirebaseFirestore.instance
+          .collection(collection)
+          .doc(_currentUid)
+          .update({'fcmToken': FieldValue.delete()});
+      debugPrint('[Auth] Cleared FCM token for $_currentUid from $collection');
     } catch (e) {
-      print("Error during session token registration: $e");
+      debugPrint('[Auth] Error clearing FCM token: $e');
     }
   }
+
+  Future<void> registerFcmTokenForSession(String uid, String collegeId, String role) => 
+      _registerFcmToken(uid, collegeId, role);
 
   // ─────────────────────────────────────────────────────────────────────────
   // BUG FIX: _registerFcmToken / _saveFcmToken
@@ -112,7 +147,7 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
   // fake student records for drivers.
   // Fix: Save to 'users' if role is DRIVER/ADMIN, else 'students'.
   // ─────────────────────────────────────────────────────────────────────────
-  Future<void> _registerFcmToken(String uid, String collegeId, DocumentSnapshot userDoc) async {
+  Future<void> _registerFcmToken(String uid, String collegeId, String role) async {
     try {
       final messaging = FirebaseMessaging.instance;
       await messaging.requestPermission(
@@ -121,28 +156,32 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
         sound: true,
       );
       
-      final data = userDoc.data() as Map<String, dynamic>?;
-      final role = (data?['role'] as String?)?.toUpperCase() ?? 'STUDENT';
-      // Drivers/Admins are in 'users', Students are in 'students'
-      final collection = (role == 'DRIVER' || role == 'ADMIN' || role == 'COLLEGE_ADMIN') 
-          ? 'users' : 'students';
-
+      // Store session info for cleanup
+      _currentUid = uid;
+      _currentRole = role;
+      _currentCollegeId = collegeId;
+      
       final token = await messaging.getToken();
       if (token != null) {
-        await _saveFcmToken(uid, token, collegeId, collection);
+        await _saveFcmToken(uid, token, collegeId, role);
       }
 
-      // Listen for token refresh
-      messaging.onTokenRefresh.listen((newToken) async {
-        await _saveFcmToken(uid, newToken, collegeId, collection);
+      // Cancel previous listener to prevent leaks
+      _tokenRefreshSubscription?.cancel();
+      _tokenRefreshSubscription = messaging.onTokenRefresh.listen((newToken) async {
+        await _saveFcmToken(uid, newToken, collegeId, role);
       });
 
     } catch (e) {
-      print("Error registering FCM token: $e");
+      debugPrint("Error registering FCM token: $e");
     }
   }
 
-  Future<void> _saveFcmToken(String uid, String token, String collegeId, String collection) async {
+  Future<void> _saveFcmToken(String uid, String token, String collegeId, String role) async {
+    // Save to the collection based on role to prevent "Student" redirect for drivers
+    final collection = (role.toLowerCase() == 'driver' || role.toLowerCase() == 'admin' || role.toLowerCase() == 'user') 
+        ? 'users' 
+        : 'students';
     final ref = FirebaseFirestore.instance.collection(collection).doc(uid);
     try {
       // Use update to avoid overwriting existing fields like role/name
@@ -150,17 +189,18 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
         'fcmToken': token,
         'collegeId': collegeId,
       });
-      print("FCM Token updated for $uid in $collection");
+      debugPrint("FCM Token updated for $uid in $collection (college: $collegeId)");
     } catch (updateErr) {
       // If doc doesn't exist, we must use set with merge
       try {
         await ref.set({
           'fcmToken': token,
           'collegeId': collegeId,
+          'role': role,
         }, SetOptions(merge: true));
-        print("FCM Token set (merge) for $uid in $collection");
+        debugPrint("FCM Token set (new doc) for $uid in $collection (college: $collegeId)");
       } catch (setErr) {
-        print("Error saving FCM token to $collection: $updateErr | $setErr");
+        debugPrint("Error saving FCM token: $updateErr | $setErr");
       }
     }
   }

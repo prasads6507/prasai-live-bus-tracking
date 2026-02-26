@@ -97,7 +97,7 @@ class _StudentSearchScreenState extends ConsumerState<StudentSearchScreen> {
 
                       return BusSearchResultTile(
                         busNumber: bus.busNumber,
-                        routeName: bus.assignedRouteId ?? "No Route", 
+                        routeName: bus.assignedRouteId != null ? 'Route ${bus.busNumber}' : "No Route", 
                         plateNumber: bus.plateNumber,
                         status: status,
                         busId: bus.id,

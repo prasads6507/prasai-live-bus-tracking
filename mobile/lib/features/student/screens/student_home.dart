@@ -63,8 +63,25 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
     final profileAsync = ref.watch(userProfileProvider);
     final collegeId = ref.watch(selectedCollegeIdProvider);
     final selectedCollege = ref.watch(selectedCollegeProvider);
-    final busesAsync = ref.watch(busesProvider(collegeId ?? ""));
     final collegeName = selectedCollege?['collegeName'] ?? collegeId?.toUpperCase() ?? "";
+    
+    // Guard: don't query with empty collegeId
+    if (collegeId == null || collegeId.isEmpty) {
+      return AppScaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.school_outlined, size: 64, color: AppColors.textTertiary),
+              const SizedBox(height: 16),
+              Text("No college selected", style: AppTypography.textTheme.titleMedium),
+            ],
+          ),
+        ),
+      );
+    }
+    
+    final busesAsync = ref.watch(busesProvider(collegeId));
     
     return AppScaffold(
       body: Column(
@@ -83,7 +100,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
           Expanded(
             child: RefreshIndicator(
               onRefresh: () async {
-                ref.invalidate(busesProvider(collegeId ?? ""));
+                ref.invalidate(busesProvider(collegeId));
                 ref.invalidate(userProfileProvider);
               },
               child: SingleChildScrollView(
@@ -122,7 +139,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(24),
                                   child: MobileMapLibre(
-                                    collegeId: collegeId ?? "",
+                                    collegeId: collegeId,
                                     followBus: false,
                                     focusedLocation: _studentLocation,
                                     showStudentLocation: true,
@@ -202,98 +219,6 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _RealBody extends ConsumerStatefulWidget {
-  final String busId;
-  final String tripId;
-  final String collegeId;
-
-  const _RealBody({required this.busId, required this.tripId, required this.collegeId});
-
-  @override
-  ConsumerState<_RealBody> createState() => _RealBodyState();
-}
-
-class _RealBodyState extends ConsumerState<_RealBody> {
-  BusRoute? _route;
-  bool _loading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _fetchRoute();
-  }
-  
-  @override
-  void didUpdateWidget(covariant _RealBody oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.tripId != widget.tripId) {
-      _fetchRoute();
-    }
-  }
-
-  Future<void> _fetchRoute() async {
-    try {
-      // 1. Get Trip to get Route ID
-      // We assume the trip object isn't fully available in the bus list, 
-      // or we just fetch it to be safe/live. 
-      // Actually, we can't easily get the trip doc without streaming it.
-      // But let's assume we can get the routeId from somewhere.
-      
-      // Wait, Bus model doesn't have routeId. Trip has it.
-      // So let's listen to the trip or fetch it once.
-      // For simplicity in this "fix", let's listen to the trip.
-      
-    } catch (e) {
-      print("Error fetching route info: $e");
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final tripAsync = ref.watch(activeTripProvider(ActiveTripParams(widget.collegeId, widget.busId)));
-    
-    return tripAsync.when(
-      data: (trip) {
-        if (trip == null) return const SizedBox.shrink(); // Removed "Trip ended" label
-        
-        // Now fetch route
-        // We can't use ref.watch easily for a Future provider unless we define it.
-        // Let's use a FutureBuilder for the route.
-        return FutureBuilder<BusRoute?>(
-          future: ref.read(firestoreDataSourceProvider).getRoute(trip.routeId),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            if (!snapshot.hasData || snapshot.data == null) {
-              return const SizedBox.shrink(); // Removed "Route info not found" label
-            }
-
-            final route = snapshot.data!;
-            // Convert to UI model
-            // We need 'stopName', 'time', 'isCompleted'
-            // We don't have 'completedStops' in Trip model yet? 
-            // Trip has 'status'. Bus might have 'completedStops' list?
-            // Checking student_dashboard.tsx: trackedBus.completedStops
-            
-            // For now, assume none completed or simpler logic
-            final items = route.stops.map((s) => DropOffItem(
-              time: "Pending", // We need ETA logic for real time
-              location: s.stopName,
-              isCompleted: false, // TODO: Check completedStops
-              isNext: false,
-            )).toList();
-
-            return DropOffList(items: items);
-          },
-        );
-      },
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => const SizedBox.shrink(), // Keep it clean on error
     );
   }
 }

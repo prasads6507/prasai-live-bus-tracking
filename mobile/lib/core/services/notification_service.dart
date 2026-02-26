@@ -71,7 +71,7 @@ class NotificationService {
   /// Notification 1: Bus started its trip
   static Future<void> showBusStartedNotification(String busNumber) async {
     await _show(
-      id: 9,
+      id: 'bus_started_$busNumber'.hashCode.abs() % 100000,
       title: 'Bus Started 🚌',
       body: 'Bus $busNumber has started its trip. Track it live!',
     );
@@ -80,7 +80,7 @@ class NotificationService {
   /// Notification 2: Bus entering 0.5 mile radius — "Arriving Soon"
   static Future<void> showArrivingNotification(String stopName) async {
     await _show(
-      id: 10,
+      id: 'arriving_$stopName'.hashCode.abs() % 100000,
       title: 'Bus Arriving Soon 🚍',
       body: '$stopName, Arriving Soon',
     );
@@ -89,7 +89,7 @@ class NotificationService {
   /// Notification 3: Bus entered 100m radius — "Arrived"
   static Future<void> showArrivedNotification(String stopName) async {
     await _show(
-      id: 11,
+      id: 'arrived_$stopName'.hashCode.abs() % 100000,
       title: 'Bus Arrived ✅',
       body: 'Bus has arrived at $stopName',
     );
@@ -98,7 +98,7 @@ class NotificationService {
   /// Notification 4: Trip completed
   static Future<void> showTripEndedNotification(String busNumber) async {
     await _show(
-      id: 13,
+      id: 'trip_ended_$busNumber'.hashCode.abs() % 100000,
       title: 'Trip Completed 🏁',
       body: 'Bus $busNumber has completed its trip for today.',
     );
@@ -107,7 +107,7 @@ class NotificationService {
   /// Stop skipped
   static Future<void> showSkipNotification(String stopName) async {
     await _show(
-      id: 12,
+      id: 'skipped_$stopName'.hashCode.abs() % 100000,
       title: 'Stop Skipped ⏭',
       body: 'Bus skipped $stopName — heading to next stop',
     );
@@ -143,24 +143,8 @@ class NotificationService {
     final title = message.notification?.title ?? 'Bus Update';
     final body = message.notification?.body ?? '';
 
-    // Use type to pick the right notification ID (avoids stacking same-type notifs)
-    int id;
-    switch (type) {
-      case 'BUS_STARTED':
-        id = 9;
-        break;
-      case 'ARRIVING':
-        id = 10;
-        break;
-      case 'ARRIVED':
-        id = 11;
-        break;
-      case 'TRIP_ENDED':
-        id = 13;
-        break;
-      default:
-        id = 99;
-    }
+    // Use body content hash for unique ID so different stops don't overwrite
+    int id = '${type}_$body'.hashCode.abs() % 100000;
 
     await _show(id: id, title: title, body: body);
   }
