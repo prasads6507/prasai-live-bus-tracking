@@ -23,13 +23,25 @@ final dioProvider = Provider<Dio>((ref) {
   dio.interceptors.add(InterceptorsWrapper(
     onRequest: (options, handler) async {
       try {
-        final prefs = await SharedPreferences.getInstance();
-        final token = prefs.getString('auth_token');
-        if (token != null) {
-          options.headers['Authorization'] = 'Bearer $token';
+        // Use Firebase ID Token directly - this ensures it is ALWAYS fresh
+        // Firebase Auth automatically handles refreshing the token if it's expired.
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null) {
+          final token = await user.getIdToken();
+          if (token != null) {
+            options.headers['Authorization'] = 'Bearer $token';
+            // debugPrint("[Dio] Added fresh Firebase ID Token to header");
+          }
+        } else {
+          // Fallback to SharedPreferences for login/public routes if needed
+          final prefs = await SharedPreferences.getInstance();
+          final token = prefs.getString('auth_token');
+          if (token != null) {
+            options.headers['Authorization'] = 'Bearer $token';
+          }
         }
       } catch (e) {
-        print("Error getting token for Dio: $e");
+        debugPrint("Error getting token for Dio: $e");
       }
       return handler.next(options);
     },

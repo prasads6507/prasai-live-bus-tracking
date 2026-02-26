@@ -9,6 +9,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../../../firebase_options.dart';
 import '../../../../core/config/env.dart';
 import 'trip_finalizer.dart';
@@ -628,10 +629,13 @@ class BackgroundTrackingService {
   }) async {
     try {
       final apiBase = prefs?.getString('api_base_url') ?? Env.apiUrl;
-      final token = prefs?.getString('auth_token');
+      
+      // Use Firebase ID Token directly - this ensures it is ALWAYS fresh even in background isolate
+      final user = FirebaseAuth.instance.currentUser;
+      final token = await user?.getIdToken();
 
       if (token == null || token.isEmpty) {
-        debugPrint('[NotifyServer] WARNING: No auth_token in prefs — request will be unauthorized (401).');
+        debugPrint('[NotifyServer] WARNING: No Firebase user or ID token — request will be unauthorized (401).');
       }
 
       final dio = Dio(BaseOptions(
