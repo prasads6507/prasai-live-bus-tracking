@@ -179,87 +179,90 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
 
   Widget _buildBusSelection(String collegeId, UserProfile profile) {
     final driverId = profile.id;
-    final assignedBusId = profile.assignedBusId;
-    debugPrint("[DriverHome] Driver: ${profile.email}, AssignedBusId: $assignedBusId");
+    debugPrint("[DriverHome] Driver: ${profile.email}, UID: $driverId");
 
-    // SCENARIO 1: Driver has an assigned bus and hasn't opted for maintenance
-    if (assignedBusId != null && !_isMaintenanceFlow) {
-      return StreamBuilder<Bus>(
-        stream: ref.watch(firestoreDataSourceProvider).getBus(collegeId, assignedBusId),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final bus = snapshot.data;
-          if (bus == null) {
-            // Fallback: Assigned bus not found in DB
-            return _buildNoAssignmentState();
-          }
+    // If in maintenance flow, show maintenance bus list
+    if (_isMaintenanceFlow) {
+      return _buildMaintenanceBusList(collegeId, driverId, _originalBusId);
+    }
 
-          final isMaintenance = bus.status == 'MAINTENANCE';
-          final isInactive = bus.status == 'INACTIVE';
+    // PRIMARY: Query buses collection for buses assigned to this driver
+    // This is the authoritative source — the admin portal writes assignedDriverId on the bus doc
+    return StreamBuilder<List<Bus>>(
+      stream: ref.watch(firestoreDataSourceProvider).getDriverBuses(collegeId, driverId),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
 
-          return Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      "Assigned Vehicle",
-                      style: AppTypography.textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.textPrimary,
-                      ),
+        final assignedBuses = snapshot.data ?? [];
+        debugPrint("[DriverHome] Found ${assignedBuses.length} buses assigned to driver $driverId");
+
+        if (assignedBuses.isEmpty) {
+          // No bus assigned to this driver in the bus collection
+          return _buildNoAssignmentState();
+        }
+
+        // Use the first assigned bus (drivers should only have one)
+        final bus = assignedBuses.first;
+        // Store for maintenance flow context
+        _originalBusId = bus.id;
+
+        final isMaintenance = bus.status == 'MAINTENANCE';
+        final isInactive = bus.status == 'INACTIVE';
+
+        return Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    "Assigned Vehicle",
+                    style: AppTypography.textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.textPrimary,
                     ),
-                    if (!isInactive)
-                      IconButton(
-                        onPressed: () => _showMaintenanceConsent(context),
-                        icon: const Icon(Icons.build_circle_outlined, color: AppColors.primary),
-                        tooltip: "Maintenance replacement",
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  isMaintenance 
-                    ? "Your assigned bus is currently in maintenance."
-                    : (isInactive 
-                        ? "Your assigned bus is currently inactive. Please contact admin."
-                        : "Ready to start your trip with your assigned bus."),
-                  style: AppTypography.textTheme.bodyMedium?.copyWith(
-                    color: AppColors.textTertiary,
                   ),
+                  if (!isInactive)
+                    IconButton(
+                      onPressed: () => _showMaintenanceConsent(context),
+                      icon: const Icon(Icons.build_circle_outlined, color: AppColors.primary),
+                      tooltip: "Maintenance replacement",
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                isMaintenance 
+                  ? "Your assigned bus is currently in maintenance."
+                  : (isInactive 
+                      ? "Your assigned bus is currently inactive. Please contact admin."
+                      : "Ready to start your trip with your assigned bus."),
+                style: AppTypography.textTheme.bodyMedium?.copyWith(
+                  color: AppColors.textTertiary,
                 ),
-                const SizedBox(height: 32),
-                
-                // Assigned Bus Card
-                _buildBusCard(bus, isMaintenance || isInactive),
+              ),
+              const SizedBox(height: 32),
+              
+              // Assigned Bus Card
+              _buildBusCard(bus, isMaintenance || isInactive),
 
-                const Spacer(),
+              const Spacer(),
 
-                PrimaryButton(
-                  text: isMaintenance || isInactive ? "Vehicle Not Available" : "Start Trip with ${bus.busNumber}",
-                  onPressed: isMaintenance || isInactive 
-                    ? null 
-                    : () => _handleBusSelection(bus),
-                ),
-              ],
-            ),
-          );
-        },
-      );
-    }
-
-    // SCENARIO 2: No assignment - show error state
-    if (assignedBusId == null && !_isMaintenanceFlow) {
-      return _buildNoAssignmentState();
-    }
-
-    // SCENARIO 3: Maintenance flow
-    return _buildMaintenanceBusList(collegeId, driverId, assignedBusId);
+              PrimaryButton(
+                text: isMaintenance || isInactive ? "Vehicle Not Available" : "Start Trip with ${bus.busNumber}",
+                onPressed: isMaintenance || isInactive 
+                  ? null 
+                  : () => _handleBusSelection(bus),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   void _showMaintenanceConsent(BuildContext context) {
