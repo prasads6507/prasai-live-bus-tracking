@@ -104,6 +104,7 @@ class _CollegeSelectionScreenState extends ConsumerState<CollegeSelectionScreen>
                   // Glowing Search Bar
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
+                    clipBehavior: Clip.antiAlias,
                     decoration: BoxDecoration(
                       color: AppColors.bgCard,
                       borderRadius: BorderRadius.circular(16),
