@@ -680,26 +680,15 @@ class FirestoreDataSource {
   /// Streams user profile for real-time updates (favorites, etc.)
   /// Streams user profile for real-time updates (favorites, etc.)
   Stream<UserProfile?> streamUserProfile(String collegeId, String uid) {
-    // Try students collection first (most common)
-    final studentStream = _firestore.collection('students').doc(uid).snapshots();
-    
-    return studentStream.asyncMap((studentDoc) async {
-      if (studentDoc.exists) {
-        final data = studentDoc.data() as Map<String, dynamic>?;
-        if (data != null && data['collegeId'] == collegeId) {
-          return UserProfile.fromFirestore(studentDoc);
-        }
-      }
-      
-      // Fallback: Check users collection for drivers/admins
-      final userDoc = await _firestore.collection('users').doc(uid).get();
+    // 1. First, do a one-time check to see which collection the user lives in.
+    return _firestore.collection('users').doc(uid).get().asStream().asyncExpand((userDoc) {
       if (userDoc.exists) {
-        final data = userDoc.data() as Map<String, dynamic>?;
-        if (data != null && data['collegeId'] == collegeId) {
-          return UserProfile.fromFirestore(userDoc);
-        }
+        // User is in 'users' collection (Driver/Admin)
+        return _firestore.collection('users').doc(uid).snapshots().map((doc) => UserProfile.fromFirestore(doc));
+      } else {
+        // Fallback to 'students' collection
+        return _firestore.collection('students').doc(uid).snapshots().map((doc) => UserProfile.fromFirestore(doc));
       }
-      return null;
     });
   }
 }
