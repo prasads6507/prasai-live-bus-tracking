@@ -51,13 +51,13 @@ class Bus {
   });
 
   factory Bus.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+    final data = doc.data() as Map<String, dynamic>? ?? {};
     return Bus(
       id: doc.id,
-      busNumber: data['busNumber'] ?? '',
-      plateNumber: data['plateNumber'] ?? '',
-      status: data['status'] ?? 'ACTIVE',
-      activeTripId: data['activeTripId'],
+      busNumber: data['busNumber']?.toString() ?? 'Unknown',
+      plateNumber: data['plateNumber']?.toString() ?? 'N/A',
+      status: data['status']?.toString() ?? 'ACTIVE',
+      activeTripId: data['activeTripId']?.toString(),
       location: data['location'] != null
           ? LocationPoint.fromJson(data['location'])
           : (data['currentLocation'] != null

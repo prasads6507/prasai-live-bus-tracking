@@ -8,6 +8,7 @@ class PrimaryButton extends StatelessWidget {
   final bool isLoading;
   final IconData? trailingIcon;
   final Color? backgroundColor;
+  final Color? foregroundColor;
 
   const PrimaryButton({
     super.key,
@@ -16,6 +17,7 @@ class PrimaryButton extends StatelessWidget {
     this.isLoading = false,
     this.trailingIcon,
     this.backgroundColor,
+    this.foregroundColor,
   });
 
   @override
@@ -32,7 +34,7 @@ class PrimaryButton extends StatelessWidget {
               ? (backgroundColor ?? AppColors.primary)
               : AppColors.bgCard,
           foregroundColor: isEnabled
-              ? AppColors.textInverse
+              ? (foregroundColor ?? AppColors.textInverse)
               : AppColors.textTertiary,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
@@ -56,7 +58,7 @@ class PrimaryButton extends StatelessWidget {
                       text,
                       style: AppTypography.h3.copyWith(
                         color: isEnabled
-                            ? AppColors.textInverse
+                            ? (foregroundColor ?? AppColors.textInverse)
                             : AppColors.textTertiary,
                       ),
                       overflow: TextOverflow.ellipsis,

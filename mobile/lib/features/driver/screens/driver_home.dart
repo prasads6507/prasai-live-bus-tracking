@@ -13,6 +13,7 @@ import '../services/background_tracking_service.dart';
 import '../services/trip_finalizer.dart';
 import '../../../core/services/tracking_lifecycle_manager.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/primary_button.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/typography.dart';
 import '../../../data/providers.dart';
@@ -71,7 +72,7 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
 
           Widget content;
           if (_selectedBusId == null) {
-            content = _buildBusSelection(collegeId, profile.id);
+            content = _buildBusSelection(collegeId, profile);
           } else if (_selectedRouteId == null) {
             content = _buildRouteSelection(collegeId);
           } else if (_selectedDirection == null) {
@@ -166,9 +167,9 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
     );
   }
 
-  Widget _buildBusSelection(String collegeId, String driverId) {
-    final profile = ref.read(userProfileProvider).value;
-    final assignedBusId = profile?.assignedBusId;
+  Widget _buildBusSelection(String collegeId, UserProfile profile) {
+    final driverId = profile.id;
+    final assignedBusId = profile.assignedBusId;
 
     // SCENARIO 1: Driver has an assigned bus and hasn't opted to switch
     if (assignedBusId != null && !_isManuallySelecting) {
@@ -222,7 +223,7 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
                     text: "Select Alternative Bus",
                     onPressed: () => setState(() => _isManuallySelecting = true),
                     backgroundColor: AppColors.surface,
-                    textColor: AppColors.primary,
+                    foregroundColor: AppColors.primary,
                   ),
                   const SizedBox(height: 16),
                 ],
