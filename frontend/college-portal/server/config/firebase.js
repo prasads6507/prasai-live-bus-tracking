@@ -1,65 +1,54 @@
 const admin = require('firebase-admin');
+const path = require('path');
+const fs = require('fs');
 
 let db = null;
 let auth = null;
 let initializationError = null;
 
-// Helper to provide clear missing var reports for diagnostics
-const getMissingReport = () => {
-    return {
-        projectId: !!process.env.FIREBASE_PROJECT_ID,
-        clientEmail: !!process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: !!process.env.FIREBASE_PRIVATE_KEY
-    };
-};
+const serviceAccountFiles = [
+    'live-bus-tracking-2ec59-firebase-adminsdk-fbsvc-c51ffbf7e4.json',
+    'live-bus-tracking-2ec59-firebase-adminsdk-fbsvc-1dfd9cf3ef.json'
+];
 
 try {
-    const projectId = (process.env.FIREBASE_PROJECT_ID || '').trim();
-    const clientEmail = (process.env.FIREBASE_CLIENT_EMAIL || '').trim();
-    let privateKeyRaw = (process.env.FIREBASE_PRIVATE_KEY || '').trim();
+    let serviceAccount = null;
 
-    if (!projectId || !clientEmail || !privateKeyRaw) {
-        const report = getMissingReport();
-        throw new Error(`Missing configuration: ${Object.keys(report).filter(k => !report[k]).join(', ')}`);
+    // 1. Try local JSON files first (More reliable than corrupted .env)
+    for (const file of serviceAccountFiles) {
+        const fullPath = path.join(__dirname, '..', file);
+        if (fs.existsSync(fullPath)) {
+            try {
+                serviceAccount = require(fullPath);
+                console.log(`[Firebase] Using service account file: ${file}`);
+                break;
+            } catch (e) {
+                console.error(`[Firebase] Failed to load ${file}:`, e.message);
+            }
+        }
     }
 
-    // Robust stripping: remove leading/trailing double or single quotes that might be copy-pasted
-    if ((privateKeyRaw.startsWith('"') && privateKeyRaw.endsWith('"')) ||
-        (privateKeyRaw.startsWith("'") && privateKeyRaw.endsWith("'"))) {
-        console.log("[Firebase] Stripping wrapper quotes from PRIVATE_KEY");
-        privateKeyRaw = privateKeyRaw.slice(1, -1);
+    // 2. Fallback to .env if no JSON file worked
+    if (!serviceAccount) {
+        const projectId = (process.env.FIREBASE_PROJECT_ID || '').trim();
+        const clientEmail = (process.env.FIREBASE_CLIENT_EMAIL || '').trim();
+        const privateKeyRaw = (process.env.FIREBASE_PRIVATE_KEY || '').trim();
+
+        if (projectId && clientEmail && privateKeyRaw) {
+            const privateKey = privateKeyRaw.replace(/\\n/g, '\n').replace(/"/g, '');
+            serviceAccount = { projectId, clientEmail, privateKey };
+        }
     }
 
-    // Ultimate Foolproof PEM Reconstructor for Vercel
-    // Extracts the base64 payload regardless of how mangled the user input is 
-    // (escaped newlines, spaces, quotes, missing newlines) and rebuilds a valid PEM.
-    let base64Payload = privateKeyRaw
-        .replace(/-----BEGIN PRIVATE KEY-----/g, '')
-        .replace(/-----END PRIVATE KEY-----/g, '')
-        .replace(/\\n/g, '') // remove literal \n
-        .replace(/\r/g, '')  // remove carriage returns
-        .replace(/\n/g, '')  // remove actual newlines
-        .replace(/\"/g, '')  // remove quotes
-        .replace(/\'/g, '')  // remove quotes
-        .replace(/\s+/g, ''); // remove any other whitespaces/tabs
-
-    // A valid PEM chunks the base64 payload into 64-character lines
-    let formattedKey = '';
-    for (let i = 0; i < base64Payload.length; i += 64) {
-        formattedKey += base64Payload.substring(i, i + 64) + '\n';
+    if (!serviceAccount) {
+        throw new Error('Missing Firebase Admin configuration (JSON and .env failed)');
     }
-
-    const privateKey = `-----BEGIN PRIVATE KEY-----\n${formattedKey.trim()}\n-----END PRIVATE KEY-----\n`;
 
     if (!admin.apps.length) {
         admin.initializeApp({
-            credential: admin.credential.cert({
-                projectId,
-                clientEmail,
-                privateKey
-            })
+            credential: admin.credential.cert(serviceAccount)
         });
-        console.log(`[Firebase] Successfully initialized for project: ${projectId}`);
+        console.log(`[Firebase] Successfully initialized for project: ${serviceAccount.project_id || serviceAccount.projectId}`);
     }
 
     db = admin.firestore();
@@ -76,4 +65,3 @@ module.exports = {
     initializationError,
     messaging: admin.apps.length ? admin.messaging() : null
 };
-
