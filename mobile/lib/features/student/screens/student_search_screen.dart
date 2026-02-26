@@ -52,14 +52,18 @@ class _StudentSearchScreenState extends ConsumerState<StudentSearchScreen> {
               decoration: InputDecoration(
                 hintText: 'Search by bus no, plate...',
                 hintStyle: AppTypography.textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
-                prefixIcon: const Icon(Icons.search, color: AppColors.textSecondary),
+                prefixIcon: const Padding(
+                  padding: EdgeInsets.fromLTRB(16, 0, 12, 0),
+                  child: Icon(Icons.search, color: AppColors.textSecondary, size: 20),
+                ),
+                prefixIconConstraints: const BoxConstraints(minWidth: 48, minHeight: 20),
                 filled: true,
                 fillColor: AppColors.surface,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
                   borderSide: BorderSide.none,
                 ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                contentPadding: const EdgeInsets.symmetric(vertical: 16),
               ),
             ),
             const SizedBox(height: 24),

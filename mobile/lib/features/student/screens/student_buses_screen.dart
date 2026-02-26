@@ -178,7 +178,11 @@ class _StudentBusesScreenState extends ConsumerState<StudentBusesScreen> {
                   style: AppTypography.bodyLg.copyWith(color: AppColors.textPrimary),
                   decoration: InputDecoration(
                     hintText: 'Bus no, plate, driver...',
-                    prefixIcon: const Icon(Icons.search_rounded, color: AppColors.primary, size: 20),
+                    prefixIcon: const Padding(
+                      padding: EdgeInsets.fromLTRB(16, 0, 12, 0),
+                      child: Icon(Icons.search_rounded, color: AppColors.primary, size: 20),
+                    ),
+                    prefixIconConstraints: const BoxConstraints(minWidth: 48, minHeight: 20),
                     border: InputBorder.none,
                     enabledBorder: InputBorder.none,
                     focusedBorder: InputBorder.none,

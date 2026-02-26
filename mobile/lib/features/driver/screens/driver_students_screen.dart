@@ -148,10 +148,10 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
                   decoration: InputDecoration(
                     hintText: 'Search by name or email...',
                     prefixIcon: const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 12),
+                      padding: EdgeInsets.fromLTRB(16, 0, 12, 0),
                       child: Icon(Icons.search_rounded, color: AppColors.primary, size: 20),
                     ),
-                    prefixIconConstraints: const BoxConstraints(minWidth: 44, minHeight: 20),
+                    prefixIconConstraints: const BoxConstraints(minWidth: 48, minHeight: 20),
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(vertical: 14),
                   ),

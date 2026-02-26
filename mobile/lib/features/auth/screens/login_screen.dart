@@ -221,10 +221,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               style: AppTypography.bodyLg.copyWith(color: AppColors.textPrimary),
                               decoration: InputDecoration(
                                 prefixIcon: const Padding(
-                                  padding: EdgeInsets.symmetric(horizontal: 12),
+                                  padding: EdgeInsets.fromLTRB(16, 0, 12, 0),
                                   child: Icon(Icons.mail_outline_rounded, color: AppColors.textSecondary, size: 20),
                                 ),
-                                prefixIconConstraints: const BoxConstraints(minWidth: 44, minHeight: 20),
+                                prefixIconConstraints: const BoxConstraints(minWidth: 48, minHeight: 20),
                                 hintText: 'Enter your email',
                                 border: InputBorder.none,
                                 enabledBorder: InputBorder.none,
@@ -250,10 +250,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               style: AppTypography.bodyLg.copyWith(color: AppColors.textPrimary),
                               decoration: InputDecoration(
                                 prefixIcon: const Padding(
-                                  padding: EdgeInsets.symmetric(horizontal: 12),
+                                  padding: EdgeInsets.fromLTRB(16, 0, 12, 0),
                                   child: Icon(Icons.lock_outline_rounded, color: AppColors.textSecondary, size: 20),
                                 ),
-                                prefixIconConstraints: const BoxConstraints(minWidth: 44, minHeight: 20),
+                                prefixIconConstraints: const BoxConstraints(minWidth: 48, minHeight: 20),
                                 suffixIcon: IconButton(
                                   icon: Icon(
                                     _isPasswordVisible ? Icons.visibility_rounded : Icons.visibility_off_rounded,

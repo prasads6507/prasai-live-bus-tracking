@@ -122,10 +122,10 @@ class _CollegeSelectionScreenState extends ConsumerState<CollegeSelectionScreen>
                       style: AppTypography.bodyLg.copyWith(color: AppColors.textPrimary),
                       decoration: InputDecoration(
                         prefixIcon: const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 12),
+                          padding: EdgeInsets.fromLTRB(16, 0, 12, 0),
                           child: Icon(Icons.search_rounded, color: AppColors.primary, size: 22),
                         ),
-                        prefixIconConstraints: const BoxConstraints(minWidth: 46, minHeight: 22),
+                        prefixIconConstraints: const BoxConstraints(minWidth: 50, minHeight: 22),
                         suffixIcon: _isLoading
                             ? const Padding(
                                 padding: EdgeInsets.all(14.0),
