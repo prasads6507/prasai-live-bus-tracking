@@ -12,7 +12,7 @@ const checkInit = (res) => {
     }
     return true;
 };
-const { sendBusStartedNotification, checkProximityAndNotify, sendTripEndedNotification } = require('./notificationController');
+const { checkProximityAndNotify, sendTripEndedNotification } = require('./notificationController');
 
 // @desc    Get available buses for the driver's college
 // @route   GET /api/driver/buses
@@ -401,11 +401,8 @@ const startTrip = async (req, res) => {
 
 
 
-        // Send 'Bus Started' Notification (Phase 4.2)
-        const busNumberInfo = busData.busNumber || busData.number || busId;
-        sendBusStartedNotification(tripId, busId, req.collegeId, busNumberInfo)
-            .catch(err => console.error('Failed to send bus start notification:', err));
-
+        // NOTE: Bus Started notification is sent by Flutter via /trip-started-notify endpoint.
+        // Sending it here too would cause duplicate notifications. Do NOT re-add.
         res.status(201).json({ success: true, message: 'Trip started', tripId, stopsCount: stopsSnapshot.length, direction: tripDirection });
     } catch (error) {
         console.error('Error starting trip:', error);

@@ -27,6 +27,20 @@
                     "arrayConfig": "CONTAINS"
                 }
             ]
+        },
+        {
+            "collectionGroup": "users",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "collegeId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "favoriteBusIds",
+                    "arrayConfig": "CONTAINS"
+                }
+            ]
         }
     ],
     "fieldOverrides": []

@@ -33,7 +33,7 @@ router.post('/trips/:tripId/history-upload', historyUpload);
 router.post('/notifications/proximity', checkProximity);
 
 // POST /api/driver/trip-started-notify
-router.post('/trip-started-notify', protect, async (req, res) => {
+router.post('/trip-started-notify', async (req, res) => {
     try {
         const { tripId, busId, collegeId, busNumber } = req.body;
 
@@ -42,7 +42,7 @@ router.post('/trip-started-notify', protect, async (req, res) => {
         }
 
         const { sendBusStartedNotification } = require('../controllers/notificationController');
-        
+
         // Fire and forget
         sendBusStartedNotification(tripId, busId, collegeId, busNumber || busId)
             .catch(err => console.error('[TripStartedRoute] Error:', err.message));
@@ -54,7 +54,7 @@ router.post('/trip-started-notify', protect, async (req, res) => {
 });
 
 // POST /api/driver/stop-event (Step 5E)
-router.post('/stop-event', protect, async (req, res) => {
+router.post('/stop-event', async (req, res) => {
     try {
         const { tripId, busId, collegeId, stopId, stopName, stopAddress, type, arrivalDocId } = req.body;
 
@@ -76,7 +76,7 @@ router.post('/stop-event', protect, async (req, res) => {
 });
 
 // POST /api/driver/trip-ended-notify
-router.post('/trip-ended-notify', protect, async (req, res) => {
+router.post('/trip-ended-notify', async (req, res) => {
     try {
         const { tripId, busId, collegeId } = req.body;
 

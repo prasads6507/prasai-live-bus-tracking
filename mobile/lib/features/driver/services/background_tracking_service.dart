@@ -613,38 +613,68 @@ class BackgroundTrackingService {
     }
   }
 
-  /// Fire-and-forget call to the Node.js server to multicast FCM notifications
-  static void _notifyServer(String tripId, String busId, String collegeId, String stopId, String type, {String? stopName, String? arrivalDocId, SharedPreferences? prefs}) async {
-     try {
-       final apiBase = prefs?.getString('api_base_url') ?? Env.apiUrl;
-       final token = prefs?.getString('auth_token'); // Driver's JWT if available
+  /// Fire-and-forget call to the Node.js server to multicast FCM notifications.
+  /// BUG FIX (Bug 1): Added missing auth token warning + full DioException logging
+  /// so 401/400 errors are visible in logs instead of silently swallowed.
+  static void _notifyServer(
+    String tripId,
+    String busId,
+    String collegeId,
+    String stopId,
+    String type, {
+    String? stopName,
+    String? arrivalDocId,
+    SharedPreferences? prefs,
+  }) async {
+    try {
+      final apiBase = prefs?.getString('api_base_url') ?? Env.apiUrl;
+      final token = prefs?.getString('auth_token');
 
-       final dio = Dio(BaseOptions(
-         connectTimeout: const Duration(seconds: 5),
-         headers: token != null ? {'Authorization': 'Bearer $token'} : null,
-       ));
+      if (token == null || token.isEmpty) {
+        debugPrint('[NotifyServer] WARNING: No auth_token in prefs — request will be unauthorized (401).');
+      }
 
-       if (type == 'TRIP_ENDED') {
-         await dio.post("$apiBase/api/driver/trip-ended-notify", data: {
-           'tripId': tripId,
-           'busId': busId,
-           'collegeId': collegeId,
-         });
-         debugPrint("[NotifyServer] TRIP_ENDED notified successfully");
-       } else {
-         final response = await dio.post("$apiBase/api/driver/stop-event", data: {
-           'tripId': tripId,
-           'busId': busId,
-           'collegeId': collegeId,
-           'stopId': stopId,
-           'stopName': stopName ?? 'Stop',
-           'type': type,
-           'arrivalDocId': arrivalDocId
-         });
-         debugPrint("[NotifyServer] Result: ${response.statusCode} - ${response.data}");
-       }
-     } catch (e) {
-       debugPrint("[NotifyServer] FAILED for $type at $stopId: $e");
-     }
+      final dio = Dio(BaseOptions(
+        connectTimeout: const Duration(seconds: 10),
+        receiveTimeout: const Duration(seconds: 10),
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        },
+      ));
+
+      if (type == 'TRIP_ENDED') {
+        final response = await dio.post(
+          '$apiBase/api/driver/trip-ended-notify',
+          data: {
+            'tripId': tripId,
+            'busId': busId,
+            'collegeId': collegeId,
+          },
+        );
+        debugPrint('[NotifyServer] TRIP_ENDED success: ${response.statusCode}');
+      } else {
+        final response = await dio.post(
+          '$apiBase/api/driver/stop-event',
+          data: {
+            'tripId': tripId,
+            'busId': busId,
+            'collegeId': collegeId,
+            'stopId': stopId,
+            'stopName': stopName ?? 'Stop',
+            'type': type,
+            if (arrivalDocId != null) 'arrivalDocId': arrivalDocId,
+          },
+        );
+        debugPrint('[NotifyServer] $type success: ${response.statusCode} - ${response.data}');
+      }
+    } on DioException catch (e) {
+      debugPrint('[NotifyServer] FAILED for $type at stopId=$stopId: ${e.message}');
+      if (e.response != null) {
+        debugPrint('[NotifyServer] Server response: ${e.response?.statusCode} — ${e.response?.data}');
+      }
+    } catch (e) {
+      debugPrint('[NotifyServer] Unexpected error for $type at stopId=$stopId: $e');
+    }
   }
 }

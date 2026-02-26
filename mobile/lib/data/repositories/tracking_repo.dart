@@ -1,3 +1,5 @@
+import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import '../datasources/api_ds.dart';
 import '../datasources/firestore_ds.dart';
 import '../models/location_point.dart';
@@ -38,13 +40,20 @@ class TrackingRepository {
       direction: direction,
     );
 
-    // Fire and forget notification
+    // Fire and forget — notify server to send FCM to students who favorited this bus
     _apiDataSource.notifyTripStarted(
       collegeId: collegeId,
       busId: busId,
       tripId: tripId,
       busNumber: busNumber,
-    ).catchError((e) => print("Failed to send start trip notification: $e"));
+    ).catchError((e) {
+      if (e is DioException) {
+        debugPrint('[TripRepo] notifyTripStarted failed: ${e.message} | ${e.response?.statusCode} | ${e.response?.data}');
+      } else {
+        debugPrint('[TripRepo] notifyTripStarted failed: $e');
+      }
+      return null;
+    });
 
     return tripId;
   }
@@ -53,12 +62,19 @@ class TrackingRepository {
     await _firestoreDataSource.endTrip(tripId, busId);
     
     if (tripId != null && tripId.isNotEmpty) {
-      // Fire and forget notification
+      // Fire and forget — notify students that trip ended
       _apiDataSource.notifyTripEnded(
         collegeId: collegeId,
         busId: busId,
         tripId: tripId,
-      ).catchError((e) => print("Failed to send end trip notification: $e"));
+      ).catchError((e) {
+        if (e is DioException) {
+          debugPrint('[TripRepo] notifyTripEnded failed: ${e.message} | ${e.response?.statusCode} | ${e.response?.data}');
+        } else {
+          debugPrint('[TripRepo] notifyTripEnded failed: $e');
+        }
+        return null;
+      });
     }
   }
 }

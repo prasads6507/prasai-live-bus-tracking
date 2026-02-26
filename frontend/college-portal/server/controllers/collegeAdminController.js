@@ -328,7 +328,10 @@ const createBulkUsers = async (req, res) => {
                     passwordHash,
                     role,
                     status: 'ACTIVE',
-                    createdAt: new Date().toISOString()
+                    createdAt: new Date().toISOString(),
+                    // Required for FCM notification queries (array-contains needs field to exist)
+                    favoriteBusIds: [],
+                    fcmToken: null,
                 };
 
                 batch.set(db.collection('users').doc(userId), newUser);
@@ -392,7 +395,10 @@ const createUser = async (req, res) => {
             passwordHash,
             role,
             status: 'ACTIVE',
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
+            // Required for FCM notification queries (array-contains needs field to exist)
+            favoriteBusIds: [],
+            fcmToken: null,
         };
 
         // Save to Firestore with the SAME UID as Auth

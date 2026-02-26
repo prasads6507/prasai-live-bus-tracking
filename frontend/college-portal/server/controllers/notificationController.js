@@ -95,13 +95,18 @@ const getDistanceFromLatLonInKm = (lat1, lon1, lat2, lon2) => {
 
 /**
  * Identify and delete invalid FCM tokens from Firestore to prevent memory leaks.
+ * BUG FIX (Bug 5): Wrapped in try/catch so a missing Firestore index never
+ * crashes the notification send pipeline. Also checks the users (drivers) collection.
  */
 const cleanupStaleTokens = async (result, tokensBatch, db, admin) => {
-    if (result.failureCount > 0) {
+    if (result.failureCount === 0) return;
+
+    try {
         const failedTokens = [];
         result.responses.forEach((resp, idx) => {
             if (!resp.success) {
                 const errCode = resp.error?.code;
+                console.log(`[FCM] Token ${idx} failed with code: ${errCode}`);
                 if (errCode === 'messaging/invalid-registration-token' ||
                     errCode === 'messaging/registration-token-not-registered') {
                     failedTokens.push(tokensBatch[idx]);
@@ -109,19 +114,41 @@ const cleanupStaleTokens = async (result, tokensBatch, db, admin) => {
             }
         });
 
-        if (failedTokens.length > 0) {
-            console.log(`[FCM] Removing ${failedTokens.length} stale tokens`);
-            const batch = db.batch();
-            const studentsRef = db.collection('students');
+        if (failedTokens.length === 0) return;
 
-            for (const staleToken of failedTokens) {
-                const staleSnap = await studentsRef.where('fcmToken', '==', staleToken).get();
-                staleSnap.forEach(doc => {
+        console.log(`[FCM] Removing ${failedTokens.length} stale tokens`);
+        const batch = db.batch();
+
+        // Search both collections for stale tokens
+        for (const staleToken of failedTokens) {
+            try {
+                // Check students collection
+                const staleStudentSnap = await db.collection('students')
+                    .where('fcmToken', '==', staleToken)
+                    .limit(5)
+                    .get();
+                staleStudentSnap.forEach(doc => {
                     batch.update(doc.ref, { fcmToken: admin.firestore.FieldValue.delete() });
                 });
+
+                // Check users collection (drivers)
+                const staleUserSnap = await db.collection('users')
+                    .where('fcmToken', '==', staleToken)
+                    .limit(5)
+                    .get();
+                staleUserSnap.forEach(doc => {
+                    batch.update(doc.ref, { fcmToken: admin.firestore.FieldValue.delete() });
+                });
+            } catch (indexErr) {
+                // Missing index — log and skip. Token will be cleaned up next time.
+                console.warn(`[FCM] Stale token cleanup skipped (index missing?): ${indexErr.message}`);
             }
-            await batch.commit();
         }
+
+        await batch.commit();
+    } catch (err) {
+        // Never let cleanup crash the notification pipeline
+        console.error('[FCM] cleanupStaleTokens error (non-fatal):', err.message);
     }
 };
 
