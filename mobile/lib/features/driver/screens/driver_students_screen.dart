@@ -46,7 +46,11 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
     final studentsAsync = ref.watch(studentsProvider(collegeId));
 
     return AppScaffold(
-      title: 'Students',
+      appBar: AppBar(
+        title: Text('Students', style: AppTypography.h2),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
       body: Column(
         children: [
           // Search Header
@@ -266,7 +270,7 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(student.name ?? 'Unknown Student', style: AppTypography.h3),
-                      Text(student.email, style: AppTypography.bodySmall),
+                      Text(student.email, style: AppTypography.bodyMd),
                     ],
                   ),
                 ),
