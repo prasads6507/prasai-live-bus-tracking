@@ -1,4 +1,5 @@
-const { db, admin, auth, initializationError } = require('../config/firebase');
+const { db, admin, auth, messaging, initializationError } = require('../config/firebase');
+const { sendTripEndedNotification } = require('./notificationController');
 const bcrypt = require('bcryptjs');
 const polyline = require('@mapbox/polyline');
 
@@ -818,6 +819,40 @@ const adminEndTrip = async (req, res) => {
                     speedMph: 0,
                     lastUpdated: new Date().toISOString()
                 });
+
+                // 3. Notify Students who favorited this bus
+                sendTripEndedNotification(tripId, busId, req.collegeId)
+                    .catch(err => console.error('[AdminEndTrip] Student Notification Error:', err.message));
+
+                // 4. Notify Driver specifically
+                const driverId = tripData.driverId;
+                if (driverId) {
+                    const driverDoc = await db.collection('users').doc(driverId).get();
+                    const driverToken = driverDoc.exists ? driverDoc.data().fcmToken : null;
+
+                    if (driverToken && messaging) {
+                        const driverMessage = {
+                            notification: {
+                                title: 'Trip Stopped by Admin 🛑',
+                                body: `Administrator has ended your trip for Bus ${tripData.busNumber || 'assigned'}.`
+                            },
+                            data: {
+                                type: 'ADMIN_FORCE_STOP',
+                                tripId: tripId
+                            },
+                            android: {
+                                notification: {
+                                    channelId: 'trip_updates',
+                                    priority: 'high'
+                                }
+                            },
+                            token: driverToken
+                        };
+                        messaging.send(driverMessage)
+                            .then(() => console.log(`[AdminEndTrip] Notified driver ${driverId}`))
+                            .catch(err => console.error(`[AdminEndTrip] Driver Notify Error:`, err.message));
+                    }
+                }
             }
         }
 

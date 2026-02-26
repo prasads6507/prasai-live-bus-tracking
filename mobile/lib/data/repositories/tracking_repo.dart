@@ -26,9 +26,11 @@ class TrackingRepository {
     required String busId,
     required String driverId,
     required String routeId,
-    String? busNumber,
+    required String busNumber,
+    required String direction,
     String? driverName,
-    String direction = 'pickup',
+    bool isMaintenance = false,
+    String? originalBusId,
   }) async {
     final tripId = await _firestoreDataSource.startTrip(
       collegeId: collegeId,
@@ -38,6 +40,8 @@ class TrackingRepository {
       busNumber: busNumber,
       driverName: driverName,
       direction: direction,
+      isMaintenance: isMaintenance,
+      originalBusId: originalBusId,
     );
 
     // Fire and forget — notify server to send FCM to students who favorited this bus
@@ -46,6 +50,10 @@ class TrackingRepository {
       busId: busId,
       tripId: tripId,
       busNumber: busNumber,
+      driverId: driverId,
+      routeId: routeId,
+      isMaintenance: isMaintenance,
+      originalBusId: originalBusId,
     ).catchError((e) {
       if (e is DioException) {
         debugPrint('[TripRepo] notifyTripStarted failed: ${e.message} | ${e.response?.statusCode} | ${e.response?.data}');

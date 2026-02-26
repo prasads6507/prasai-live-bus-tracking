@@ -9,6 +9,8 @@ class UserProfile {
   final String? phone;
   final String? assignedBusId;
   final List<String> favoriteBusIds;
+  final String? activeBusId;
+  final String? activeBusNumber;
 
   UserProfile({
     required this.id,
@@ -19,6 +21,8 @@ class UserProfile {
     this.phone,
     this.assignedBusId,
     this.favoriteBusIds = const [],
+    this.activeBusId,
+    this.activeBusNumber,
   });
 
   factory UserProfile.fromFirestore(DocumentSnapshot doc) {
@@ -32,6 +36,8 @@ class UserProfile {
       phone: (data['phone'] ?? data['phoneNumber'])?.toString(),
       assignedBusId: (data['busId'] ?? data['assignedBusId'])?.toString(),
       favoriteBusIds: List<String>.from(data['favoriteBusIds'] ?? []),
+      activeBusId: data['activeBusId']?.toString(),
+      activeBusNumber: data['activeBusNumber']?.toString(),
     );
   }
 }

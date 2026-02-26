@@ -43,7 +43,9 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
   String? _selectedRouteId;
   String? _selectedDirection;
   String _searchQuery = "";
-  bool _isManuallySelecting = false;
+  bool _isMaintenanceFlow = false;
+  Bus? _maintenanceBus;
+  String? _originalBusId;
   final TextEditingController _searchController = TextEditingController();
 
   @override
@@ -72,8 +74,10 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
           }
 
           Widget content;
-          if (_selectedBusId == null) {
+            if (_selectedBusId == null) {
             content = _buildBusSelection(collegeId, profile);
+          } else if (_isMaintenanceFlow && _selectedRouteId == null) {
+            content = _buildMaintenanceRouteSelection(collegeId, profile);
           } else if (_selectedRouteId == null) {
             content = _buildRouteSelection(collegeId);
           } else if (_selectedDirection == null) {
@@ -85,10 +89,15 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
               routeId: _selectedRouteId!,
               driverId: profile.id,
               direction: _selectedDirection!,
+              isMaintenance: _isMaintenanceFlow,
+              originalBusId: _originalBusId,
               onBack: () => setState(() {
                 _selectedBusId = null;
                 _selectedRouteId = null;
                 _selectedDirection = null;
+                _isMaintenanceFlow = false;
+                _maintenanceBus = null;
+                _originalBusId = null;
               }),
               onChangeRoute: () => setState(() {
                 _selectedRouteId = null;
@@ -173,8 +182,8 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
     final assignedBusId = profile.assignedBusId;
     debugPrint("[DriverHome] Driver: ${profile.email}, AssignedBusId: $assignedBusId");
 
-    // SCENARIO 1: Driver has an assigned bus and hasn't opted to switch
-    if (assignedBusId != null && !_isManuallySelecting) {
+    // SCENARIO 1: Driver has an assigned bus and hasn't opted for maintenance
+    if (assignedBusId != null && !_isMaintenanceFlow) {
       return StreamBuilder<Bus>(
         stream: ref.watch(firestoreDataSourceProvider).getBus(collegeId, assignedBusId),
         builder: (context, snapshot) {
@@ -184,7 +193,7 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
           final bus = snapshot.data;
           if (bus == null) {
             // Fallback: Assigned bus not found in DB
-            return _buildFullBusList(collegeId, driverId, showBackButton: false);
+            return _buildNoAssignmentState();
           }
 
           final isMaintenance = bus.status == 'MAINTENANCE';
@@ -195,12 +204,23 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  "Assigned Vehicle",
-                  style: AppTypography.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.textPrimary,
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      "Assigned Vehicle",
+                      style: AppTypography.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    if (!isInactive)
+                      IconButton(
+                        onPressed: () => _showMaintenanceConsent(context),
+                        icon: const Icon(Icons.build_circle_outlined, color: AppColors.primary),
+                        tooltip: "Maintenance replacement",
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 8),
                 Text(
@@ -220,16 +240,6 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
 
                 const Spacer(),
 
-                if (isMaintenance) ...[
-                  PrimaryButton(
-                    text: "Select Alternative Bus",
-                    onPressed: () => setState(() => _isManuallySelecting = true),
-                    backgroundColor: AppColors.surface,
-                    foregroundColor: AppColors.primary,
-                  ),
-                  const SizedBox(height: 16),
-                ],
-
                 PrimaryButton(
                   text: isMaintenance || isInactive ? "Vehicle Not Available" : "Start Trip with ${bus.busNumber}",
                   onPressed: isMaintenance || isInactive 
@@ -243,11 +253,49 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
       );
     }
 
-    // SCENARIO 2: No assignment OR manually selecting alternative
-    return _buildFullBusList(collegeId, driverId, showBackButton: assignedBusId != null);
+    // SCENARIO 2: No assignment - show error state
+    if (assignedBusId == null && !_isMaintenanceFlow) {
+      return _buildNoAssignmentState();
+    }
+
+    // SCENARIO 3: Maintenance flow
+    return _buildMaintenanceBusList(collegeId, driverId, assignedBusId);
   }
 
-  Widget _buildFullBusList(String collegeId, String driverId, {required bool showBackButton}) {
+  void _showMaintenanceConsent(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Report Maintenance?"),
+        content: const Text("Is your assigned bus having an issue today? You can request maintenance and choose a replacement bus for this trip."),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              setState(() {
+                _isMaintenanceFlow = true;
+              });
+            },
+            child: const Text("Yes, Find Replacement"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoAssignmentState() {
+    return _buildEmptyState(
+      icon: Icons.directions_bus_outlined,
+      title: "No Bus Assigned",
+      subtitle: "Please contact your administrator to get a bus assigned to you.",
+    );
+  }
+
+  Widget _buildMaintenanceBusList(String collegeId, String driverId, String? assignedBusId) {
     final busesStream = ref.watch(firestoreDataSourceProvider).getBuses(collegeId);
 
     return Column(
@@ -257,20 +305,22 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (showBackButton)
-                TextButton.icon(
-                  onPressed: () => setState(() => _isManuallySelecting = false),
-                  icon: const Icon(Icons.arrow_back, size: 18),
-                  label: const Text("Back to Assigned Bus"),
-                  style: TextButton.styleFrom(
-                    padding: EdgeInsets.zero,
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
+              TextButton.icon(
+                onPressed: () => setState(() {
+                  _isMaintenanceFlow = false;
+                  _maintenanceBus = null;
+                }),
+                icon: const Icon(Icons.arrow_back, size: 18),
+                label: const Text("Back to Assigned Bus"),
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
-              if (showBackButton) const SizedBox(height: 16),
+              ),
+              const SizedBox(height: 16),
               Text(
-                "Select Any Bus",
+                "Find Replacement Bus",
                 style: AppTypography.textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.w900,
                   color: AppColors.textPrimary,
@@ -278,7 +328,7 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                "Choose an alternative vehicle from the list below.",
+                "Choose an available vehicle from the list below.",
                 style: AppTypography.textTheme.bodyMedium?.copyWith(
                   color: AppColors.textTertiary,
                 ),
@@ -317,6 +367,9 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
               final queryText = _searchQuery.trim().toLowerCase();
 
               // 1. Filter locally
+              // Filter out the driver's own assigned bus
+              buses = buses.where((bus) => bus.id != assignedBusId).toList();
+
               if (queryText.isNotEmpty) {
                 buses = buses.where((bus) => 
                   bus.busNumber.toLowerCase().contains(queryText) || 
@@ -333,12 +386,23 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
                 itemCount: buses.length,
                 itemBuilder: (context, index) {
                   final bus = buses[index];
-                  final isMaintenance = bus.status == 'MAINTENANCE';
-                  final isInactive = bus.status == 'INACTIVE';
+                  final isCurrentlyOnRoute = bus.status == 'ON_ROUTE' || bus.activeTripId != null;
+                  final isInactive = bus.status == 'INACTIVE' || bus.status == 'MAINTENANCE';
 
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 16.0),
-                    child: _buildBusCard(bus, isMaintenance || isInactive),
+                    child: _buildBusCard(
+                      bus, 
+                      isCurrentlyOnRoute || isInactive,
+                      onTap: () {
+                        setState(() {
+                          _maintenanceBus = bus;
+                          _selectedBusId = bus.id;
+                          _originalBusId = assignedBusId;
+                        });
+                      },
+                      statusLabel: isCurrentlyOnRoute ? "ON ROUTE" : null,
+                    ),
                   );
                 },
               );
@@ -349,12 +413,13 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
     );
   }
 
-  Widget _buildBusCard(Bus bus, bool isDisabled) {
+  Widget _buildBusCard(Bus bus, bool isDisabled, {VoidCallback? onTap, String? statusLabel}) {
     final isMaintenance = bus.status == 'MAINTENANCE';
     final isInactive = bus.status == 'INACTIVE';
+    final label = statusLabel ?? (isMaintenance ? "MAINTENANCE" : (isInactive ? "INACTIVE" : null));
 
     return InkWell(
-      onTap: isDisabled ? null : () => _handleBusSelection(bus),
+      onTap: isDisabled ? (onTap == null ? null : onTap) : (onTap ?? () => _handleBusSelection(bus)),
       borderRadius: BorderRadius.circular(16),
       child: Container(
         padding: const EdgeInsets.all(20),
@@ -362,7 +427,7 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
           color: isDisabled ? AppColors.surface.withOpacity(0.5) : AppColors.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: (isMaintenance || isInactive)
+            color: label != null
               ? AppColors.error.withOpacity(0.3) 
               : AppColors.divider.withOpacity(0.5)
           ),
@@ -373,14 +438,14 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
               width: 56,
               height: 56,
               decoration: BoxDecoration(
-                color: (isMaintenance || isInactive)
+                color: label != null
                   ? AppColors.error.withOpacity(0.1) 
                   : AppColors.primary.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Icon(
-                (isMaintenance || isInactive) ? Icons.build_circle_outlined : Icons.directions_bus, 
-                color: (isMaintenance || isInactive) ? AppColors.error : AppColors.primary, 
+                label != null ? Icons.build_circle_outlined : Icons.directions_bus, 
+                color: label != null ? AppColors.error : AppColors.primary, 
                 size: 28
               ),
             ),
@@ -398,7 +463,7 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
                           color: isDisabled ? AppColors.textSecondary : AppColors.textPrimary,
                         ),
                       ),
-                      if (isMaintenance || isInactive) ...[
+                      if (label != null) ...[
                         const SizedBox(width: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -407,7 +472,7 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
-                            isMaintenance ? "MAINTENANCE" : "INACTIVE",
+                            label,
                             style: AppTypography.textTheme.labelSmall?.copyWith(
                               color: AppColors.error,
                               fontWeight: FontWeight.bold,
@@ -425,7 +490,7 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
                 ],
               ),
             ),
-            if (!isDisabled)
+            if (!isDisabled || onTap != null)
               const Icon(Icons.chevron_right, color: AppColors.textTertiary),
           ],
         ),
@@ -443,6 +508,140 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
         _selectedRouteId = bus.assignedRouteId;
       }
     });
+  }
+
+  Widget _buildMaintenanceRouteSelection(String collegeId, UserProfile profile) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+          child: Row(
+            children: [
+              IconButton(
+                onPressed: () => setState(() {
+                  _selectedBusId = null;
+                  _maintenanceBus = null;
+                }),
+                icon: const Icon(Icons.arrow_back),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                "Select Trip Route",
+                style: AppTypography.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+        ),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+          child: Text(
+            "Which route are you driving today?",
+            style: TextStyle(color: AppColors.textSecondary),
+          ),
+        ),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.all(20),
+            children: [
+              // 1. Original Assigned Route
+              if (profile.assignedBusId != null) ...[
+                _buildSectionHeader("Your Assigned Route"),
+                FutureBuilder<Bus>(
+                  future: ref.read(firestoreDataSourceProvider).getBus(collegeId, profile.assignedBusId!).first,
+                  builder: (context, busSnap) {
+                    if (!busSnap.hasData || busSnap.data?.assignedRouteId == null) return const SizedBox.shrink();
+                    return FutureBuilder<BusRoute?>(
+                      future: ref.read(firestoreDataSourceProvider).getRoute(busSnap.data!.assignedRouteId!),
+                      builder: (context, routeSnap) {
+                        if (!routeSnap.hasData || routeSnap.data == null) return const SizedBox.shrink();
+                        return _buildRouteCard(routeSnap.data!);
+                      },
+                    );
+                  },
+                ),
+                const SizedBox(height: 24),
+              ],
+
+              // 2. Maintenance Bus Route
+              if (_maintenanceBus?.assignedRouteId != null && _maintenanceBus?.assignedRouteId != profile.assignedBusId) ...[
+                _buildSectionHeader("Replacement Bus's Route"),
+                FutureBuilder<BusRoute?>(
+                  future: ref.read(firestoreDataSourceProvider).getRoute(_maintenanceBus!.assignedRouteId!),
+                  builder: (context, routeSnap) {
+                    if (!routeSnap.hasData || routeSnap.data == null) return const SizedBox.shrink();
+                    return _buildRouteCard(routeSnap.data!);
+                  },
+                ),
+                const SizedBox(height: 24),
+              ],
+              
+              const Divider(),
+              const SizedBox(height: 16),
+              _buildSectionHeader("Other Routes"),
+              TextButton(
+                onPressed: () => setState(() => _isMaintenanceFlow = false), // Switch back to normal route selection
+                child: const Text("Show All College Routes"),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12.0),
+      child: Text(
+        title.toUpperCase(),
+        style: AppTypography.textTheme.labelMedium?.copyWith(
+          color: AppColors.textTertiary,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 1.2,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRouteCard(BusRoute route) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12.0),
+      child: InkWell(
+        onTap: () => setState(() => _selectedRouteId = route.id),
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.divider.withOpacity(0.5)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.map, color: AppColors.primary),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      route.routeName,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                    Text(
+                      "${route.stops.length} stops",
+                      style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right, color: AppColors.textSecondary),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildRouteSelection(String collegeId) {
@@ -493,34 +692,7 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
                 itemCount: routes.length,
                 itemBuilder: (context, index) {
                   final route = routes[index];
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 12.0),
-                    child: InkWell(
-                      onTap: () => setState(() => _selectedRouteId = route.id),
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: AppColors.surface,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: AppColors.divider.withOpacity(0.5)),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.map, color: AppColors.primary),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Text(
-                                route.routeName,
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                              ),
-                            ),
-                            const Icon(Icons.chevron_right, color: AppColors.textSecondary),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
+                  return _buildRouteCard(route);
                 },
               );
             },
@@ -634,7 +806,12 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
     );
   }
 
-  Widget _buildEmptyState({bool isSearching = false}) {
+  Widget _buildEmptyState({
+    bool isSearching = false,
+    IconData? icon,
+    String? title,
+    String? subtitle,
+  }) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(40.0),
@@ -642,20 +819,20 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              isSearching ? Icons.search_off : Icons.bus_alert_rounded, 
+              icon ?? (isSearching ? Icons.search_off : Icons.bus_alert_rounded), 
               size: 64, 
               color: AppColors.textTertiary.withOpacity(0.5)
             ),
             const SizedBox(height: 16),
             Text(
-              isSearching ? "No buses found" : "No buses assigned to you.",
+              title ?? (isSearching ? "No buses found" : "No buses assigned to you."),
               style: const TextStyle(color: AppColors.textTertiary, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Text(
-              isSearching 
+              subtitle ?? (isSearching 
                 ? "Try searching for a different bus number."
-                : "Please contact your administrator to assign a bus to your profile.",
+                : "Please contact your administrator to assign a bus to your profile."),
               textAlign: TextAlign.center,
               style: TextStyle(color: AppColors.textTertiary.withOpacity(0.7)),
             ),
@@ -668,10 +845,8 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
 
 class _DriverContent extends ConsumerStatefulWidget {
   final String collegeId;
-  final String busId;
-  final String routeId;
-  final String driverId;
-  final String direction;
+  final bool isMaintenance;
+  final String? originalBusId;
   final VoidCallback onBack;
   final VoidCallback onChangeRoute;
 
@@ -683,6 +858,8 @@ class _DriverContent extends ConsumerStatefulWidget {
     required this.direction,
     required this.onBack,
     required this.onChangeRoute,
+    this.isMaintenance = false,
+    this.originalBusId,
   });
 
   @override
@@ -1021,114 +1198,10 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
                 ),
               ],
               const SizedBox(height: 32),
-              if (isTripActive && bus.currentDriverId != null && bus.currentDriverId != widget.driverId)
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppColors.error.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.error.withOpacity(0.3)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.lock, color: AppColors.error),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          "Trip started by another driver. You cannot end this trip.",
-                          style: AppTypography.textTheme.bodyMedium?.copyWith(
-                            color: AppColors.error,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              else
-                TripControlPanel(
-                isTripActive: isTripActive,
-                isLoading: _isLoading,
-                onStartTrip: () async {
-                  setState(() => _isLoading = true);
-                  try {
-                    final profile = ref.read(userProfileProvider).asData?.value;
-                    final tripId = await ref.read(trackingRepositoryProvider).startTrip(
-                      collegeId: widget.collegeId,
-                      busId: widget.busId,
-                      driverId: widget.driverId,
-                      routeId: widget.routeId,
-                      busNumber: bus.busNumber,
-                      driverName: profile?.name,
-                      direction: widget.direction,
-                    );
-                    _startTracking(tripId);
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Trip started successfully!")),
-                      );
-                    }
-                  } catch (e) {
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text("Error starting trip: $e")),
-                      );
-                    }
-                  } finally {
-                    if (mounted) setState(() => _isLoading = false);
-                  }
-                },
-                onEndTrip: () async {
-                  final confirmed = await showDialog<bool>(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      title: const Text("End Trip?"),
-                      content: const Text("Are you sure you want to end this trip and stop tracking?"),
-                      actions: [
-                        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("CANCEL")),
-                        TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("END TRIP")),
-                      ],
-                    ),
-                  );
+              
+              // ─── OWNERSHIP & CONTROL PANEL ────────────────────────────────
+              _buildControlPanel(bus, isTripActive, routeName),
 
-                  if (confirmed != true) return;
-
-                  try {
-                    final String? activeTripId = bus.activeTripId;
-
-                    // 1. Stop location stream immediately (local UI & Background service)
-                    _stopTracking();
-
-                    if (activeTripId != null && activeTripId.isNotEmpty) {
-                      // 2. Start background finalization (unawaited)
-                      unawaited(TripFinalizer.finalizeTrip(
-                        collegeId: widget.collegeId,
-                        busId: widget.busId,
-                        tripId: activeTripId,
-                      ));
-                    }
-                    
-                    _liveTrackBuffer.clear();
-
-                    // 3. Navigate home immediately
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text("Trip ending... Returning home."),
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
-                      widget.onBack();
-                    }
-                  } catch (e) {
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text("Error ending trip: $e")),
-                      );
-                    }
-                  }
-                },
-              ),
               const SizedBox(height: 40),
               Text(
                 "Keep this screen open while driving to ensure location updates are sent.",
@@ -1140,6 +1213,136 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
             ],
           ),
         );
+      },
+    );
+  }
+
+  Widget _buildControlPanel(Bus bus, bool isTripActive, String routeName) {
+    final tripStartedByAnotherDriver = isTripActive && 
+                                       bus.currentDriverId != null && 
+                                       bus.currentDriverId != widget.driverId;
+
+    if (tripStartedByAnotherDriver) {
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: AppColors.error.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AppColors.error.withOpacity(0.2)),
+        ),
+        child: Column(
+          children: [
+            const Icon(Icons.lock_person_rounded, color: AppColors.error, size: 40),
+            const SizedBox(height: 16),
+            Text(
+              "Trip In Progress",
+              style: AppTypography.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: AppColors.error,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "This vehicle is currently being driven by another driver. You cannot start or end trips for this bus right now.",
+              textAlign: TextAlign.center,
+              style: AppTypography.textTheme.bodyMedium?.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 20),
+            PrimaryButton(
+              text: "Return Home",
+              onPressed: widget.onBack,
+              backgroundColor: AppColors.error,
+            ),
+          ],
+        ),
+      );
+    }
+
+    return TripControlPanel(
+      isTripActive: isTripActive,
+      isLoading: _isLoading,
+      onStartTrip: () async {
+        setState(() => _isLoading = true);
+        try {
+          final profile = ref.read(userProfileProvider).asData?.value;
+          final tripId = await ref.read(trackingRepositoryProvider).startTrip(
+            collegeId: widget.collegeId,
+            busId: widget.busId,
+            driverId: widget.driverId,
+            routeId: widget.routeId,
+            busNumber: bus.busNumber,
+            driverName: profile?.name,
+            direction: widget.direction,
+            isMaintenance: widget.isMaintenance,
+            originalBusId: widget.originalBusId,
+          );
+          if (mounted) _startTracking(tripId);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Trip started successfully!")),
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text("Error starting trip: $e")),
+            );
+          }
+        } finally {
+          if (mounted) setState(() => _isLoading = false);
+        }
+      },
+      onEndTrip: () async {
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text("End Trip?"),
+            content: const Text("Are you sure you want to end this trip and stop tracking?"),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("CANCEL")),
+              TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("END TRIP")),
+            ],
+          ),
+        );
+
+        if (confirmed != true) return;
+
+        try {
+          final String? activeTripId = bus.activeTripId;
+
+          // 1. Stop location stream immediately (local UI & Background service)
+          _stopTracking();
+
+          if (activeTripId != null && activeTripId.isNotEmpty) {
+            // 2. Start background finalization (unawaited)
+            unawaited(TripFinalizer.finalizeTrip(
+              collegeId: widget.collegeId,
+              busId: widget.busId,
+              tripId: activeTripId,
+            ));
+          }
+          
+          _liveTrackBuffer.clear();
+
+          // 3. Navigate home immediately
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text("Trip ending... Returning home."),
+                duration: Duration(seconds: 2),
+              ),
+            );
+            widget.onBack();
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text("Error ending trip: $e")),
+            );
+          }
+        }
       },
     );
   }

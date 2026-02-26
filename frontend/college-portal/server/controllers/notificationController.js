@@ -7,47 +7,65 @@ const { admin, db, messaging } = require('../config/firebase');
 /**
  * Send notification to all students assigned to a trip's route
  */
-const sendBusStartedNotification = async (tripId, busId, collegeId, busNumber) => {
+const sendBusStartedNotification = async (tripId, busId, collegeId, busNumber, isMaintenance = false, originalBusId = null) => {
     try {
-        console.log(`[BusStarted] Triggering for bus="${busId}" college="${collegeId}" trip="${tripId}"`);
+        console.log(`[BusStarted] Triggering for bus="${busId}" college="${collegeId}" trip="${tripId}" isMaintenance=${isMaintenance}`);
 
         // 1. Primary Query: Match both collegeId and favoriteBusIds
+        // If maintenance, we query by the ORIGINAL bus that students favorited.
+        const queryBusId = isMaintenance ? originalBusId : busId;
+
+        if (!queryBusId) {
+            console.error('[BusStarted] No busId provided for query');
+            return;
+        }
+
         let studentsSnapshot = await db.collection('students')
             .where('collegeId', '==', collegeId)
-            .where('favoriteBusIds', 'array-contains', busId)
+            .where('favoriteBusIds', 'array-contains', queryBusId)
             .get();
 
-        console.log(`[BusStarted] Query (college="${collegeId}", bus="${busId}") found ${studentsSnapshot.size} students`);
+        console.log(`[BusStarted] Query (college="${collegeId}", bus="${queryBusId}") found ${studentsSnapshot.size} students`);
 
-        // DIAGNOSTIC FALLBACK: If 0 found, try searching by busId only to see if there's a collegeId mismatch
+        // DIAGNOSTIC FALLBACK
         if (studentsSnapshot.empty) {
-            console.log(`[BusStarted] DIAGNOSTIC: Searching for students with bus "${busId}" in ANY college...`);
-            const fallbackSnap = await db.collection('students')
-                .where('favoriteBusIds', 'array-contains', busId)
-                .get();
-            if (!fallbackSnap.empty) {
-                console.log(`[BusStarted] DIAGNOSTIC FOUND: ${fallbackSnap.size} students have this bus, but their collegeId is NOT "${collegeId}".`);
-                fallbackSnap.forEach(d => console.log(` - Student ${d.id} has collegeId: "${d.data().collegeId}"`));
-            } else {
-                console.log(`[BusStarted] DIAGNOSTIC: No students in ANY college have favorited bus "${busId}".`);
-            }
+            console.log(`[BusStarted] No students found for bus "${queryBusId}"`);
             return;
         }
 
         const tokens = [];
+        const studentUpdates = [];
+
         studentsSnapshot.forEach(doc => {
             const data = doc.data();
             const token = data.fcmToken;
             if (token && typeof token === 'string' && token.length > 10) {
                 tokens.push(token);
-                console.log(` - Found student ${doc.id} with token ${token.substring(0, 10)}...`);
-            } else {
-                console.log(` - Student ${doc.id} has NO valid fcmToken.`);
             }
+
+            // 2. SILENT UPDATE: Update student's current active bus so they track the correct vehicle
+            // This is essential for maintenance trips where the busId changed
+            studentUpdates.push({
+                ref: doc.ref,
+                data: {
+                    activeBusId: busId,
+                    activeBusNumber: busNumber,
+                    activeTripId: tripId,
+                    lastBusUpdate: admin.firestore.FieldValue.serverTimestamp()
+                }
+            });
         });
 
+        // Execute student updates in batches
+        if (studentUpdates.length > 0) {
+            console.log(`[BusStarted] Performing silent updates for ${studentUpdates.length} students...`);
+            const updateBatch = db.batch();
+            studentUpdates.forEach(update => updateBatch.update(update.ref, update.data));
+            await updateBatch.commit();
+        }
+
         if (tokens.length === 0) {
-            console.log(`[BusStarted] No valid FCM tokens for bus ${busId} favorites`);
+            console.log(`[BusStarted] No valid FCM tokens for bus ${queryBusId} favorites`);
             return;
         }
 
@@ -57,7 +75,9 @@ const sendBusStartedNotification = async (tripId, busId, collegeId, busNumber) =
             const message = {
                 notification: {
                     title: 'Bus Started 🚌',
-                    body: `Bus ${busNumber || busId} has started its trip. Track it live!`
+                    body: isMaintenance
+                        ? `Replacement Bus ${busNumber} for your route has started. Track it live!`
+                        : `Bus ${busNumber || busId} has started its trip. Track it live!`
                 },
                 data: {
                     tripId: tripId || '',
@@ -87,7 +107,11 @@ const sendBusStartedNotification = async (tripId, busId, collegeId, busNumber) =
         await db.collection('notifications').add({
             type: 'BUS_STARTED',
             busId, tripId, collegeId,
-            message: `Bus ${busNumber} has started its trip`,
+            message: isMaintenance
+                ? `Maintenance Trip: Bus ${busNumber} replaced ${originalBusId} for trip ${tripId}`
+                : `Bus ${busNumber} has started its trip`,
+            isMaintenance: !!isMaintenance,
+            originalBusId: originalBusId || null,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
             read: false,
         });

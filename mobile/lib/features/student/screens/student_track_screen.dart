@@ -145,6 +145,31 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
       return;
     }
 
+    // CHECK FOR REPLACEMENT: If student is tracking their favorite, but backend says another bus is active
+    final profile = ref.read(userProfileProvider).asData?.value;
+    if (profile != null && profile.activeBusId != null && profile.activeBusId != busId) {
+       // Only show if the student has favorited the bus they came here to track
+       if (profile.favoriteBusIds.contains(busId)) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text("Replacement Bus ${profile.activeBusNumber} is running for your route."),
+                  action: SnackBarAction(
+                    label: "TRACK IT",
+                    onPressed: () {
+                      // Redirect to track the replacement bus
+                      context.pushReplacement('/student/track', extra: profile.activeBusId);
+                    },
+                  ),
+                  duration: const Duration(seconds: 10),
+                ),
+              );
+            }
+          });
+       }
+    }
+
     _busSubscription = ref.read(firestoreDataSourceProvider)
         .getBus(collegeId, busId)
         .listen((bus) {

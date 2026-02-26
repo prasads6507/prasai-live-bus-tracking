@@ -447,7 +447,20 @@ class FirestoreDataSource {
     String? busNumber,
     String? driverName,
     String direction = 'pickup',
+    bool isMaintenance = false,
+    String? originalBusId,
   }) async {
+    // 0. GUARDIAN: Ensure driver doesn't have another active trip already
+    final activeTripsSnap = await _firestore.collection('trips')
+        .where('collegeId', '==', collegeId)
+        .where('driverId', '==', driverId)
+        .where('status', '==', 'ACTIVE')
+        .get();
+
+    if (activeTripsSnap.docs.isNotEmpty) {
+      throw Exception("You already have an active trip. Please end it before starting a new one.");
+    }
+
     final batch = _firestore.batch();
     
     // Generate trip ID
@@ -513,6 +526,9 @@ class FirestoreDataSource {
       'direction': direction,
       'status': 'ACTIVE',
       'isActive': true,
+      'isMaintenance': isMaintenance,
+      'originalBusId': originalBusId,
+      'maintenanceBusId': isMaintenance ? busId : null,
       'startedAt': FieldValue.serverTimestamp(),
       'startTime': DateTime.now().toIso8601String(),
       'createdAt': FieldValue.serverTimestamp(),
@@ -524,8 +540,6 @@ class FirestoreDataSource {
     };
 
     // 1. Write to ROOT trips collection ONLY (canonical source for portal & path data)
-    // C-5 FIX: Removed subcollection write — it caused data inconsistency with server-started trips
-    // which only write to the root collection. The subcollection is not queried by any active code.
     final rootTripRef = _firestore.collection('trips').doc(tripId);
     batch.set(rootTripRef, tripData);
 

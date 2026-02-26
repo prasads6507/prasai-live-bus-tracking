@@ -49,6 +49,10 @@ class ApiDataSource {
     required String busId,
     required String tripId,
     String? busNumber,
+    String? driverId,
+    String? routeId,
+    bool isMaintenance = false,
+    String? originalBusId,
   }) async {
     await _dio.post(
       '${Env.apiUrl}/api/driver/trip-started-notify',
@@ -57,6 +61,10 @@ class ApiDataSource {
         'busId': busId,
         'tripId': tripId,
         'busNumber': busNumber,
+        'driverId': driverId,
+        'routeId': routeId,
+        'isMaintenance': isMaintenance,
+        'originalBusId': originalBusId,
       },
     );
   }

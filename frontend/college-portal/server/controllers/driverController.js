@@ -291,10 +291,23 @@ const endTrip = async (req, res) => {
 const startTrip = async (req, res) => {
     try {
         const { busId } = req.params;
-        const { tripId, routeId, direction } = req.body;
+        const { tripId, routeId, direction, isMaintenance, originalBusId } = req.body;
         const tripDirection = direction || 'pickup'; // 'pickup' or 'dropoff'
 
+        // 0. GUARDIAN: Ensure driver doesn't have another active trip already
+        const activeTripsQuery = await db.collection('trips')
+            .where('collegeId', '==', req.collegeId)
+            .where('driverId', '==', req.user.id)
+            .where('status', '==', 'ACTIVE')
+            .get();
 
+        if (!activeTripsQuery.empty) {
+            return res.status(409).json({
+                success: false,
+                message: 'You already have an active trip. Please end it before starting a new one.',
+                activeTripId: activeTripsQuery.docs[0].id
+            });
+        }
 
         // Verify bus exists and belongs to college
         const busRef = db.collection('buses').doc(busId);
@@ -382,6 +395,9 @@ const startTrip = async (req, res) => {
             stopsSnapshot,
             stopProgress,
             eta,
+            isMaintenance: !!isMaintenance,
+            originalBusId: originalBusId || null,
+            maintenanceBusId: isMaintenance ? busId : null,
             path: []
         });
 
