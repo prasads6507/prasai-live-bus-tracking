@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
-import { Bus, Plus, Search, Trash2, Edit2, Wrench, X, AlertCircle, CheckCircle, Settings } from 'lucide-react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Bus, Plus, Search, Trash2, Edit2, Wrench, X, CheckCircle, Settings, Users } from 'lucide-react';
 import { getBuses, createBus, updateBus, deleteBus, validateSlug, getDrivers, getRoutes } from '../services/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import Layout from '../components/Layout';
 
 const Buses = () => {
     const { orgSlug } = useParams<{ orgSlug: string }>();
+    const navigate = useNavigate();
     const [buses, setBuses] = useState<any[]>([]);
     const [drivers, setDrivers] = useState<any[]>([]);
     const [routes, setRoutes] = useState<any[]>([]);
@@ -35,7 +36,6 @@ const Buses = () => {
 
     const initializeAndFetchBuses = async () => {
         try {
-            // Ensure college context is set (important for Super Admin and production)
             if (orgSlug) {
                 const orgData = await validateSlug(orgSlug);
                 localStorage.setItem('current_college_id', orgData.collegeId);
@@ -83,11 +83,9 @@ const Buses = () => {
 
         try {
             if (isEditMode && editingBus) {
-                // Update existing bus
                 await updateBus(editingBus._id, newBus);
                 setSuccessMessage(`Bus ${newBus.busNumber} updated successfully!`);
             } else {
-                // Create new bus
                 await createBus(newBus);
                 setSuccessMessage(`Bus ${newBus.busNumber} created successfully!`);
             }
@@ -95,7 +93,7 @@ const Buses = () => {
             setNewBus({ busNumber: '', plateNumber: '', assignedDriverId: '', assignedRouteId: '' });
             setIsEditMode(false);
             setEditingBus(null);
-            fetchBuses(); // Refresh list
+            fetchBuses();
             setTimeout(() => {
                 setSuccessMessage('');
                 setIsModalOpen(false);
@@ -140,8 +138,7 @@ const Buses = () => {
             console.error('Update Status Error:', err);
             setFormError(err.message || 'Failed to update status');
         }
-    }
-
+    };
 
     const handleAssignSubstitute = async (busId: string, substituteBusId: string) => {
         try {
@@ -155,6 +152,11 @@ const Buses = () => {
             console.error('Assign Substitute Error:', err);
             setFormError(err.message || 'Failed to assign substitute');
         }
+    };
+
+    // ── NEW: Navigate to the bus-students assignment page ──
+    const handleAddStudents = (bus: any) => {
+        navigate(`/${orgSlug}/buses/${bus._id}/students`);
     };
 
     const filteredBuses = buses.filter(bus =>
@@ -181,6 +183,32 @@ const Buses = () => {
                         <h1 className="text-3xl font-bold text-slate-800 mb-2">Buses</h1>
                         <p className="text-slate-500">Manage your fleet of buses</p>
                     </div>
+
+                    {/* Global messages */}
+                    <AnimatePresence>
+                        {successMessage && (
+                            <motion.div
+                                initial={{ opacity: 0, y: -8 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0 }}
+                                className="mb-4 flex items-center gap-2 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl"
+                            >
+                                <CheckCircle size={18} />
+                                {successMessage}
+                            </motion.div>
+                        )}
+                        {formError && (
+                            <motion.div
+                                initial={{ opacity: 0, y: -8 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0 }}
+                                className="mb-4 flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl"
+                            >
+                                <X size={18} />
+                                {formError}
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
 
                     {/* Search & Add Button */}
                     <div className="flex flex-col md:flex-row gap-4 mb-6">
@@ -258,7 +286,20 @@ const Buses = () => {
                                                     </span>
                                                 </td>
                                                 <td className="px-6 py-4">
-                                                    <div className="flex items-center gap-2">
+                                                    <div className="flex items-center gap-2 flex-wrap">
+
+                                                        {/* ── NEW: Add Students Button ── */}
+                                                        <motion.button
+                                                            whileHover={{ scale: 1.05 }}
+                                                            whileTap={{ scale: 0.95 }}
+                                                            onClick={() => handleAddStudents(bus)}
+                                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg text-xs font-semibold transition-colors"
+                                                            title="Assign Students to this Bus"
+                                                        >
+                                                            <Users size={14} />
+                                                            Add Students
+                                                        </motion.button>
+
                                                         <button
                                                             onClick={() => toggleMaintenance(bus)}
                                                             className={`p-2 rounded-lg transition-colors ${bus.status === 'MAINTENANCE'
@@ -270,7 +311,7 @@ const Buses = () => {
                                                             <Wrench size={18} />
                                                         </button>
 
-                                                        {/* Substitute Bus Dropdown (Phase 5.2) */}
+                                                        {/* Substitute Bus Dropdown */}
                                                         {bus.status === 'MAINTENANCE' && (
                                                             <div className="relative group">
                                                                 <select
@@ -309,7 +350,7 @@ const Buses = () => {
                                         ))
                                     ) : (
                                         <tr>
-                                            <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
+                                            <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
                                                 {searchQuery ? 'No buses found matching your search.' : 'No buses added yet. Click "Add New Bus" to get started.'}
                                             </td>
                                         </tr>
@@ -335,50 +376,45 @@ const Buses = () => {
                             initial={{ scale: 0.95, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             exit={{ scale: 0.95, opacity: 0 }}
-                            onClick={(e) => e.stopPropagation()}
-                            className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6"
+                            className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl"
+                            onClick={e => e.stopPropagation()}
                         >
                             <div className="flex items-center justify-between mb-6">
-                                <h2 className="text-2xl font-bold text-slate-800">
-                                    {isEditMode ? 'Edit Bus' : 'New Bus Account'}
+                                <h2 className="text-xl font-bold text-slate-800">
+                                    {isEditMode ? 'Edit Bus' : 'Add New Bus'}
                                 </h2>
-                                <button
-                                    onClick={() => setIsModalOpen(false)}
-                                    className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-                                >
-                                    <X size={20} className="text-slate-500" />
+                                <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                                    <X size={20} />
                                 </button>
                             </div>
 
-                            {formError && (
-                                <div className="mb-4 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 rounded-r flex items-start gap-3">
-                                    <AlertCircle size={20} className="flex-shrink-0 mt-0.5" />
-                                    <span className="text-sm">{formError}</span>
+                            {successMessage && (
+                                <div className="mb-4 flex items-center gap-2 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl text-sm">
+                                    <CheckCircle size={16} />
+                                    {successMessage}
                                 </div>
                             )}
-
-                            {successMessage && (
-                                <div className="mb-4 p-4 bg-green-50 border-l-4 border-green-500 text-green-700 rounded-r flex items-start gap-3">
-                                    <CheckCircle size={20} className="flex-shrink-0 mt-0.5" />
-                                    <span className="text-sm">{successMessage}</span>
+                            {formError && (
+                                <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
+                                    {formError}
                                 </div>
                             )}
 
                             <form onSubmit={handleCreateBus} className="space-y-4">
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-700 mb-2">Bus Number</label>
+                                    <label className="block text-sm font-semibold text-slate-700 mb-2">Bus Number *</label>
                                     <input
                                         type="text"
                                         required
                                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all"
-                                        placeholder="e.g., BUS-001"
+                                        placeholder="e.g., BUS-01"
                                         value={newBus.busNumber}
                                         onChange={(e) => setNewBus({ ...newBus, busNumber: e.target.value })}
                                     />
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-700 mb-2">Plate Number</label>
+                                    <label className="block text-sm font-semibold text-slate-700 mb-2">Plate Number *</label>
                                     <input
                                         type="text"
                                         required

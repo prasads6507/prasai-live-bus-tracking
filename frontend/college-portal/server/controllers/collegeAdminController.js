@@ -1300,6 +1300,127 @@ const getStudentAssignments = async (req, res) => {
     }
 };
 
+// @desc    Get students assigned to a specific bus
+// @route   GET /api/admin/buses/:busId/students
+// @access  Private (College Admin)
+const getBusStudents = async (req, res) => {
+    try {
+        const { busId } = req.params;
+        const collegeId = req.collegeId;
+
+        // Verify the bus belongs to this college
+        const busRef = db.collection('buses').doc(busId);
+        const busDoc = await busRef.get();
+
+        if (!busDoc.exists) {
+            return res.status(404).json({ message: 'Bus not found' });
+        }
+        if (busDoc.data().collegeId !== collegeId) {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+
+        const busData = busDoc.data();
+
+        // Fetch students who have assignedBusId === busId
+        const snapshot = await db.collection('students')
+            .where('collegeId', '==', collegeId)
+            .where('assignedBusId', '==', busId)
+            .get();
+
+        const students = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                _id: doc.id,
+                name: data.name || '',
+                email: data.email || '',
+                phone: data.phone || data.phoneNumber || null,
+                registerNumber: data.registerNumber || null,
+                rollNumber: data.rollNumber || null,
+                assignedBusId: data.assignedBusId || null,
+            };
+        });
+
+        res.json({
+            success: true,
+            data: {
+                busNumber: busData.busNumber,
+                busId,
+                students,
+            }
+        });
+    } catch (error) {
+        console.error('Get bus students error:', error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Assign or unassign students from a specific bus
+// @route   POST /api/admin/buses/:busId/students
+// @access  Private (College Admin)
+//
+// Body: { assignments: [{ studentId: string, action: 'add' | 'remove' }] }
+const assignStudentsToBusRoute = async (req, res) => {
+    try {
+        const { busId } = req.params;
+        const { assignments } = req.body;
+        const collegeId = req.collegeId;
+
+        if (!assignments || !Array.isArray(assignments) || assignments.length === 0) {
+            return res.status(400).json({ message: 'assignments array is required' });
+        }
+
+        // Verify the bus belongs to this college
+        const busRef = db.collection('buses').doc(busId);
+        const busDoc = await busRef.get();
+
+        if (!busDoc.exists) {
+            return res.status(404).json({ message: 'Bus not found' });
+        }
+        if (busDoc.data().collegeId !== collegeId) {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+
+        const batch = db.batch();
+
+        for (const a of assignments) {
+            if (!a.studentId) continue;
+
+            const studentRef = db.collection('students').doc(a.studentId);
+            // Verify student belongs to same college (optional extra safety check)
+            const studentDoc = await studentRef.get();
+            if (!studentDoc.exists || studentDoc.data().collegeId !== collegeId) {
+                continue; // skip students that don't belong to this org
+            }
+
+            if (a.action === 'remove') {
+                batch.update(studentRef, {
+                    assignedBusId: null,
+                    updatedAt: new Date().toISOString(),
+                });
+            } else {
+                // action === 'add' (default)
+                batch.update(studentRef, {
+                    assignedBusId: busId,
+                    updatedAt: new Date().toISOString(),
+                });
+            }
+        }
+
+        await batch.commit();
+
+        const addCount = assignments.filter(a => a.action !== 'remove').length;
+        const removeCount = assignments.filter(a => a.action === 'remove').length;
+
+        res.json({
+            success: true,
+            message: `${addCount} student(s) assigned, ${removeCount} student(s) removed from bus.`
+        });
+    } catch (error) {
+        console.error('Assign students to bus error:', error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
 module.exports = {
     createBus,
     getBuses,
@@ -1327,5 +1448,7 @@ module.exports = {
     deleteCollegeAdmin,
     bulkDeleteTrips,
     assignStudentsToStop,
-    getStudentAssignments
+    getStudentAssignments,
+    getBusStudents,
+    assignStudentsToBusRoute
 };

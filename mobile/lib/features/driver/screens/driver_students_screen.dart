@@ -15,296 +15,305 @@ class DriverStudentsScreen extends ConsumerStatefulWidget {
 }
 
 class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
-  String _searchQuery = "";
+  final TextEditingController _searchController = TextEditingController();
+  bool _isSearchMode = false;
+  String _searchQuery = '';
 
-  Future<void> _showCallDialog(BuildContext context, UserProfile student) async {
-    final phone = student.phone ?? "Not provided";
-    
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.bgSurface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text("Call Student", style: AppTypography.h2),
-        content: Text(
-          "Call ${student.name ?? 'the student'}?\n\nPhone: $phone",
-          style: AppTypography.bodyMd,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text("Cancel", style: TextStyle(color: AppColors.textSecondary)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text("Call", style: TextStyle(color: AppColors.primary)),
-          ),
-        ],
-      ),
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _makePhoneCall(String? phoneNumber) async {
+    if (phoneNumber == null || phoneNumber.isEmpty) return;
+    final Uri launchUri = Uri(
+      scheme: 'tel',
+      path: phoneNumber,
     );
-
-    if (result == true && phone != "Not provided") {
-      final uri = Uri.parse("tel:$phone");
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri);
-      }
+    if (await canLaunchUrl(launchUri)) {
+      await launchUrl(launchUri);
     }
-  }
-
-  void _showDetailsSheet(BuildContext context, UserProfile student) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AppColors.bgSurface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40, height: 4,
-                  decoration: BoxDecoration(
-                    color: AppColors.borderMid,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              Text("Student Details", style: AppTypography.h2),
-              const SizedBox(height: 24),
-              _buildDetailRow(Icons.person_rounded, "Name", student.name ?? "Student"),
-              const SizedBox(height: 16),
-              _buildDetailRow(Icons.phone_rounded, "Phone", student.phone ?? "Not Available"),
-              const SizedBox(height: 16),
-              _buildDetailRow(Icons.email_rounded, "Email", student.email),
-              const SizedBox(height: 16),
-              _buildDetailRow(Icons.directions_bus_rounded, "Assigned Bus", student.assignedBusId ?? "Not Assigned"),
-              const SizedBox(height: 32),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildDetailRow(IconData icon, String label, String value) {
-    return Row(
-      children: [
-        Container(
-          width: 36, height: 36,
-          decoration: BoxDecoration(
-            color: AppColors.primarySoft,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(icon, color: AppColors.primary, size: 18),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: AppTypography.caption),
-              Text(value, style: AppTypography.bodyLg.copyWith(color: AppColors.textPrimary)),
-            ],
-          ),
-        ),
-      ],
-    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final collegeId = ref.watch(selectedCollegeIdProvider);
-    final studentsAsync = ref.watch(studentsProvider(collegeId ?? ""));
+    final userProfile = ref.watch(userProfileProvider).value;
+    final driverBusId = userProfile?.assignedBusId;
+    final collegeId = userProfile?.collegeId ?? '';
+
+    // Fetch all students in the college
+    final studentsAsync = ref.watch(studentsProvider(collegeId));
 
     return AppScaffold(
-      body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Title
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-              child: Text('Students', style: AppTypography.h1),
-            ),
-            const SizedBox(height: 16),
-
-            // Search Bar
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: AppColors.bgCard,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: TextField(
-                  style: AppTypography.bodyLg.copyWith(color: AppColors.textPrimary),
-                  decoration: InputDecoration(
-                    hintText: 'Search by name or email...',
-                    prefixIcon: const Padding(
-                      padding: EdgeInsets.fromLTRB(16, 0, 12, 0),
-                      child: Icon(Icons.search_rounded, color: AppColors.primary, size: 20),
-                    ),
-                    prefixIconConstraints: const BoxConstraints(minWidth: 48, minHeight: 20),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 14),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: AppColors.borderSubtle, width: 1),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: AppColors.borderSubtle, width: 1),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-                    ),
-                  ),
-                  onChanged: (value) => setState(() => _searchQuery = value.toLowerCase()),
+      title: 'Students',
+      body: Column(
+        children: [
+          // Search Header
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Search all students...',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          setState(() {
+                            _searchController.clear();
+                            _searchQuery = '';
+                            _isSearchMode = false;
+                          });
+                        },
+                      )
+                    : null,
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
                 ),
               ),
+              onChanged: (val) {
+                setState(() {
+                  _searchQuery = val.trim();
+                  _isSearchMode = _searchQuery.isNotEmpty;
+                });
+              },
             ),
-            const SizedBox(height: 16),
-            
-            Expanded(
-              child: studentsAsync.when(
-                data: (students) {
-                  if (students.isEmpty) {
-                    return Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.people_outline_rounded, size: 48, color: AppColors.textTertiary),
-                          const SizedBox(height: 12),
-                          Text("No students available", style: AppTypography.bodyMd),
-                        ],
-                      ),
-                    );
-                  }
+          ),
 
-                  final filteredStudents = students.where((s) {
-                    final sName = (s.name ?? "").toLowerCase();
-                    final sEmail = s.email.toLowerCase();
-                    return sName.contains(_searchQuery) || sEmail.contains(_searchQuery);
+          Expanded(
+            child: studentsAsync.when(
+              data: (allStudents) {
+                // Determine which students to show
+                List<UserProfile> displayList;
+
+                if (_isSearchMode) {
+                  // Search all students by name, email, or roll number
+                  final q = _searchQuery.toLowerCase();
+                  displayList = allStudents.where((s) {
+                    final nameMatch = (s.name ?? '').toLowerCase().contains(q);
+                    final emailMatch = (s.email ?? '').toLowerCase().contains(q);
+                    // Using email or name as fallback if rollNumber isn't there
+                    return nameMatch || emailMatch;
                   }).toList();
+                } else {
+                  // Default Mode: Only show students assigned to THIS driver's bus
+                  displayList = allStudents.where((s) => s.assignedBusId == driverBusId).toList();
+                }
 
-                  if (filteredStudents.isEmpty) {
-                    return Center(child: Text("No matching students", style: AppTypography.bodyMd));
-                  }
-
-                  return ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
-                    itemCount: filteredStudents.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
-                    itemBuilder: (context, index) {
-                      final student = filteredStudents[index];
-                      final initials = student.name != null && student.name!.isNotEmpty
-                          ? student.name![0].toUpperCase()
-                          : 'S';
-
-                      return Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: AppColors.bgCard,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: AppColors.borderSubtle),
+                if (displayList.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.people_outline, size: 64, color: Colors.grey[400]),
+                        const SizedBox(height: 16),
+                        Text(
+                          _isSearchMode ? 'No students found matching "$_searchQuery"' : 'No students assigned to your bus',
+                          style: TextStyle(color: Colors.grey[600]),
+                          textAlign: TextAlign.center,
                         ),
-                        child: Row(
+                      ],
+                    ),
+                  );
+                }
+
+                return ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: displayList.length,
+                  itemBuilder: (context, index) {
+                    final student = displayList[index];
+                    final isOnOtherBus = student.assignedBusId != null && student.assignedBusId != driverBusId;
+
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.all(12),
+                        leading: CircleAvatar(
+                          backgroundColor: AppColors.primary.withOpacity(0.1),
+                          child: Text(
+                            (student.name ?? 'S')[0].toUpperCase(),
+                            style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        title: Row(
                           children: [
-                            CircleAvatar(
-                              radius: 22,
-                              backgroundColor: AppColors.primarySoft,
-                              child: Text(initials, style: AppTypography.h3.copyWith(color: AppColors.primary)),
-                            ),
-                            const SizedBox(width: 14),
                             Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(student.name ?? "Student", style: AppTypography.bodyLg.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
-                                  Text(student.email, style: AppTypography.caption),
-                                ],
+                              child: Text(
+                                student.name ?? 'Unknown Student',
+                                style: const TextStyle(fontWeight: FontWeight.bold),
                               ),
                             ),
-                            // Quick actions
-                            GestureDetector(
-                              onTap: () => _showDetailsSheet(context, student),
-                              child: Container(
-                                width: 34, height: 34,
+                            if (isOnOtherBus)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, py: 2),
                                 decoration: BoxDecoration(
-                                  color: AppColors.bgSurface,
+                                  color: Colors.orange[50],
                                   borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.orange[200]!),
                                 ),
-                                child: const Icon(Icons.info_outline_rounded, color: AppColors.textSecondary, size: 16),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            if (student.phone != null)
-                              GestureDetector(
-                                onTap: () => _showCallDialog(context, student),
-                                child: Container(
-                                  width: 34, height: 34,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.primarySoft,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: const Icon(Icons.phone_rounded, color: AppColors.primary, size: 16),
+                                child: const Text(
+                                  'Bus Assigned',
+                                  style: TextStyle(color: Colors.orange, fontSize: 10, fontWeight: FontWeight.bold),
+                                ),
+                              )
+                            else if (student.assignedBusId == driverBusId)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, py: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.green[50],
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.green[200]!),
+                                ),
+                                child: const Text(
+                                  'My Bus',
+                                  style: TextStyle(color: Colors.green, fontSize: 10, fontWeight: FontWeight.bold),
                                 ),
                               ),
                           ],
                         ),
-                      );
-                    },
-                  );
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(student.email),
+                            if (student.phone != null)
+                              Padding(
+                                padding: const EdgeInsets.top(4),
+                                child: Text(
+                                  student.phone!,
+                                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                                ),
+                              ),
+                          ],
+                        ),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.call, color: AppColors.primary),
+                          onPressed: () {
+                             _showCallDialog(student);
+                          },
+                        ),
+                         onTap: () => _showStudentDetails(student),
+                      ),
+                    );
+                  },
+                );
+              },
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (err, stack) => Center(child: Text('Error: $err')),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showCallDialog(UserProfile student) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Call Student'),
+        content: Text('Do you want to call ${student.name}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _makePhoneCall(student.phone);
+            },
+            child: const Text('Call'),
+          ),
+        ],
+      ),
+    );
+  }
+
+    void _showStudentDetails(UserProfile student) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 30,
+                  backgroundColor: AppColors.primary.withOpacity(0.1),
+                  child: Text(
+                    (student.name ?? 'S')[0].toUpperCase(),
+                    style: const TextStyle(color: AppColors.primary, fontSize: 24, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(student.name ?? 'Unknown Student', style: AppTypography.h3),
+                      Text(student.email, style: AppTypography.bodySmall),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            _detailRow(Icons.email, 'Email', student.email),
+            _detailRow(Icons.phone, 'Phone', student.phone ?? 'Not provided'),
+            _detailRow(Icons.bus_alert, 'Assigned Bus ID', student.assignedBusId ?? 'Not Assigned'),
+            const SizedBox(height: 32),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _makePhoneCall(student.phone);
                 },
-                loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
-                error: (err, stack) => _buildErrorState(context, ref, collegeId ?? ""),
+                icon: const Icon(Icons.call),
+                label: const Text('Call Student Directly'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
               ),
             ),
+            const SizedBox(height: 16),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildErrorState(BuildContext context, WidgetRef ref, String collegeId) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.error_outline_rounded, size: 48, color: AppColors.error),
-            const SizedBox(height: 16),
-            Text(
-              "Permission Denied or Connection Error",
-              style: AppTypography.h3.copyWith(color: AppColors.error),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              "Drivers may need additional permissions to view the students list. Please contact your administrator.",
-              style: AppTypography.bodyMd.copyWith(color: AppColors.textSecondary),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: () => ref.refresh(studentsProvider(collegeId)),
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text("Retry Connection"),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
-          ],
-        ),
+  Widget _detailRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: Colors.grey[400]),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+              Text(value, style: const TextStyle(fontWeight: FontWeight.w500)),
+            ],
+          ),
+        ],
       ),
     );
   }

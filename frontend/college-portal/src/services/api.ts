@@ -372,4 +372,20 @@ export const uploadTripHistory = async (tripId: string, data: {
     return response.data;
 };
 
+// Get students assigned to a specific bus
+export const getBusStudents = async (busId: string) => {
+    const response = await api.get(`/admin/buses/${busId}/students`);
+    return response.data;
+};
+
+// Assign or remove students from a specific bus
+// assignments: [{ studentId: string, action: 'add' | 'remove' }]
+export const assignStudentsToBus = async (
+    busId: string,
+    assignments: { studentId: string; action: 'add' | 'remove' }[]
+) => {
+    const response = await api.post(`/admin/buses/${busId}/students`, { assignments });
+    return response.data;
+};
+
 export default api;

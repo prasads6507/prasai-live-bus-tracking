@@ -6,7 +6,8 @@ const {
     createUser, getUsersByRole, updateUser, deleteUser, createBulkUsers,
     assignDriver, getAssignments, getTripHistory, updateTrip, deleteTrip, bulkDeleteTrips, adminEndTrip, getTripPath,
     getCollegeAdmins, createCollegeAdmin, updateCollegeAdmin, deleteCollegeAdmin,
-    assignStudentsToStop, getStudentAssignments
+    assignStudentsToStop, getStudentAssignments,
+    getBusStudents, assignStudentsToBusRoute
 } = require('../controllers/collegeAdminController');
 const {
     uploadRoutesFile,
@@ -28,6 +29,10 @@ router.route('/buses')
 router.route('/buses/:busId')
     .put(updateBus)
     .delete(deleteBus);
+
+router.route('/buses/:busId/students')
+    .get(getBusStudents)
+    .post(assignStudentsToBusRoute);
 
 router.route('/routes')
     .post(createRoute)

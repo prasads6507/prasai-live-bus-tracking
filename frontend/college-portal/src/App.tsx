@@ -10,6 +10,7 @@ import Students from './pages/Students';
 import StudentLogin from './pages/StudentLogin';
 import StudentDashboard from './pages/StudentDashboard';
 import Buses from './pages/Buses';
+import BusStudents from './pages/BusStudents';
 import RoutesPage from './pages/Routes';
 import Settings from './pages/Settings';
 import TripHistory from './pages/TripHistory';
@@ -38,6 +39,7 @@ function App() {
         <Route path="/:orgSlug/drivers" element={<ProtectedRoute><Drivers /></ProtectedRoute>} />
         <Route path="/:orgSlug/students" element={<ProtectedRoute><Students /></ProtectedRoute>} />
         <Route path="/:orgSlug/buses" element={<ProtectedRoute><Buses /></ProtectedRoute>} />
+        <Route path="/:orgSlug/buses/:busId/students" element={<ProtectedRoute><BusStudents /></ProtectedRoute>} />
         <Route path="/:orgSlug/routes" element={<ProtectedRoute><RoutesPage /></ProtectedRoute>} />
         <Route path="/:orgSlug/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
         <Route path="/:orgSlug/trip-history" element={<ProtectedRoute><TripHistory /></ProtectedRoute>} />
