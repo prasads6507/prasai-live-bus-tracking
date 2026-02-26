@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../../../core/theme/colors.dart';
-import '../../../core/theme/typography.dart';
-import '../../../core/widgets/app_scaffold.dart';
-import '../../../data/providers.dart';
-import '../../../data/models/user_profile.dart';
+import 'package:mobile/core/theme/colors.dart';
+import 'package:mobile/core/theme/typography.dart';
+import 'package:mobile/core/widgets/app_scaffold.dart';
+import 'package:mobile/data/providers.dart';
+import 'package:mobile/data/models/user_profile.dart';
 
 class DriverStudentsScreen extends ConsumerStatefulWidget {
   const DriverStudentsScreen({super.key});
@@ -187,7 +187,7 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
                             Text(student.email),
                             if (student.phone != null)
                               Padding(
-                                padding: const EdgeInsets.top(4),
+                                padding: const EdgeInsets.only(top: 4),
                                 child: Text(
                                   student.phone!,
                                   style: TextStyle(color: Colors.grey[600], fontSize: 12),
