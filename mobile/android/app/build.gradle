@@ -13,8 +13,8 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "com.bannu.mobile.mobile"
-    compileSdk = 36
-    ndkVersion = "28.1.13356709"
+    compileSdk = 34
+    // ndkVersion = "28.1.13356709"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
