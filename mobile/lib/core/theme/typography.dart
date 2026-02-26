@@ -6,7 +6,7 @@ class AppTypography {
   // DISPLAY — Hero numbers (ETA, speed, distances)
   static TextStyle display = GoogleFonts.sora(
     fontSize: 48, fontWeight: FontWeight.w800,
-    color: AppColors.textPrimary, letterSpacing: -2.0,
+    color: AppColors.textPrimary, letterSpacing: -1.0,
   );
 
   // HEADLINE 1 — Screen titles
@@ -17,7 +17,7 @@ class AppTypography {
 
   // HEADLINE 2 — Section headers, card titles
   static TextStyle h2 = GoogleFonts.sora(
-    fontSize: 20, fontWeight: FontWeight.w600,
+    fontSize: 20, fontWeight: FontWeight.w700,
     color: AppColors.textPrimary, letterSpacing: -0.4,
   );
 
@@ -29,7 +29,7 @@ class AppTypography {
 
   // BODY LARGE — Primary body text
   static TextStyle bodyLg = GoogleFonts.dmSans(
-    fontSize: 16, fontWeight: FontWeight.w400,
+    fontSize: 16, fontWeight: FontWeight.w500,
     color: AppColors.textPrimary, height: 1.6,
   );
 
@@ -41,8 +41,8 @@ class AppTypography {
 
   // LABEL — Tags, chips, badges
   static TextStyle label = GoogleFonts.sora(
-    fontSize: 12, fontWeight: FontWeight.w600,
-    color: AppColors.textSecondary, letterSpacing: 0.4,
+    fontSize: 12, fontWeight: FontWeight.w700,
+    color: AppColors.textSecondary, letterSpacing: 0.8,
   );
 
   // CAPTION — Timestamps, meta info

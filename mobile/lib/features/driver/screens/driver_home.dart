@@ -265,12 +265,12 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
                               }
                             });
                           },
-                          borderRadius: BorderRadius.circular(24),
+                          borderRadius: BorderRadius.circular(16),
                           child: Container(
                             padding: const EdgeInsets.all(20),
                             decoration: BoxDecoration(
                               color: isMaintenance ? AppColors.surface.withOpacity(0.5) : AppColors.surface,
-                              borderRadius: BorderRadius.circular(24),
+                              borderRadius: BorderRadius.circular(16),
                               border: Border.all(
                                 color: isMaintenance 
                                   ? AppColors.error.withOpacity(0.3) 
@@ -471,7 +471,7 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
               children: [
                 InkWell(
                   onTap: () => setState(() => _selectedDirection = 'pickup'),
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(16),
                   child: Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
@@ -479,7 +479,7 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
                       gradient: const LinearGradient(
                         colors: [Color(0xFF2196F3), Color(0xFF1976D2)],
                       ),
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(color: Colors.blue.withOpacity(0.3), blurRadius: 16, offset: const Offset(0, 8)),
                       ],
@@ -503,7 +503,7 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
                 const SizedBox(height: 24),
                 InkWell(
                   onTap: () => setState(() => _selectedDirection = 'dropoff'),
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(16),
                   child: Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
@@ -511,7 +511,7 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
                       gradient: const LinearGradient(
                         colors: [Color(0xFFFF9800), Color(0xFFE65100)],
                       ),
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(color: Colors.orange.withOpacity(0.3), blurRadius: 16, offset: const Offset(0, 8)),
                       ],

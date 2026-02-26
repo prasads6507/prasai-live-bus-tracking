@@ -32,7 +32,7 @@ class DriverStatusCard extends StatelessWidget {
                 end: Alignment.bottomRight,
               )
             : null,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(16),
         border: isTracking ? null : Border.all(color: AppColors.borderSubtle),
         boxShadow: [
           if (isTracking)

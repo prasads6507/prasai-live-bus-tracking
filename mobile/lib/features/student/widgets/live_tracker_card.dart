@@ -32,7 +32,7 @@ class LiveTrackerCard extends StatelessWidget {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isLive ? AppColors.live.withOpacity(0.4) : AppColors.borderSubtle,
           ),

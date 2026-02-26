@@ -77,34 +77,6 @@ class _CollegeSelectionScreenState extends ConsumerState<CollegeSelectionScreen>
     return AppScaffold(
       body: SafeArea(
         child: Stack(
-          children: [
-            // Radial accent glow
-            Positioned(
-              top: -100,
-              left: -100,
-              child: Container(
-                width: 400,
-                height: 400,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      AppColors.primary.withOpacity(0.08),
-                      Colors.transparent,
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-            // Decorative animated route line
-            Positioned(
-              top: 30,
-              left: 20,
-              right: 20,
-              child: _AnimatedRouteLine(),
-            ),
-
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24.0),
               child: Column(
@@ -340,72 +312,3 @@ class _CollegeSelectionScreenState extends ConsumerState<CollegeSelectionScreen>
   }
 }
 
-/// Decorative animated dashed route line
-class _AnimatedRouteLine extends StatefulWidget {
-  @override
-  State<_AnimatedRouteLine> createState() => _AnimatedRouteLineState();
-}
-
-class _AnimatedRouteLineState extends State<_AnimatedRouteLine>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 3),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        return CustomPaint(
-          size: const Size(double.infinity, 4),
-          painter: _DashPainter(progress: _controller.value),
-        );
-      },
-    );
-  }
-}
-
-class _DashPainter extends CustomPainter {
-  final double progress;
-  _DashPainter({required this.progress});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = AppColors.live.withOpacity(0.4)
-      ..strokeWidth = 2
-      ..strokeCap = StrokeCap.round;
-
-    const dashWidth = 8.0;
-    const dashGap = 6.0;
-    final totalDash = dashWidth + dashGap;
-    final offset = progress * totalDash;
-
-    double x = -offset;
-    while (x < size.width) {
-      final start = x.clamp(0.0, size.width);
-      final end = (x + dashWidth).clamp(0.0, size.width);
-      if (end > start) {
-        canvas.drawLine(Offset(start, 2), Offset(end, 2), paint);
-      }
-      x += totalDash;
-    }
-  }
-
-  @override
-  bool shouldRepaint(_DashPainter oldDelegate) => oldDelegate.progress != progress;
-}

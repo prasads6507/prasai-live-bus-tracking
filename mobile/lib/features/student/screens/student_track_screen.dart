@@ -555,7 +555,7 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       decoration: BoxDecoration(
                         color: AppColors.background.withValues(alpha: 0.95),
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(16),
                         border: Border.all(color: AppColors.divider.withValues(alpha: 0.5), width: 1.0),
                         boxShadow: [
                           BoxShadow(color: Colors.black12, blurRadius: 10, spreadRadius: 1)
@@ -658,7 +658,7 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
               return Container(
                 decoration: BoxDecoration(
                   color: AppColors.background,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
                   boxShadow: [
                     BoxShadow(color: Colors.black26, blurRadius: 10, spreadRadius: 0, offset: Offset(0, -5))
                   ],

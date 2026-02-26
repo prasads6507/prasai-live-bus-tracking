@@ -20,24 +20,20 @@ class GlassCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            padding: padding,
-            decoration: BoxDecoration(
-              color: AppColors.bgGlass,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: AppColors.borderSubtle,
-                width: 1,
-              ),
-              boxShadow: isGlowing ? [AppShadows.primaryGlow] : [],
-            ),
-            child: child,
+      child: Container(
+        padding: padding,
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: AppColors.divider,
+            width: 1,
           ),
+          boxShadow: [
+            if (isGlowing) AppShadows.primaryGlow else AppShadows.cardShadow,
+          ],
         ),
+        child: child,
       ),
     );
   }

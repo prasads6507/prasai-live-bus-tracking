@@ -27,10 +27,22 @@ String? roleRedirect(
   AsyncValue<User?> authState,
   AsyncValue<UserProfile?> profileState,
   Map<String, dynamic>? selectedCollege,
+  bool hasSeenOnboarding,
 ) {
   final isLoggedIn = authState.value != null;
   final isLoggingIn = state.uri.path == '/login';
   final isSelectingCollege = state.uri.path == '/college-selection';
+  final isOnboarding = state.uri.path == '/onboarding';
+
+  if (!hasSeenOnboarding) {
+    if (!isOnboarding) return '/onboarding';
+    return null;
+  }
+
+  // If already seen onboarding, don't let them go back
+  if (isOnboarding) {
+    return '/college-selection';
+  }
 
   if (!isLoggedIn) {
     // If no college selected, ALWAYS go to selection
@@ -40,8 +52,6 @@ String? roleRedirect(
     }
     
     // College is selected, but not logged in.
-    // If we are on selection page, but already have a college, stay there unless they manually clicked change?
-    // Actually, if selectedCollege exists, the initial destination should be login.
     if (!isLoggingIn && !isSelectingCollege) {
       return '/login';
     }

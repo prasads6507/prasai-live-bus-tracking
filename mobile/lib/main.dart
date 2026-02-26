@@ -169,9 +169,9 @@ class _MyAppState extends ConsumerState<MyApp> {
 
     return MaterialApp.router(
       title: 'PRASAI',
-      theme: AppTheme.darkTheme, 
+      theme: AppTheme.lightTheme, 
       darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.dark,
+      themeMode: ThemeMode.light,
       routerConfig: router,
       debugShowCheckedModeBanner: false,
     );

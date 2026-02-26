@@ -35,7 +35,7 @@ class PrimaryButton extends StatelessWidget {
               ? AppColors.textInverse
               : AppColors.textTertiary,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(16),
           ),
           elevation: 0,
         ),

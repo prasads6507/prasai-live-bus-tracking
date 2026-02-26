@@ -14,6 +14,7 @@ import '../driver/screens/driver_home.dart';
 import '../driver/screens/driver_profile_screen.dart';
 import '../driver/screens/driver_students_screen.dart';
 import '../admin/screens/admin_dashboard.dart';
+import '../onboarding/screens/onboarding_screen.dart';
 import 'role_router.dart';
 import 'student_shell.dart';
 import 'driver_shell.dart';
@@ -28,7 +29,7 @@ final routerProvider = Provider<GoRouter>((ref) {
   ref.listen<AsyncValue<dynamic>>(userProfileProvider, (_, __) => listenable.notifyListeners());
 
   return GoRouter(
-    initialLocation: '/college-selection',
+    initialLocation: ref.read(sharedPreferencesProvider).getBool('has_seen_onboarding') == true ? '/college-selection' : '/onboarding',
     refreshListenable: listenable,
     redirect: (context, state) {
       // Use ref.read to get the current state without creating a dependency 
@@ -36,6 +37,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       final authState = ref.read(authStateProvider);
       final profileState = ref.read(userProfileProvider);
       final selectedCollege = ref.read(selectedCollegeProvider);
+      final prefs = ref.read(sharedPreferencesProvider);
+      final hasSeenOnboarding = prefs.getBool('has_seen_onboarding') ?? false;
 
       return roleRedirect(
         context,
@@ -43,9 +46,14 @@ final routerProvider = Provider<GoRouter>((ref) {
         authState,
         profileState,
         selectedCollege,
+        hasSeenOnboarding,
       );
     },
     routes: [
+      GoRoute(
+        path: '/onboarding',
+        builder: (context, state) => const OnboardingScreen(),
+      ),
       GoRoute(
         path: '/college-selection',
         builder: (context, state) => const CollegeSelectionScreen(),

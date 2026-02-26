@@ -195,78 +195,87 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       onDismiss: () => setState(() => _errorMessage = null),
                     ),
 
-                  // Form
-                  Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Email field
-                        Text('Email', style: AppTypography.label.copyWith(color: AppColors.textSecondary)),
-                        const SizedBox(height: 8),
-                        _GlowField(
-                          isFocused: _emailFocused,
-                          child: TextFormField(
-                            controller: _emailController,
-                            focusNode: _emailFocus,
-                            keyboardType: TextInputType.emailAddress,
-                            style: AppTypography.bodyLg.copyWith(color: AppColors.textPrimary),
-                            decoration: InputDecoration(
-                              prefixIcon: const Icon(Icons.mail_outline_rounded, color: AppColors.textSecondary, size: 20),
-                              hintText: 'Enter your email',
-                              border: InputBorder.none,
-                              enabledBorder: InputBorder.none,
-                              focusedBorder: InputBorder.none,
-                              contentPadding: const EdgeInsets.symmetric(vertical: 16),
-                            ),
-                            validator: (value) =>
-                                (value == null || value.isEmpty) ? 'Please enter your email' : null,
-                          ),
-                        ),
-
-                        const SizedBox(height: 20),
-
-                        // Password field
-                        Text('Password', style: AppTypography.label.copyWith(color: AppColors.textSecondary)),
-                        const SizedBox(height: 8),
-                        _GlowField(
-                          isFocused: _passwordFocused,
-                          child: TextFormField(
-                            controller: _passwordController,
-                            focusNode: _passwordFocus,
-                            obscureText: !_isPasswordVisible,
-                            style: AppTypography.bodyLg.copyWith(color: AppColors.textPrimary),
-                            decoration: InputDecoration(
-                              prefixIcon: const Icon(Icons.lock_outline_rounded, color: AppColors.textSecondary, size: 20),
-                              suffixIcon: IconButton(
-                                icon: Icon(
-                                  _isPasswordVisible ? Icons.visibility_rounded : Icons.visibility_off_rounded,
-                                  color: AppColors.textTertiary,
-                                  size: 20,
-                                ),
-                                onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
+                  // Form Card
+                  Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: AppColors.borderSubtle),
+                      boxShadow: [AppShadows.cardShadow],
+                    ),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Email field
+                          Text('Email', style: AppTypography.label.copyWith(color: AppColors.textSecondary)),
+                          const SizedBox(height: 8),
+                          _GlowField(
+                            isFocused: _emailFocused,
+                            child: TextFormField(
+                              controller: _emailController,
+                              focusNode: _emailFocus,
+                              keyboardType: TextInputType.emailAddress,
+                              style: AppTypography.bodyLg.copyWith(color: AppColors.textPrimary),
+                              decoration: InputDecoration(
+                                prefixIcon: const Icon(Icons.mail_outline_rounded, color: AppColors.textSecondary, size: 20),
+                                hintText: 'Enter your email',
+                                border: InputBorder.none,
+                                enabledBorder: InputBorder.none,
+                                focusedBorder: InputBorder.none,
+                                contentPadding: const EdgeInsets.symmetric(vertical: 16),
                               ),
-                              hintText: 'Enter your password',
-                              border: InputBorder.none,
-                              enabledBorder: InputBorder.none,
-                              focusedBorder: InputBorder.none,
-                              contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                              validator: (value) =>
+                                  (value == null || value.isEmpty) ? 'Please enter your email' : null,
                             ),
-                            validator: (value) =>
-                                (value == null || value.isEmpty) ? 'Please enter your password' : null,
                           ),
-                        ),
 
-                        const SizedBox(height: 36),
+                          const SizedBox(height: 20),
 
-                        // Sign In Button
-                        PrimaryButton(
-                          text: 'Sign In',
-                          trailingIcon: Icons.arrow_forward_rounded,
-                          onPressed: _submit,
-                          isLoading: state.isLoading,
-                        ),
-                      ],
+                          // Password field
+                          Text('Password', style: AppTypography.label.copyWith(color: AppColors.textSecondary)),
+                          const SizedBox(height: 8),
+                          _GlowField(
+                            isFocused: _passwordFocused,
+                            child: TextFormField(
+                              controller: _passwordController,
+                              focusNode: _passwordFocus,
+                              obscureText: !_isPasswordVisible,
+                              style: AppTypography.bodyLg.copyWith(color: AppColors.textPrimary),
+                              decoration: InputDecoration(
+                                prefixIcon: const Icon(Icons.lock_outline_rounded, color: AppColors.textSecondary, size: 20),
+                                suffixIcon: IconButton(
+                                  icon: Icon(
+                                    _isPasswordVisible ? Icons.visibility_rounded : Icons.visibility_off_rounded,
+                                    color: AppColors.textTertiary,
+                                    size: 20,
+                                  ),
+                                  onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
+                                ),
+                                hintText: 'Enter your password',
+                                border: InputBorder.none,
+                                enabledBorder: InputBorder.none,
+                                focusedBorder: InputBorder.none,
+                                contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                              ),
+                              validator: (value) =>
+                                  (value == null || value.isEmpty) ? 'Please enter your password' : null,
+                            ),
+                          ),
+
+                          const SizedBox(height: 36),
+
+                          // Sign In Button
+                          PrimaryButton(
+                            text: 'Sign In',
+                            trailingIcon: Icons.arrow_forward_rounded,
+                            onPressed: _submit,
+                            isLoading: state.isLoading,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
 
@@ -301,7 +310,7 @@ class _GlowField extends StatelessWidget {
       duration: const Duration(milliseconds: 200),
       decoration: BoxDecoration(
         color: AppColors.bgCard,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isFocused ? AppColors.primary : AppColors.borderSubtle,
           width: isFocused ? 1.5 : 1,
