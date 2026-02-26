@@ -41,6 +41,7 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
   String? _selectedRouteId;
   String? _selectedDirection;
   String _searchQuery = "";
+  bool _isManuallySelecting = false;
   final TextEditingController _searchController = TextEditingController();
 
   @override
@@ -166,7 +167,84 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
   }
 
   Widget _buildBusSelection(String collegeId, String driverId) {
-    // Show ALL buses in the college
+    final profile = ref.read(userProfileProvider).value;
+    final assignedBusId = profile?.assignedBusId;
+
+    // SCENARIO 1: Driver has an assigned bus and hasn't opted to switch
+    if (assignedBusId != null && !_isManuallySelecting) {
+      return StreamBuilder<Bus>(
+        stream: ref.watch(firestoreDataSourceProvider).getBus(collegeId, assignedBusId),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final bus = snapshot.data;
+          if (bus == null) {
+            // Fallback: Assigned bus not found in DB
+            return _buildFullBusList(collegeId, driverId, showBackButton: false);
+          }
+
+          final isMaintenance = bus.status == 'MAINTENANCE';
+          final isInactive = bus.status == 'INACTIVE';
+
+          return Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Assigned Vehicle",
+                  style: AppTypography.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  isMaintenance 
+                    ? "Your assigned bus is currently in maintenance."
+                    : (isInactive 
+                        ? "Your assigned bus is currently inactive. Please contact admin."
+                        : "Ready to start your trip with your assigned bus."),
+                  style: AppTypography.textTheme.bodyMedium?.copyWith(
+                    color: AppColors.textTertiary,
+                  ),
+                ),
+                const SizedBox(height: 32),
+                
+                // Assigned Bus Card
+                _buildBusCard(bus, isMaintenance || isInactive),
+
+                const Spacer(),
+
+                if (isMaintenance) ...[
+                  PrimaryButton(
+                    text: "Select Alternative Bus",
+                    onPressed: () => setState(() => _isManuallySelecting = true),
+                    backgroundColor: AppColors.surface,
+                    textColor: AppColors.primary,
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
+                PrimaryButton(
+                  text: isMaintenance || isInactive ? "Vehicle Not Available" : "Start Trip with ${bus.busNumber}",
+                  onPressed: isMaintenance || isInactive 
+                    ? null 
+                    : () => _handleBusSelection(bus),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    }
+
+    // SCENARIO 2: No assignment OR manually selecting alternative
+    return _buildFullBusList(collegeId, driverId, showBackButton: assignedBusId != null);
+  }
+
+  Widget _buildFullBusList(String collegeId, String driverId, {required bool showBackButton}) {
     final busesStream = ref.watch(firestoreDataSourceProvider).getBuses(collegeId);
 
     return Column(
@@ -176,8 +254,20 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (showBackButton)
+                TextButton.icon(
+                  onPressed: () => setState(() => _isManuallySelecting = false),
+                  icon: const Icon(Icons.arrow_back, size: 18),
+                  label: const Text("Back to Assigned Bus"),
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                ),
+              if (showBackButton) const SizedBox(height: 16),
               Text(
-                "Select Your Bus",
+                "Select Any Bus",
                 style: AppTypography.textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.w900,
                   color: AppColors.textPrimary,
@@ -185,7 +275,7 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                "Your assigned bus is at the top. You can also search for others.",
+                "Choose an alternative vehicle from the list below.",
                 style: AppTypography.textTheme.bodyMedium?.copyWith(
                   color: AppColors.textTertiary,
                 ),
@@ -223,16 +313,7 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
               var buses = snapshot.data ?? [];
               final queryText = _searchQuery.trim().toLowerCase();
 
-              // 1. Sort: Assigned bus first, then by bus number
-              buses.sort((a, b) {
-                final aAssigned = a.driverId == driverId;
-                final bAssigned = b.driverId == driverId;
-                if (aAssigned && !bAssigned) return -1;
-                if (!aAssigned && bAssigned) return 1;
-                return a.busNumber.compareTo(b.busNumber);
-              });
-
-              // 2. Filter locally
+              // 1. Filter locally
               if (queryText.isNotEmpty) {
                 buses = buses.where((bus) => 
                   bus.busNumber.toLowerCase().contains(queryText) || 
@@ -245,111 +326,121 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
               }
 
               return ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                    itemCount: buses.length,
-                    itemBuilder: (context, index) {
-                      final bus = buses[index];
-                      final isMaintenance = bus.status == 'MAINTENANCE';
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                itemCount: buses.length,
+                itemBuilder: (context, index) {
+                  final bus = buses[index];
+                  final isMaintenance = bus.status == 'MAINTENANCE';
+                  final isInactive = bus.status == 'INACTIVE';
 
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 16.0),
-                        child: InkWell(
-                          onTap: isMaintenance ? null : () {
-                            setState(() {
-                              _selectedBusId = bus.id;
-                              if (bus.activeTripId != null || bus.status == 'ON_ROUTE') {
-                                _selectedRouteId = bus.assignedRouteId ?? 'unknown';
-                                _selectedDirection = 'active';
-                              } else {
-                                _selectedRouteId = bus.assignedRouteId;
-                              }
-                            });
-                          },
-                          borderRadius: BorderRadius.circular(16),
-                          child: Container(
-                            padding: const EdgeInsets.all(20),
-                            decoration: BoxDecoration(
-                              color: isMaintenance ? AppColors.surface.withOpacity(0.5) : AppColors.surface,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: isMaintenance 
-                                  ? AppColors.error.withOpacity(0.3) 
-                                  : AppColors.divider.withOpacity(0.5)
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 56,
-                                  height: 56,
-                                  decoration: BoxDecoration(
-                                    color: isMaintenance 
-                                      ? AppColors.error.withOpacity(0.1) 
-                                      : AppColors.primary.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  child: Icon(
-                                    isMaintenance ? Icons.build_circle_outlined : Icons.directions_bus, 
-                                    color: isMaintenance ? AppColors.error : AppColors.primary, 
-                                    size: 28
-                                  ),
-                                ),
-                                const SizedBox(width: 20),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Text(
-                                            bus.busNumber,
-                                            style: AppTypography.textTheme.titleLarge?.copyWith(
-                                              fontWeight: FontWeight.bold,
-                                              color: isMaintenance ? AppColors.textSecondary : AppColors.textPrimary,
-                                            ),
-                                          ),
-                                          if (isMaintenance) ...[
-                                            const SizedBox(width: 8),
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                              decoration: BoxDecoration(
-                                                color: AppColors.error.withOpacity(0.1),
-                                                borderRadius: BorderRadius.circular(8),
-                                              ),
-                                              child: Text(
-                                                "MAINTENANCE",
-                                                style: AppTypography.textTheme.labelSmall?.copyWith(
-                                                  color: AppColors.error,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ],
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        bus.plateNumber,
-                                        style: AppTypography.textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                if (!isMaintenance)
-                                  const Icon(Icons.chevron_right, color: AppColors.textTertiary),
-                              ],
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 16.0),
+                    child: _buildBusCard(bus, isMaintenance || isInactive),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBusCard(Bus bus, bool isDisabled) {
+    final isMaintenance = bus.status == 'MAINTENANCE';
+    final isInactive = bus.status == 'INACTIVE';
+
+    return InkWell(
+      onTap: isDisabled ? null : () => _handleBusSelection(bus),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: isDisabled ? AppColors.surface.withOpacity(0.5) : AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: (isMaintenance || isInactive)
+              ? AppColors.error.withOpacity(0.3) 
+              : AppColors.divider.withOpacity(0.5)
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: (isMaintenance || isInactive)
+                  ? AppColors.error.withOpacity(0.1) 
+                  : AppColors.primary.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(
+                (isMaintenance || isInactive) ? Icons.build_circle_outlined : Icons.directions_bus, 
+                color: (isMaintenance || isInactive) ? AppColors.error : AppColors.primary, 
+                size: 28
+              ),
+            ),
+            const SizedBox(width: 20),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        bus.busNumber,
+                        style: AppTypography.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: isDisabled ? AppColors.textSecondary : AppColors.textPrimary,
+                        ),
+                      ),
+                      if (isMaintenance || isInactive) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.error.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            isMaintenance ? "MAINTENANCE" : "INACTIVE",
+                            style: AppTypography.textTheme.labelSmall?.copyWith(
+                              color: AppColors.error,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
                         ),
-                      );
-                    },
-                  );
-                },
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    bus.plateNumber,
+                    style: AppTypography.textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
+                  ),
+                ],
               ),
             ),
+            if (!isDisabled)
+              const Icon(Icons.chevron_right, color: AppColors.textTertiary),
           ],
-        );
+        ),
+      ),
+    );
+  }
+
+  void _handleBusSelection(Bus bus) {
+    setState(() {
+      _selectedBusId = bus.id;
+      if (bus.activeTripId != null || bus.status == 'ON_ROUTE') {
+        _selectedRouteId = bus.assignedRouteId ?? 'unknown';
+        _selectedDirection = 'active';
+      } else {
+        _selectedRouteId = bus.assignedRouteId;
       }
+    });
+  }
 
   Widget _buildRouteSelection(String collegeId) {
     return Column(
