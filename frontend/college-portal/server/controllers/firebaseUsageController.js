@@ -1,33 +1,76 @@
 const { google } = require('googleapis');
 const { BigQuery } = require('@google-cloud/bigquery');
-const { db } = require('../config/firebase');
 
-// Constants for Firestore metrics
-const METRIC_READS = 'firestore.googleapis.com/document/read_count';
-const METRIC_WRITES = 'firestore.googleapis.com/document/write_count';
-const METRIC_DELETES = 'firestore.googleapis.com/document/delete_count';
+// Lazy-loaded clients to prevent failure at import time
+let monitoringClient = null;
+let bqClient = null;
 
 /**
- * Gets authentication client for Google Cloud Monitoring
+ * Gets credentials for Google Cloud APIs.
+ * Prioritizes dedicated SA JSON, then falls back to individual env vars, then Firebase Admin vars.
+ */
+const getCredentials = () => {
+    // 1. Try dedicated JSON blob (recommended by user)
+    if (process.env.MONITORING_SA_JSON) {
+        try {
+            return JSON.parse(process.env.MONITORING_SA_JSON);
+        } catch (e) {
+            console.error('[Usage] Failed to parse MONITORING_SA_JSON');
+        }
+    }
+
+    // 2. Fallback to individuual Firebase Admin vars (current behavior)
+    if (process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
+        return {
+            client_email: process.env.FIREBASE_CLIENT_EMAIL,
+            private_key: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+        };
+    }
+
+    return null;
+};
+
+/**
+ * Lazy initializer for Monitoring Client
  */
 const getMonitoringClient = async () => {
+    if (monitoringClient) return monitoringClient;
+
+    const credentials = getCredentials();
+    if (!credentials) throw new Error('Missing Google Cloud credentials');
+
     const auth = new google.auth.GoogleAuth({
-        credentials: {
-            client_email: process.env.FIREBASE_CLIENT_EMAIL,
-            private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-        },
+        credentials,
         projectId: process.env.FIREBASE_PROJECT_ID,
         scopes: ['https://www.googleapis.com/auth/monitoring.read'],
     });
-    return await auth.getClient();
+
+    monitoringClient = await auth.getClient();
+    return monitoringClient;
+};
+
+/**
+ * Lazy initializer for BigQuery Client
+ */
+const getBigQueryClient = async (bqProjectId) => {
+    if (bqClient) return bqClient;
+
+    const credentials = getCredentials();
+    if (!credentials) throw new Error('Missing BigQuery credentials');
+
+    bqClient = new BigQuery({
+        credentials,
+        projectId: bqProjectId || process.env.BILLING_BQ_PROJECT_ID,
+    });
+
+    return bqClient;
 };
 
 /**
  * GET /api/owner/firebase-usage/overview?month=YYYY-MM
- * Returns total Firestore reads, writes, and deletes for the specified month.
  */
 const getUsageOverview = async (req, res) => {
-    const { month } = req.query; // YYYY-MM
+    const { month } = req.query;
     if (!month) return res.status(400).json({ message: 'Month (YYYY-MM) is required' });
 
     try {
@@ -35,7 +78,6 @@ const getUsageOverview = async (req, res) => {
         const authClient = await getMonitoringClient();
         const projectId = process.env.FIREBASE_PROJECT_ID;
 
-        // Calculate time range
         const startOfMonth = new Date(`${month}-01T00:00:00Z`);
         const endOfMonth = new Date(startOfMonth);
         endOfMonth.setMonth(endOfMonth.getMonth() + 1);
@@ -66,35 +108,27 @@ const getUsageOverview = async (req, res) => {
         };
 
         const [totalReads, totalWrites, totalDeletes] = await Promise.all([
-            getMetricValue(METRIC_READS),
-            getMetricValue(METRIC_WRITES),
-            getMetricValue(METRIC_DELETES),
+            getMetricValue('firestore.googleapis.com/document/read_count'),
+            getMetricValue('firestore.googleapis.com/document/write_count'),
+            getMetricValue('firestore.googleapis.com/document/delete_count'),
         ]);
 
-        res.json({
-            month,
-            totalReads,
-            totalWrites,
-            totalDeletes,
-        });
+        res.json({ month, totalReads, totalWrites, totalDeletes });
     } catch (error) {
         console.error('[Owner] Error fetching Firebase usage:', error);
-        res.status(500).json({
+        res.json({
             month,
-            totalReads: 0,
-            totalWrites: 0,
-            totalDeletes: 0,
-            note: 'Error fetching monitoring metrics: ' + error.message
+            totalReads: 0, totalWrites: 0, totalDeletes: 0,
+            note: 'Monitoring info unavailable: ' + error.message
         });
     }
 };
 
 /**
  * GET /api/owner/firebase-usage/cost?month=YYYY-MM
- * Returns total GCP/Firebase cost for the specified month from BigQuery billing export.
  */
 const getUsageCost = async (req, res) => {
-    const { month } = req.query; // YYYY-MM
+    const { month } = req.query;
     if (!month) return res.status(400).json({ message: 'Month (YYYY-MM) is required' });
 
     const bqProjectId = process.env.BILLING_BQ_PROJECT_ID;
@@ -104,21 +138,13 @@ const getUsageCost = async (req, res) => {
 
     if (!bqProjectId || !bqDataset || !bqTable) {
         return res.json({
-            month,
-            totalCostThisMonth: 0,
-            currency: 'USD',
+            month, totalCostThisMonth: 0, currency: 'USD',
             note: 'Billing export not configured / Spark plan'
         });
     }
 
     try {
-        const bigquery = new BigQuery({
-            credentials: {
-                client_email: process.env.FIREBASE_CLIENT_EMAIL,
-                private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-            },
-            projectId: bqProjectId,
-        });
+        const bigquery = await getBigQueryClient(bqProjectId);
 
         const query = `
             SELECT
@@ -141,24 +167,13 @@ const getUsageCost = async (req, res) => {
         nextMonth.setMonth(nextMonth.getMonth() + 1);
         const endDate = nextMonth.toISOString().split('T')[0];
 
-        const options = {
+        const [rows] = await bigquery.query({
             query,
-            params: {
-                projectId: targetProjectId,
-                startDate,
-                endDate
-            },
-        };
-
-        const [rows] = await bigquery.query(options);
+            params: { projectId: targetProjectId, startDate, endDate },
+        });
 
         if (rows.length === 0) {
-            return res.json({
-                month,
-                totalCostThisMonth: 0,
-                currency: 'USD',
-                note: 'No billing data found for this period'
-            });
+            return res.json({ month, totalCostThisMonth: 0, currency: 'USD', note: 'No data found' });
         }
 
         res.json({
@@ -168,17 +183,12 @@ const getUsageCost = async (req, res) => {
             firestoreCostThisMonth: rows[0].firestore_cost || 0
         });
     } catch (error) {
-        console.error('[Owner] Error fetching cost from BigQuery:', error);
+        console.error('[Owner] Error fetching cost:', error);
         res.json({
-            month,
-            totalCostThisMonth: 0,
-            currency: 'USD',
+            month, totalCostThisMonth: 0, currency: 'USD',
             note: 'Billing info unavailable: ' + error.message
         });
     }
 };
 
-module.exports = {
-    getUsageOverview,
-    getUsageCost
-};
+module.exports = { getUsageOverview, getUsageCost };
