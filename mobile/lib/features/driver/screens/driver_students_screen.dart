@@ -155,7 +155,7 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
                             ),
                             if (isOnOtherBus)
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, py: 2),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                 decoration: BoxDecoration(
                                   color: Colors.orange[50],
                                   borderRadius: BorderRadius.circular(8),
