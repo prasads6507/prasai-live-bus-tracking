@@ -121,7 +121,11 @@ class _CollegeSelectionScreenState extends ConsumerState<CollegeSelectionScreen>
                       onChanged: _onSearchChanged,
                       style: AppTypography.bodyLg.copyWith(color: AppColors.textPrimary),
                       decoration: InputDecoration(
-                        prefixIcon: const Icon(Icons.search_rounded, color: AppColors.primary, size: 22),
+                        prefixIcon: const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 12),
+                          child: Icon(Icons.search_rounded, color: AppColors.primary, size: 22),
+                        ),
+                        prefixIconConstraints: const BoxConstraints(minWidth: 46, minHeight: 22),
                         suffixIcon: _isLoading
                             ? const Padding(
                                 padding: EdgeInsets.all(14.0),
@@ -139,7 +143,7 @@ class _CollegeSelectionScreenState extends ConsumerState<CollegeSelectionScreen>
                         border: InputBorder.none,
                         enabledBorder: InputBorder.none,
                         focusedBorder: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 16),
                       ),
                     ),
                   ),

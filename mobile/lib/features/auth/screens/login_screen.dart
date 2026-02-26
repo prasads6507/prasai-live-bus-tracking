@@ -220,12 +220,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               keyboardType: TextInputType.emailAddress,
                               style: AppTypography.bodyLg.copyWith(color: AppColors.textPrimary),
                               decoration: InputDecoration(
-                                prefixIcon: const Icon(Icons.mail_outline_rounded, color: AppColors.textSecondary, size: 20),
+                                prefixIcon: const Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 12),
+                                  child: Icon(Icons.mail_outline_rounded, color: AppColors.textSecondary, size: 20),
+                                ),
+                                prefixIconConstraints: const BoxConstraints(minWidth: 44, minHeight: 20),
                                 hintText: 'Enter your email',
                                 border: InputBorder.none,
                                 enabledBorder: InputBorder.none,
                                 focusedBorder: InputBorder.none,
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                                contentPadding: const EdgeInsets.symmetric(vertical: 16),
                               ),
                               validator: (value) =>
                                   (value == null || value.isEmpty) ? 'Please enter your email' : null,
@@ -245,7 +249,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               obscureText: !_isPasswordVisible,
                               style: AppTypography.bodyLg.copyWith(color: AppColors.textPrimary),
                               decoration: InputDecoration(
-                                prefixIcon: const Icon(Icons.lock_outline_rounded, color: AppColors.textSecondary, size: 20),
+                                prefixIcon: const Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 12),
+                                  child: Icon(Icons.lock_outline_rounded, color: AppColors.textSecondary, size: 20),
+                                ),
+                                prefixIconConstraints: const BoxConstraints(minWidth: 44, minHeight: 20),
                                 suffixIcon: IconButton(
                                   icon: Icon(
                                     _isPasswordVisible ? Icons.visibility_rounded : Icons.visibility_off_rounded,
@@ -258,7 +266,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 border: InputBorder.none,
                                 enabledBorder: InputBorder.none,
                                 focusedBorder: InputBorder.none,
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                                contentPadding: const EdgeInsets.symmetric(vertical: 16),
                               ),
                               validator: (value) =>
                                   (value == null || value.isEmpty) ? 'Please enter your password' : null,

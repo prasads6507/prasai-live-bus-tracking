@@ -147,7 +147,11 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
                   style: AppTypography.bodyLg.copyWith(color: AppColors.textPrimary),
                   decoration: InputDecoration(
                     hintText: 'Search by name or email...',
-                    prefixIcon: const Icon(Icons.search_rounded, color: AppColors.primary, size: 20),
+                    prefixIcon: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 12),
+                      child: Icon(Icons.search_rounded, color: AppColors.primary, size: 20),
+                    ),
+                    prefixIconConstraints: const BoxConstraints(minWidth: 44, minHeight: 20),
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(vertical: 14),
                   ),
@@ -249,7 +253,44 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
                   );
                 },
                 loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
-                error: (err, stack) => Center(child: Text("Error: $err", style: AppTypography.bodyMd)),
+                error: (err, stack) => _buildErrorState(context, ref, collegeId ?? ""),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorState(BuildContext context, WidgetRef ref, String collegeId) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline_rounded, size: 48, color: AppColors.error),
+            const SizedBox(height: 16),
+            Text(
+              "Permission Denied or Connection Error",
+              style: AppTypography.h3.copyWith(color: AppColors.error),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "Drivers may need additional permissions to view the students list. Please contact your administrator.",
+              style: AppTypography.bodyMd.copyWith(color: AppColors.textSecondary),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: () => ref.refresh(studentsProvider(collegeId)),
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text("Retry Connection"),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
           ],
