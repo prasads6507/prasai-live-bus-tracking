@@ -1,6 +1,10 @@
 {
     "rewrites": [
         {
+            "source": "/api/check-modules",
+            "destination": "/api/check-modules.js"
+        },
+        {
             "source": "/api/debug",
             "destination": "/api/debug.js"
         },

@@ -2,23 +2,28 @@ const fs = require('fs');
 const path = require('path');
 
 module.exports = (req, res) => {
-    const pathsToCheck = [
-        'node_modules/firebase-admin',
-        'node_modules/express',
-        'frontend/college-portal/node_modules/firebase-admin',
-        'frontend/college-portal/node_modules/express'
+    const modulesToCheck = [
+        'firebase-admin',
+        'express',
+        'googleapis',
+        'express-rate-limit'
     ];
 
     const results = {};
-    for (const p of pathsToCheck) {
-        const full = path.join(process.cwd(), p);
-        results[p] = fs.existsSync(full) ? 'EXISTS' : 'MISSING';
+    for (const mod of modulesToCheck) {
+        try {
+            require.resolve(mod);
+            results[mod] = 'EXISTS';
+        } catch (e) {
+            results[mod] = 'MISSING';
+        }
     }
 
     res.json({
         ok: true,
         cwd: process.cwd(),
         results,
-        all_dirs: fs.readdirSync(process.cwd()).filter(f => fs.statSync(f).isDirectory())
+        env: process.env.NODE_ENV,
+        node_version: process.version
     });
 };

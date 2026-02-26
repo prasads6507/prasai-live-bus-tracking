@@ -1,5 +1,6 @@
 const { google } = require('googleapis');
 const { BigQuery } = require('@google-cloud/bigquery');
+const { admin } = require('../config/firebase');
 
 // Lazy-loaded clients to prevent failure at import time
 let monitoringClient = null;
@@ -19,9 +20,10 @@ const getCredentials = () => {
         }
     }
 
-    // 2. Fallback to individuual Firebase Admin vars (current behavior)
+    // 2. Fallback to individual Firebase Admin vars
     if (process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
         return {
+            project_id: process.env.FIREBASE_PROJECT_ID,
             client_email: process.env.FIREBASE_CLIENT_EMAIL,
             private_key: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
         };
@@ -41,7 +43,7 @@ const getMonitoringClient = async () => {
 
     const auth = new google.auth.GoogleAuth({
         credentials,
-        projectId: process.env.FIREBASE_PROJECT_ID,
+        projectId: credentials.project_id || process.env.FIREBASE_PROJECT_ID,
         scopes: ['https://www.googleapis.com/auth/monitoring.read'],
     });
 
@@ -107,13 +109,24 @@ const getUsageOverview = async (req, res) => {
             return total;
         };
 
-        const [totalReads, totalWrites, totalDeletes] = await Promise.all([
+        const [totalReads, totalWrites, totalDeletes, authCreations, functionExecutions] = await Promise.all([
             getMetricValue('firestore.googleapis.com/document/read_count'),
             getMetricValue('firestore.googleapis.com/document/write_count'),
             getMetricValue('firestore.googleapis.com/document/delete_count'),
+            getMetricValue('identitytoolkit.googleapis.com/accounts/create_count'),
+            getMetricValue('cloudfunctions.googleapis.com/function/execution_count'),
         ]);
 
-        res.json({ month, totalReads, totalWrites, totalDeletes });
+        console.log(`[Usage] Fetched metrics for ${projectId} in ${month}`);
+
+        res.json({
+            month,
+            totalReads,
+            totalWrites,
+            totalDeletes,
+            authCreations,
+            functionExecutions
+        });
     } catch (error) {
         console.error('[Owner] Error fetching Firebase usage:', error);
         res.json({

@@ -45,6 +45,8 @@ const FirebaseUsage: React.FC = () => {
         { name: 'Reads', count: usage.totalReads, fill: '#3B82F6' },
         { name: 'Writes', count: usage.totalWrites, fill: '#10B981' },
         { name: 'Deletes', count: usage.totalDeletes, fill: '#EF4444' },
+        { name: 'Auth', count: usage.authCreations || 0, fill: '#F59E0B' },
+        { name: 'Functions', count: usage.functionExecutions || 0, fill: '#8B5CF6' },
     ] : [];
 
     if (loading && !usage) {
@@ -74,7 +76,7 @@ const FirebaseUsage: React.FC = () => {
             </div>
 
             {/* Summary Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6 mb-8">
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
                     <div className="flex items-center justify-between mb-4">
                         <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
@@ -103,6 +105,26 @@ const FirebaseUsage: React.FC = () => {
                     </div>
                     <p className="text-slate-500 text-sm font-medium">Document Deletes</p>
                     <h3 className="text-2xl font-bold text-slate-800">{(usage?.totalDeletes || 0).toLocaleString()}</h3>
+                </div>
+
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">
+                            <HiTrendingUp size={24} />
+                        </div>
+                    </div>
+                    <p className="text-slate-500 text-sm font-medium">Auth Creations</p>
+                    <h3 className="text-2xl font-bold text-slate-800">{(usage?.authCreations || 0).toLocaleString()}</h3>
+                </div>
+
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="p-3 bg-violet-50 text-violet-600 rounded-xl">
+                            <HiDatabase size={24} />
+                        </div>
+                    </div>
+                    <p className="text-slate-500 text-sm font-medium">Functions</p>
+                    <h3 className="text-2xl font-bold text-slate-800">{(usage?.functionExecutions || 0).toLocaleString()}</h3>
                 </div>
 
                 <div className="bg-slate-900 p-6 rounded-2xl shadow-lg text-white">

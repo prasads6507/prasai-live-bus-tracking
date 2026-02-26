@@ -11,6 +11,7 @@ const errorHandler = require('./middleware/errorHandler');
 
 // Initialize App
 const app = express();
+app.set('trust proxy', 1);
 const server = http.createServer(app);
 
 // Connect Database
