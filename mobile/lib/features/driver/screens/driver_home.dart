@@ -784,11 +784,13 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
       _locationUpdateSubscription?.cancel();
       final service = FlutterBackgroundService();
       _locationUpdateSubscription = service.on('update').listen((data) {
+        debugPrint("[DriverContent] RECEIVED update from background: $data");
         if (data != null && mounted) {
           try {
             setState(() {
               _currentSpeed = (data['speed'] as num? ?? 0.0).toDouble();
               _lastUpdate = TimeOfDay.now().format(context);
+              _statusText = data['status'] as String? ?? "ON_ROUTE";
               _lastRecordedPoint = LocationPoint(
                 latitude:  (data['lat'] as num).toDouble(),
                 longitude: (data['lng'] as num).toDouble(),

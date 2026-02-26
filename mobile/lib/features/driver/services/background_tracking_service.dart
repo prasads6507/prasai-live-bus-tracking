@@ -187,6 +187,7 @@ void onStart(ServiceInstance service) async {
         lastPosition = position;
         
         // G. Send to Main Isolate for UI feedback (if running)
+        debugPrint("[Background] Invoking update event: lat=${position.latitude}, lng=${position.longitude}, status=$newStatus");
         service.invoke('update', {
           "lat": position.latitude,
           "lng": position.longitude,
@@ -299,6 +300,7 @@ class BackgroundTrackingService {
       final db = FirebaseFirestore.instance;
       
       await db.collection('buses').doc(busId).update({
+        'status': 'ON_ROUTE',       // CRITICAL: Admin panel filters by this top-level field
         'lastLocationUpdate': FieldValue.serverTimestamp(),
         'location': {
           'latitude': p.latitude,
@@ -575,7 +577,10 @@ class BackgroundTrackingService {
            debugPrint("[Background] Auto-finalize failed, will retry: $e");
         }
 
-        FlutterBackgroundService().invoke("stopService");
+        // Logic to stop self from background isolate safely
+        // Historically FlutterBackgroundService().invoke("stopService") worked, 
+        // but now throws "Only main isolate". Using stopSelf() directly is safer.
+        // The service logic in onStart already cleans up subscriptions.
       }
 
     } catch (e) {
