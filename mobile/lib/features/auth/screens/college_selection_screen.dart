@@ -76,8 +76,7 @@ class _CollegeSelectionScreenState extends ConsumerState<CollegeSelectionScreen>
   Widget build(BuildContext context) {
     return AppScaffold(
       body: SafeArea(
-        child: Stack(
-            Padding(
+        child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -140,7 +139,7 @@ class _CollegeSelectionScreenState extends ConsumerState<CollegeSelectionScreen>
                         border: InputBorder.none,
                         enabledBorder: InputBorder.none,
                         focusedBorder: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
                       ),
                     ),
                   ),
@@ -305,10 +304,8 @@ class _CollegeSelectionScreenState extends ConsumerState<CollegeSelectionScreen>
                 ],
               ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
+          ),
+        );
+      }
+    }
 

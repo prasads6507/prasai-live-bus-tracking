@@ -225,7 +225,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 border: InputBorder.none,
                                 enabledBorder: InputBorder.none,
                                 focusedBorder: InputBorder.none,
-                                contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
                               ),
                               validator: (value) =>
                                   (value == null || value.isEmpty) ? 'Please enter your email' : null,
@@ -258,7 +258,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 border: InputBorder.none,
                                 enabledBorder: InputBorder.none,
                                 focusedBorder: InputBorder.none,
-                                contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
                               ),
                               validator: (value) =>
                                   (value == null || value.isEmpty) ? 'Please enter your password' : null,

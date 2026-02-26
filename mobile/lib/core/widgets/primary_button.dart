@@ -51,12 +51,16 @@ class PrimaryButton extends StatelessWidget {
             : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
-                    text,
-                    style: AppTypography.h3.copyWith(
-                      color: isEnabled
-                          ? AppColors.textInverse
-                          : AppColors.textTertiary,
+                  Flexible(
+                    child: Text(
+                      text,
+                      style: AppTypography.h3.copyWith(
+                        color: isEnabled
+                            ? AppColors.textInverse
+                            : AppColors.textTertiary,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
                     ),
                   ),
                   if (trailingIcon != null) ...[
