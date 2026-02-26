@@ -13,6 +13,10 @@ const {
     getDashboardStats,
     testDb
 } = require('../controllers/ownerController');
+const {
+    getUsageOverview,
+    getUsageCost
+} = require('../controllers/firebaseUsageController');
 const { protect, authorize } = require('../middleware/auth');
 
 // All routes are protected and restricted to OWNER
@@ -29,6 +33,8 @@ router.route('/college-admins').post(createCollegeAdmin).get(getCollegeAdmins);
 router.route('/college-admins/:id').put(updateCollegeAdmin).delete(deleteCollegeAdmin);
 router.route('/analytics').get(getAnalytics);
 router.route('/dashboard-stats').get(getDashboardStats);
+router.route('/firebase-usage/overview').get(getUsageOverview);
+router.route('/firebase-usage/cost').get(getUsageCost);
 router.route('/test-db').get(testDb);
 
 module.exports = router;

@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard';
 import Colleges from './pages/Colleges';
 import CollegeAdmins from './pages/CollegeAdmins';
 import Analytics from './pages/Analytics';
+import FirebaseUsage from './pages/FirebaseUsage';
 import Register from './pages/Register';
 import Layout from './components/Layout';
 import PrivateRoute from './components/PrivateRoute';
@@ -22,6 +23,7 @@ function App() {
               <Route path="/colleges" element={<Colleges />} />
               <Route path="/college-admins" element={<CollegeAdmins />} />
               <Route path="/analytics" element={<Analytics />} />
+              <Route path="/firebase-usage" element={<FirebaseUsage />} />
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
             </Route>
           </Route>

@@ -70,3 +70,13 @@ export const getDashboardStats = async (): Promise<any> => {
     const response = await api.get('/owner/dashboard-stats');
     return response.data;
 };
+
+export const getFirebaseUsageOverview = async (month: string): Promise<any> => {
+    const response = await api.get('/owner/firebase-usage/overview', { params: { month } });
+    return response.data;
+};
+
+export const getFirebaseUsageCost = async (month: string): Promise<any> => {
+    const response = await api.get('/owner/firebase-usage/cost', { params: { month } });
+    return response.data;
+};

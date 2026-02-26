@@ -19,6 +19,7 @@ const Layout: React.FC = () => {
         { path: '/colleges', label: 'Colleges' },
         { path: '/college-admins', label: 'Admins' },
         { path: '/analytics', label: 'Analytics' },
+        { path: '/firebase-usage', label: 'Firebase Usage' },
     ];
 
     const handleNavigation = (path: string) => {
