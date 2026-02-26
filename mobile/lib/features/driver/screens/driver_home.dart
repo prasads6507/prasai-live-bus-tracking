@@ -171,6 +171,7 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
   Widget _buildBusSelection(String collegeId, UserProfile profile) {
     final driverId = profile.id;
     final assignedBusId = profile.assignedBusId;
+    debugPrint("[DriverHome] Driver: ${profile.email}, AssignedBusId: $assignedBusId");
 
     // SCENARIO 1: Driver has an assigned bus and hasn't opted to switch
     if (assignedBusId != null && !_isManuallySelecting) {
