@@ -20,6 +20,7 @@ import '../../../data/providers.dart';
 import '../../../data/models/bus.dart';
 import '../../../data/models/location_point.dart';
 import '../../../data/models/route.dart';
+import '../../../data/models/user_profile.dart';
 import '../widgets/driver_header.dart';
 import '../widgets/assigned_bus_card.dart';
 import '../widgets/trip_control_panel.dart';
