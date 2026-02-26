@@ -4,30 +4,50 @@ const { admin, db, messaging } = require('../config/firebase');
 /**
  * Send notification to all students assigned to a trip's route
  */
+/**
+ * Send notification to all students assigned to a trip's route
+ */
 const sendBusStartedNotification = async (tripId, busId, collegeId, busNumber) => {
     try {
-        console.log(`[Notification] Sending 'Bus Started' for bus ${busId} (${busNumber}) at college ${collegeId}`);
-        const studentsSnapshot = await db.collection('students')
+        console.log(`[BusStarted] Triggering for bus="${busId}" college="${collegeId}" trip="${tripId}"`);
+
+        // 1. Primary Query: Match both collegeId and favoriteBusIds
+        let studentsSnapshot = await db.collection('students')
             .where('collegeId', '==', collegeId)
             .where('favoriteBusIds', 'array-contains', busId)
             .get();
-        console.log(`[Notification] Found ${studentsSnapshot.size} students for bus ${busId}`);
 
+        console.log(`[BusStarted] Query (college="${collegeId}", bus="${busId}") found ${studentsSnapshot.size} students`);
+
+        // DIAGNOSTIC FALLBACK: If 0 found, try searching by busId only to see if there's a collegeId mismatch
         if (studentsSnapshot.empty) {
-            console.log(`[Notification] No students have favorited bus ${busId}`);
+            console.log(`[BusStarted] DIAGNOSTIC: Searching for students with bus "${busId}" in ANY college...`);
+            const fallbackSnap = await db.collection('students')
+                .where('favoriteBusIds', 'array-contains', busId)
+                .get();
+            if (!fallbackSnap.empty) {
+                console.log(`[BusStarted] DIAGNOSTIC FOUND: ${fallbackSnap.size} students have this bus, but their collegeId is NOT "${collegeId}".`);
+                fallbackSnap.forEach(d => console.log(` - Student ${d.id} has collegeId: "${d.data().collegeId}"`));
+            } else {
+                console.log(`[BusStarted] DIAGNOSTIC: No students in ANY college have favorited bus "${busId}".`);
+            }
             return;
         }
 
         const tokens = [];
         studentsSnapshot.forEach(doc => {
             const data = doc.data();
-            if (data.fcmToken && typeof data.fcmToken === 'string' && data.fcmToken.length > 10) {
-                tokens.push(data.fcmToken);
+            const token = data.fcmToken;
+            if (token && typeof token === 'string' && token.length > 10) {
+                tokens.push(token);
+                console.log(` - Found student ${doc.id} with token ${token.substring(0, 10)}...`);
+            } else {
+                console.log(` - Student ${doc.id} has NO valid fcmToken.`);
             }
         });
 
         if (tokens.length === 0) {
-            console.log(`[Notification] No valid FCM tokens for bus ${busId} favorites`);
+            console.log(`[BusStarted] No valid FCM tokens for bus ${busId} favorites`);
             return;
         }
 
@@ -56,14 +76,14 @@ const sendBusStartedNotification = async (tripId, busId, collegeId, busNumber) =
             };
             try {
                 const result = await messaging.sendEachForMulticast(message);
-                console.log(`[BusStarted] FCM sent=${result.successCount} failed=${result.failureCount}`);
+                console.log(`[BusStarted] Batch result: sent=${result.successCount} failed=${result.failureCount}`);
                 await cleanupStaleTokens(result, batch, db, admin);
             } catch (fcmErr) {
-                console.error('[BusStarted] FCM error:', fcmErr.message);
+                console.error('[BusStarted] FCM transmission error:', fcmErr.message);
             }
         }
 
-        // Log to notifications collection
+        // Log to notifications collection for admin panel
         await db.collection('notifications').add({
             type: 'BUS_STARTED',
             busId, tripId, collegeId,
@@ -73,7 +93,7 @@ const sendBusStartedNotification = async (tripId, busId, collegeId, busNumber) =
         });
 
     } catch (error) {
-        console.error('[Notification] Error sending bus started notification:', error);
+        console.error('[BusStarted] CRITICAL ERROR:', error);
     }
 };
 
@@ -324,19 +344,40 @@ const sendStopEventNotification = async (tripId, busId, collegeId, stopId, stopN
         }
 
         // FIXED: Query by favoriteBusIds, not assignedRouteId
-        const studentsSnap = await db.collection('students')
+        let studentsSnap = await db.collection('students')
             .where('collegeId', '==', collegeId)
             .where('favoriteBusIds', 'array-contains', busId)
             .get();
-        console.log(`[StopEvent] Query found ${studentsSnap.size} students manually`);
+
+        console.log(`[StopEvent] Query (college="${collegeId}", bus="${busId}") found ${studentsSnap.size} students`);
+
+        // DIAGNOSTIC FALLBACK: If 0 found, try searching by busId only to see if there's a collegeId mismatch
+        if (studentsSnap.empty) {
+            console.log(`[StopEvent] DIAGNOSTIC: Searching for students with bus "${busId}" in ANY college...`);
+            const fallbackSnap = await db.collection('students')
+                .where('favoriteBusIds', 'array-contains', busId)
+                .get();
+            if (!fallbackSnap.empty) {
+                console.log(`[StopEvent] DIAGNOSTIC FOUND: ${fallbackSnap.size} students have this bus, but their collegeId is NOT "${collegeId}".`);
+                fallbackSnap.forEach(d => console.log(` - Student ${d.id} has collegeId: "${d.data().collegeId}"`));
+            } else {
+                console.log(`[StopEvent] DIAGNOSTIC: No students in ANY college have favorited bus "${busId}".`);
+            }
+        }
 
         const tokens = [];
         studentsSnap.forEach(doc => {
-            const token = doc.data().fcmToken;
-            if (token && typeof token === 'string' && token.length > 10) tokens.push(token);
+            const data = doc.data();
+            const token = data.fcmToken;
+            if (token && typeof token === 'string' && token.length > 10) {
+                tokens.push(token);
+                console.log(` - Found student ${doc.id} with token ${token.substring(0, 10)}...`);
+            } else {
+                console.log(` - Student ${doc.id} has NO valid fcmToken.`);
+            }
         });
 
-        console.log(`[StopEvent] Found ${tokens.length} tokens for bus ${busId} favorites`);
+        console.log(`[StopEvent] Found ${tokens.length} valid tokens for bus ${busId}`);
 
         if (tokens.length > 0) {
             // Send in batches of 500 (FCM multicast limit)
@@ -351,10 +392,10 @@ const sendStopEventNotification = async (tripId, busId, collegeId, stopId, stopN
                         tokens: batch,
                     };
                     const result = await messaging.sendEachForMulticast(msg);
-                    console.log(`[StopEvent] FCM batch sent=${result.successCount} failed=${result.failureCount}`);
+                    console.log(`[StopEvent] Batch result: sent=${result.successCount} failed=${result.failureCount}`);
                     await cleanupStaleTokens(result, batch, db, admin);
                 } catch (fcmErr) {
-                    console.error('[StopEvent] FCM batch error:', fcmErr.message);
+                    console.error('[StopEvent] FCM transmission error:', fcmErr.message);
                 }
             }
         }

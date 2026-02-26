@@ -27,11 +27,16 @@ const tenantIsolation = (req, res, next) => {
         });
     }
 
-    console.log(`[TenantIsolation] Enforcing collegeId: ${req.user.collegeId} for user: ${req.user.email} (Role: ${req.user.role})`);
+    console.log(`[TenantIsolation] Enforcing collegeId: "${req.user.collegeId}" for user: ${req.user.email} (UID: ${req.user.id}, Role: ${req.user.role})`);
     req.collegeId = req.user.collegeId;
 
     // Also enforce it in body and query to prevent accidents
-    if (req.body) req.body.collegeId = req.user.collegeId;
+    if (req.body) {
+        if (req.body.collegeId && req.body.collegeId !== req.user.collegeId) {
+            console.warn(`[TenantIsolation] Overriding body.collegeId "${req.body.collegeId}" with "${req.user.collegeId}"`);
+        }
+        req.body.collegeId = req.user.collegeId;
+    }
     if (req.query) req.query.collegeId = req.user.collegeId;
     if (req.params && req.params.collegeId) {
         if (req.params.collegeId !== req.user.collegeId) {
