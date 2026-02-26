@@ -104,14 +104,9 @@ class _CollegeSelectionScreenState extends ConsumerState<CollegeSelectionScreen>
                   // Glowing Search Bar
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
-                    clipBehavior: Clip.antiAlias,
                     decoration: BoxDecoration(
                       color: AppColors.bgCard,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: _isFocused ? AppColors.primary : AppColors.borderSubtle,
-                        width: _isFocused ? 1.5 : 1,
-                      ),
                       boxShadow: _isFocused
                           ? [BoxShadow(color: AppColors.primary.withOpacity(0.15), blurRadius: 16)]
                           : [],
@@ -141,10 +136,19 @@ class _CollegeSelectionScreenState extends ConsumerState<CollegeSelectionScreen>
                               )
                             : null,
                         hintText: 'Type your college name...',
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
                         contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: const BorderSide(color: AppColors.borderSubtle, width: 1),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: const BorderSide(color: AppColors.borderSubtle, width: 1),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                        ),
                       ),
                     ),
                   ),

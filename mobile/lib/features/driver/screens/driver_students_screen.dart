@@ -138,11 +138,9 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Container(
-                clipBehavior: Clip.antiAlias,
                 decoration: BoxDecoration(
                   color: AppColors.bgCard,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.borderSubtle),
                 ),
                 child: TextField(
                   style: AppTypography.bodyLg.copyWith(color: AppColors.textPrimary),
@@ -153,8 +151,19 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
                       child: Icon(Icons.search_rounded, color: AppColors.primary, size: 20),
                     ),
                     prefixIconConstraints: const BoxConstraints(minWidth: 48, minHeight: 20),
-                    border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: AppColors.borderSubtle, width: 1),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: AppColors.borderSubtle, width: 1),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                    ),
                   ),
                   onChanged: (value) => setState(() => _searchQuery = value.toLowerCase()),
                 ),

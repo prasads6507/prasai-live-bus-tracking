@@ -226,10 +226,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 ),
                                 prefixIconConstraints: const BoxConstraints(minWidth: 48, minHeight: 20),
                                 hintText: 'Enter your email',
-                                border: InputBorder.none,
-                                enabledBorder: InputBorder.none,
-                                focusedBorder: InputBorder.none,
                                 contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: const BorderSide(color: AppColors.borderSubtle, width: 1),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: const BorderSide(color: AppColors.borderSubtle, width: 1),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                                ),
                               ),
                               validator: (value) =>
                                   (value == null || value.isEmpty) ? 'Please enter your email' : null,
@@ -263,10 +272,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                   onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
                                 ),
                                 hintText: 'Enter your password',
-                                border: InputBorder.none,
-                                enabledBorder: InputBorder.none,
-                                focusedBorder: InputBorder.none,
                                 contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: const BorderSide(color: AppColors.borderSubtle, width: 1),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: const BorderSide(color: AppColors.borderSubtle, width: 1),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                                ),
                               ),
                               validator: (value) =>
                                   (value == null || value.isEmpty) ? 'Please enter your password' : null,
@@ -316,14 +334,9 @@ class _GlowField extends StatelessWidget {
   Widget build(BuildContext context) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
-      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: AppColors.bgCard,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isFocused ? AppColors.primary : AppColors.borderSubtle,
-          width: isFocused ? 1.5 : 1,
-        ),
         boxShadow: isFocused
             ? [BoxShadow(color: AppColors.primary.withOpacity(0.15), blurRadius: 12)]
             : [],
