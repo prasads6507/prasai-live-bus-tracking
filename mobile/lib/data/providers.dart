@@ -20,7 +20,7 @@ import 'models/user_profile.dart';
 final firebaseAuthProvider = Provider<FirebaseAuth>((ref) => FirebaseAuth.instance);
 final firestoreProvider = Provider<FirebaseFirestore>((ref) => FirebaseFirestore.instance);
 final dioProvider = Provider<Dio>((ref) {
-  final dio = Dio();
+  final dio = Dio(BaseOptions(baseUrl: Env.apiUrl));
   dio.interceptors.add(InterceptorsWrapper(
     onRequest: (options, handler) async {
       try {
@@ -156,7 +156,7 @@ final activeTripIdProvider = StreamProvider<String?>((ref) {
 
 final tripAttendanceProvider = FutureProvider.family<List<Map<String, dynamic>>, String>((ref, tripId) async {
   final dio = ref.watch(dioProvider);
-  final response = await dio.get('/driver/trips/$tripId/attendance');
+  final response = await dio.get('/api/driver/trips/$tripId/attendance');
   if (response.data['success']) {
     return List<Map<String, dynamic>>.from(response.data['data']);
   }
@@ -165,7 +165,7 @@ final tripAttendanceProvider = FutureProvider.family<List<Map<String, dynamic>>,
 
 final busStudentsProvider = FutureProvider.family<List<UserProfile>, String>((ref, busId) async {
   final dio = ref.watch(dioProvider);
-  final response = await dio.get('/driver/buses/$busId/students');
+  final response = await dio.get('/api/driver/buses/$busId/students');
   if (response.data['success']) {
     return (response.data['data'] as List)
         .map((s) => UserProfile.fromJson(s))
