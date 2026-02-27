@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { User, Plus, Search, Mail, Phone, Lock, X, AlertCircle, CheckCircle, Edit2, Trash2, ToggleRight, Upload, Download, FileSpreadsheet } from 'lucide-react';
 import { getDrivers, createDriver, updateDriver, deleteDriver, bulkCreateDrivers } from '../services/api';
-import * as XLSX from 'xlsx';
+// XLSX will be lazy-loaded on demand to optimize bundle size
 import { motion, AnimatePresence } from 'framer-motion';
 import Layout from '../components/Layout';
 
@@ -117,7 +117,9 @@ const Drivers = () => {
         }
     };
 
-    const downloadDriverTemplate = () => {
+    const downloadDriverTemplate = async () => {
+        // Dynamically import XLSX only when needed
+        const XLSX = await import('xlsx');
         const headers = [['Name', 'Email', 'Phone']];
 
         // Use existing drivers to populate the template
@@ -137,6 +139,8 @@ const Drivers = () => {
 
     const handleProcessFile = async (file: File) => {
         try {
+            // Dynamically import XLSX only when needed
+            const XLSX = await import('xlsx');
             const data = await file.arrayBuffer();
             const workbook = XLSX.read(data);
             const sheetName = workbook.SheetNames[0];

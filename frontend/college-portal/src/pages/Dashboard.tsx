@@ -7,6 +7,8 @@ import { validateSlug, getBuses, getRoutes } from '../services/api';
 import { getStreetName } from '../services/geocoding';
 import Layout from '../components/Layout';
 import MapLibreMap, { getBusLatLng } from '../components/MapLibreMap';
+import { motion } from 'framer-motion';
+import { DashboardSkeleton } from '../components/Skeleton';
 
 const getBusLastUpdateIso = (bus: any): string | null => {
     if (bus.lastLocationUpdate) {
@@ -203,16 +205,20 @@ const Dashboard = () => {
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center min-h-screen bg-slate-50">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-            </div>
+            <Layout activeItem="dashboard">
+                <DashboardSkeleton />
+            </Layout>
         );
     }
 
     return (
         <Layout activeItem="dashboard">
-            <div className="p-4 md:p-6 lg:p-8 bg-slate-50/50 min-h-full">
-                <div className="max-w-[1600px] mx-auto space-y-4 md:space-y-6">
+            <div className="p-4 md:p-6 lg:p-8 min-h-full">
+                <motion.div 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="max-w-[1600px] mx-auto space-y-4 md:space-y-6"
+                >
 
 
                     {/* Stats Grid */}
@@ -254,17 +260,24 @@ const Dashboard = () => {
                     {/* Main Content Area: Map & Alerts Side-by-Side on Desktop */}
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                         {/* Map Section */}
-                        <div className="lg:col-span-8 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden h-[380px] md:h-[420px] lg:h-[450px] flex flex-col">
-                            <div className="p-4 border-b border-slate-100 flex justify-between items-center">
-                                <h3 className="font-semibold text-slate-800 flex items-center gap-2">
-                                    <MapPin size={20} className="text-blue-600" />
+                        <motion.div 
+                            initial={{ opacity: 0, scale: 0.98 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ delay: 0.2 }}
+                            className="lg:col-span-8 bg-white rounded-[24px] shadow-sm border border-slate-200 overflow-hidden h-[380px] md:h-[420px] lg:h-[450px] flex flex-col"
+                        >
+                            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-white/50 backdrop-blur-sm sticky top-0 z-10">
+                                <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                                    <div className="p-1.5 bg-blue-50 rounded-lg">
+                                        <MapPin size={18} className="text-blue-600" />
+                                    </div>
                                     Live Fleet Tracking
                                 </h3>
                                 <div className="flex items-center gap-2">
                                     {buses.some(isLiveBus) && (
-                                        <div className="px-3 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full flex items-center gap-1">
-                                            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                                            LIVE
+                                        <div className="px-3 py-1 bg-green-50 text-green-700 text-[10px] font-black rounded-full flex items-center gap-1.5 border border-green-100">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                                            REAL-TIME
                                         </div>
                                     )}
                                 </div>
@@ -280,37 +293,51 @@ const Dashboard = () => {
                                 followBus={followSelectedBus}
                                 onBusClick={(id) => setSelectedBusId(id)}
                             />
-                        </div>
+                        </motion.div>
 
                         {/* Recent Alerts / Quick Notifications */}
-                        <div className="lg:col-span-4 flex flex-col space-y-4">
-                            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex-1 overflow-y-auto max-h-[450px]">
-                                <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-50">
-                                    <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm uppercase tracking-wider">
-                                        <Bell size={16} className="text-blue-600" />
-                                        Live Alerts
+                        <motion.div 
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: 0.3 }}
+                            className="lg:col-span-4 flex flex-col space-y-4"
+                        >
+                            <div className="bg-white rounded-[24px] shadow-sm border border-slate-200 p-6 flex-1 overflow-y-auto max-h-[450px]">
+                                <div className="flex items-center justify-between mb-6 pb-2 border-b border-slate-50">
+                                    <h3 className="font-extrabold text-slate-800 flex items-center gap-2 text-[11px] uppercase tracking-[0.1em]">
+                                        <Bell size={14} className="text-blue-600" />
+                                        System Alerts
                                     </h3>
-                                    <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">LIVE</span>
+                                    <span className="text-[10px] font-black bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-100">LIVE Updates</span>
                                 </div>
-                                <div className="space-y-3">
+                                <div className="space-y-4">
                                     {notifications.length > 0 ? (
-                                        notifications.map(note => (
-                                            <div key={note._id} className="p-3 rounded-xl bg-slate-50 border border-slate-100 group hover:border-blue-100 hover:bg-blue-50/30 transition-all cursor-default text-[13px]">
-                                                <p className="text-slate-700 leading-snug mb-1">{note.message}</p>
-                                                <span className="text-[10px] text-slate-400 font-medium">
-                                                    {getRelativeTime(note.createdAt?.toDate ? note.createdAt.toDate().toISOString() : new Date().toISOString())}
-                                                </span>
-                                            </div>
+                                        notifications.map((note, idx) => (
+                                            <motion.div 
+                                                key={note._id} 
+                                                initial={{ opacity: 0, x: -10 }}
+                                                animate={{ opacity: 1, x: 0 }}
+                                                transition={{ delay: 0.4 + (idx * 0.1) }}
+                                                className="p-4 rounded-2xl bg-slate-50 border border-slate-100 group hover:border-blue-200 hover:bg-white hover:shadow-md transition-all cursor-default text-[13px]"
+                                            >
+                                                <p className="text-slate-800 leading-relaxed font-medium mb-2">{note.message}</p>
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                                                        {getRelativeTime(note.createdAt?.toDate ? note.createdAt.toDate().toISOString() : new Date().toISOString())}
+                                                    </span>
+                                                    <div className="w-1.5 h-1.5 rounded-full bg-blue-400 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                                </div>
+                                            </motion.div>
                                         ))
                                     ) : (
-                                        <div className="py-12 text-center opacity-40">
-                                            <Bell className="mx-auto mb-2 text-slate-300" size={24} />
-                                            <p className="text-xs">No recent alerts</p>
+                                        <div className="py-16 text-center opacity-30">
+                                            <Bell className="mx-auto mb-3 text-slate-300" size={32} />
+                                            <p className="text-[11px] font-bold uppercase tracking-widest">Quiet for now</p>
                                         </div>
                                     )}
                                 </div>
                             </div>
-                        </div>
+                        </motion.div>
                     </div>
 
                     {/* Bus List - Optimized Grid */}
@@ -339,27 +366,33 @@ const Dashboard = () => {
                             )}
                         </div>
                     </div>
-                </div>
+                </motion.div>
             </div>
         </Layout>
     );
 };
 
 const StatCard = ({ title, value, total, icon, color }: any) => (
-    <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between group hover:shadow-md transition-all">
-        <div className="flex items-center gap-4">
-            <div className={`p-2.5 rounded-xl ${color} group-hover:scale-110 transition-transform`}>
+    <motion.div 
+        whileHover={{ y: -4, boxShadow: '0 12px 30px -10px rgba(0,0,0,0.1)' }}
+        className="bg-white p-6 rounded-[24px] shadow-sm border border-slate-200 flex items-center justify-between group transition-all"
+    >
+        <div className="flex items-center gap-5">
+            <div className={`p-4 rounded-2xl ${color} group-hover:scale-110 transition-transform duration-500`}>
                 {icon}
             </div>
             <div>
-                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{title}</p>
-                <div className="flex items-baseline gap-1.5">
-                    <h3 className="text-xl font-black text-slate-800 leading-none">{value}</h3>
-                    <span className="text-[10px] text-slate-400 font-bold">/ {total}</span>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] mb-1">{title}</p>
+                <div className="flex items-baseline gap-2">
+                    <h3 className="text-2xl font-black text-slate-900 leading-none tracking-tight">{value}</h3>
+                    <span className="text-[11px] text-slate-400 font-bold">/ {total}</span>
                 </div>
             </div>
         </div>
-    </div>
+        <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="w-1.5 h-1.5 rounded-full bg-slate-200"></div>
+        </div>
+    </motion.div>
 );
 
 // Helper for relative time
@@ -391,64 +424,78 @@ const BusCard = ({ bus, address }: { bus: any, address?: string }) => {
     const speedMph = Math.round(bus.speedMph ?? bus.currentSpeed ?? bus.speed ?? bus.speedMPH ?? 0);
 
     return (
-        <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition-shadow group">
-            <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm ${bus.status === 'ON_ROUTE' ? 'bg-green-100 text-green-600' : 'bg-blue-50 text-blue-600'
-                        }`}>
-                        {bus.busNumber?.slice(0, 2) || 'BS'}
+        <motion.div 
+            whileHover={{ y: -4, boxShadow: '0 20px 40px -20px rgba(0,0,0,0.1)' }}
+            className="bg-white p-5 rounded-[28px] shadow-sm border border-slate-200 transition-all group relative overflow-hidden"
+        >
+            <div className="flex items-start justify-between mb-4 relative z-10">
+                <div className="flex items-center gap-4">
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-xs tracking-tighter shadow-sm border ${
+                        bus.status === 'ON_ROUTE' ? 'bg-green-50 text-green-700 border-green-100' : 'bg-blue-50 text-blue-700 border-blue-100'
+                    }`}>
+                        {bus.busNumber?.slice(-2) || '00'}
                     </div>
                     <div>
-                        <h4 className="font-bold text-slate-800">{bus.busNumber}</h4>
-                        <p className="text-xs text-slate-500 flex items-center gap-1">
-                            <User size={10} />
+                        <h4 className="font-extrabold text-slate-900 tracking-tight">{bus.busNumber}</h4>
+                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider flex items-center gap-1.5 mt-0.5">
+                            <User size={10} className="text-slate-400" />
                             {bus.driverName || 'Unassigned'}
                         </p>
                     </div>
                 </div>
-                <span className={`px-2 py-1 rounded-full text-xs font-bold ${isLiveBus(bus) ? 'bg-green-100 text-green-700 animate-pulse' :
-                        bus.status === 'ACTIVE' ? 'bg-blue-100 text-blue-700' :
-                            bus.status === 'MAINTENANCE' ? 'bg-orange-100 text-orange-700' :
-                                'bg-slate-100 text-slate-600'
-                    }`}>
-                    {isLiveBus(bus) ? 'LIVE' : bus.status || 'Unknown'}
-                </span>
+                <div className={`px-2.5 py-1 rounded-full text-[9px] font-black tracking-[0.05em] uppercase border ${
+                    isLiveBus(bus) ? 'bg-green-50 text-green-700 border-green-200' :
+                    bus.status === 'ACTIVE' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                    bus.status === 'MAINTENANCE' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                    'bg-slate-50 text-slate-600 border-slate-200'
+                }`}>
+                    {isLiveBus(bus) ? (
+                        <span className="flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                            TRACKING
+                        </span>
+                    ) : bus.status || 'OFFLINE'}
+                </div>
             </div>
-            <div className="space-y-2">
+            
+            <div className="space-y-3 relative z-10">
                 {bus.status === 'ON_ROUTE' && getBusLatLng(bus) ? (
-                    <div className="flex flex-col gap-2 text-sm bg-green-50 p-2 rounded-lg">
-                        <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-                            <span className="text-slate-500 font-medium">Speed</span>
-                            <span className={`font-semibold ${stale ? 'text-slate-400' : 'text-green-700'}`}>
-                                {stale ? '--' : speedMph} mph
+                    <div className="flex flex-col gap-2.5 bg-slate-50/50 p-3 rounded-[20px] border border-slate-100/50">
+                        <div className="flex justify-between items-center px-1">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Velocity</span>
+                            <span className={`text-sm font-black ${stale ? 'text-slate-300' : 'text-slate-900'}`}>
+                                {stale ? '00' : speedMph} <span className="text-[10px] font-bold text-slate-400">MPH</span>
                             </span>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <MapPin size={14} className="text-green-500" />
-                            <div className="text-green-600 text-xs font-medium truncate max-w-[200px]" title={address}>
+                        <div className="flex items-start gap-2 px-1">
+                            <MapPin size={12} className="text-blue-500 mt-0.5 shrink-0" />
+                            <div className="text-[11px] text-slate-600 font-medium leading-tight line-clamp-2" title={address}>
                                 {address || `${getBusLatLng(bus)![1].toFixed(4)}, ${getBusLatLng(bus)![0].toFixed(4)}`}
                             </div>
                         </div>
                     </div>
                 ) : (
-                    <div className="flex items-center gap-2 text-sm text-slate-500">
-                        <MapPin size={14} className="text-slate-400" />
-                        <span>{getBusLatLng(bus) ? 'Parked' : 'No GPS Data'}</span>
+                    <div className="flex items-center gap-2 p-3 rounded-[20px] bg-slate-50 border border-slate-100/50 text-slate-400">
+                        <MapPin size={12} className="shrink-0" />
+                        <span className="text-[11px] font-bold uppercase tracking-widest">{getBusLatLng(bus) ? 'Stationary' : 'Signal Lost'}</span>
                     </div>
                 )}
             </div>
-            <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                <span className="text-xs font-medium text-slate-400">
-                    Updated: {getRelativeTime(lastUpdateIso ?? '')}
+
+            <div className="mt-5 pt-4 border-t border-slate-50 flex items-center justify-between relative z-10">
+                <span className="text-[9px] font-bold text-slate-300 uppercase tracking-widest flex items-center gap-1.5">
+                    <div className={`w-1 h-1 rounded-full ${stale ? 'bg-slate-200' : 'bg-green-400'}`}></div>
+                    Sync: {getRelativeTime(lastUpdateIso ?? '')}
                 </span>
-                {isLiveBus(bus) && (
-                    <span className="text-xs font-bold text-green-600 flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-green-500 animate-ping"></span>
-                        Tracking
-                    </span>
-                )}
+                
+                <button className="text-[9px] font-black text-blue-600 hover:text-blue-800 uppercase tracking-widest p-1 -mr-1 transition-colors">
+                    Details →
+                </button>
             </div>
-        </div>
+
+            {/* Subtle background flair */}
+            <div className="absolute -bottom-4 -right-4 w-20 h-20 bg-slate-50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
+        </motion.div>
     );
 };
 

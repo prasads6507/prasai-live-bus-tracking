@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Clock, Bus, Calendar, RefreshCw, Trash2, Download, Map } from 'lucide-react';
-import * as XLSX from 'xlsx';
+// XLSX will be lazy-loaded only when downloading reports to optimize bundle size
 import Layout from '../components/Layout';
 import { getTripHistory, bulkDeleteTrips } from '../services/api';
 
@@ -156,7 +156,10 @@ const TripHistory = () => {
         );
     };
 
-    const downloadReport = () => {
+    const downloadReport = async () => {
+        // Dynamically import XLSX only when needed
+        const XLSX = await import('xlsx');
+        
         const now = new Date();
         const start = new Date();
 

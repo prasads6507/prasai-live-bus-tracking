@@ -1,10 +1,35 @@
 {
   "version": 1,
   "skills": {
+    "frontend-design": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "computedHash": "5df87037065873efdf99dab68450b73de6d717744c1c363bc22cd04dc5578e93"
+    },
+    "frontend-dev-guidelines": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "computedHash": "f28ac2eefeb0ca41de8d2853f0f1078075fb6ab018e886aa44ccdb86872f2c27"
+    },
     "mobile-design": {
       "source": "sickn33/antigravity-awesome-skills",
       "sourceType": "github",
       "computedHash": "63843b274e951c940fcd408ba39a8800489fe0b9eeff4fe6bda39478bc4f662d"
+    },
+    "react-ui-patterns": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "computedHash": "6d4eb6b0bda3479324f508314a737ed7cac0c4ed60538bd7bf892b1977a3e09e"
+    },
+    "vercel-deployment": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "computedHash": "53b95746d6ed728a76d7fdba944fd72f23dac43620595f965e84eb4897871697"
+    },
+    "web-performance-optimization": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "computedHash": "8cfc6abf5a7ee700208117ad52b659cf8388a60e84fce18f87de82b39216bf99"
     }
   }
 }

@@ -63,6 +63,16 @@ class TripFinalizer {
       } catch (e) {
         debugPrint("[TripFinalizer] API endTrip failed: $e. Falling back to firestore endTrip.");
         await firestoreDS.endTrip(tripId, busId);
+        try {
+          // Attempt to forcefully trigger the notification API since backend endTrip failed
+          await apiDS.notifyTripEnded(
+            collegeId: collegeId,
+            busId: busId,
+            tripId: tripId,
+          );
+        } catch (e2) {
+          debugPrint("[TripFinalizer] notifyTripEnded fallback also failed: $e2");
+        }
       }
 
       // 4. Cleanup local tracking keys

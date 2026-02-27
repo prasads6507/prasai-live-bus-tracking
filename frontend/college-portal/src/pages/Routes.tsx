@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { MapPin, Plus, Search, X, AlertCircle, CheckCircle, Edit2, Trash2, Upload, Download } from 'lucide-react';
 import { getRoutes, createRoute, updateRoute, deleteRoute, validateSlug, bulkCreateRoutes } from '../services/api';
 import { motion, AnimatePresence } from 'framer-motion';
-import * as XLSX from 'xlsx';
+// XLSX will be lazy-loaded on demand to reduce bundle size
 import Layout from '../components/Layout';
 import AddressAutocomplete, { reverseGeocode } from '../components/AddressAutocomplete';
 import MapLibreMap from '../components/MapLibreMap';
@@ -278,6 +278,8 @@ const Routes = () => {
         if (!file) return;
 
         try {
+            // Dynamically import XLSX only when needed
+            const XLSX = await import('xlsx');
             const data = await file.arrayBuffer();
             const workbook = XLSX.read(data);
             const sheetName = workbook.SheetNames[0];
@@ -329,7 +331,9 @@ const Routes = () => {
         }
     };
 
-    const handleDownloadTemplate = () => {
+    const handleDownloadTemplate = async () => {
+        // Dynamically import XLSX only when needed
+        const XLSX = await import('xlsx');
         const headers = [['Route Name', 'Stops']];
 
         // Use existing routes to populate template

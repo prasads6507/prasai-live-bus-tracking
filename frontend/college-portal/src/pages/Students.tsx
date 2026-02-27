@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { User, Plus, Search, Mail, Phone, Hash, X, AlertCircle, CheckCircle, Edit2, Trash2, Upload, Download, Key } from 'lucide-react';
 import { getStudents, createStudent, updateStudent, deleteStudent, bulkCreateStudents, resetStudentPassword } from '../services/api';
-import * as XLSX from 'xlsx';
+// XLSX will be lazy-loaded on demand to optimize bundle size
 import { motion, AnimatePresence } from 'framer-motion';
 import Layout from '../components/Layout';
 
@@ -126,7 +126,9 @@ const Students = () => {
         }
     };
 
-    const downloadStudentTemplate = () => {
+    const downloadStudentTemplate = async () => {
+        // Dynamically import XLSX only when needed
+        const XLSX = await import('xlsx');
         const headers = [['Name', 'Register Number', 'Roll Number', 'Email', 'Phone']];
         const data = [['John Doe', 'REG001', 'R001', 'john@example.com', '9876543210']];
 
@@ -137,7 +139,9 @@ const Students = () => {
         XLSX.writeFile(wb, 'Students_Template.xlsx');
     };
 
-    const downloadStudentList = () => {
+    const downloadStudentList = async () => {
+        // Dynamically import XLSX only when needed
+        const XLSX = await import('xlsx');
         const headers = [['Name', 'Register Number', 'Roll Number', 'Email', 'Phone']];
         const data = filteredStudents.map(s => [
             s.name,
@@ -159,6 +163,8 @@ const Students = () => {
         if (!file) return;
 
         try {
+            // Dynamically import XLSX only when needed
+            const XLSX = await import('xlsx');
             const data = await file.arrayBuffer();
             const workbook = XLSX.read(data);
             const sheet = workbook.Sheets[workbook.SheetNames[0]];
