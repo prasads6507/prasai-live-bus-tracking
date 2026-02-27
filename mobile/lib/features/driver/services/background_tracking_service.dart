@@ -400,14 +400,14 @@ class BackgroundTrackingService {
               'trackingMode': 'FAR',
             });
 
-            await batch.commit();
-
-            // 4. Trigger Server FCM (Step 5F)
+            // 4. Trigger Server FCM (Step 5F) UNCONDITIONALLY BEFORE BATCH COMMIT
             _notifyServer(tripId, busId, collegeId, currentStopId, "SKIPPED", 
               stopName: stops[currentIndex]['name'],
               arrivalDocId: notifRef.id,
               prefs: prefs
             );
+
+            await batch.commit();
 
             // Cache NEXT-NEXT stop
             final nextStop = stops[newIndex] as Map<String, dynamic>;
@@ -479,14 +479,15 @@ class BackgroundTrackingService {
           'trackingMode': 'NEAR_STOP',
         });
 
-        await batch.commit();
-
-         // 4. Trigger Server FCM (Step 5F)
+        // 4. Trigger Server FCM (Step 5F) UNCONDITIONALLY BEFORE BATCH COMMIT
+        // This prevents Android offline queueing from swallowing/delaying the HTTP dispatch
         _notifyServer(tripId, busId, collegeId, stopId, "ARRIVED", 
           stopName: stops[currentIndex]['name'],
           arrivalDocId: notifRef.id,
           prefs: prefs
         );
+
+        await batch.commit();
       }
     } catch (e) {
       debugPrint("[Background] HandleArrivalEntry error: $e");
@@ -548,7 +549,7 @@ class BackgroundTrackingService {
         // AUTO-END
         debugPrint("[Background] AUTO-ENDING TRIP at final stop");
 
-        // Notify students that trip ended
+        // Notify students that trip ended UNCONDITIONALLY BEFORE BATCH COMMIT
         try {
           _notifyServer(tripId, busId, collegeId, '', 'TRIP_ENDED', prefs: prefs);
         } catch (e) {
