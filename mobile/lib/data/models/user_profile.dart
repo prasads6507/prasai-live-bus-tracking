@@ -40,4 +40,19 @@ class UserProfile {
       activeBusNumber: data['activeBusNumber']?.toString(),
     );
   }
+
+  factory UserProfile.fromJson(Map<String, dynamic> json) {
+    return UserProfile(
+      id: (json['id'] ?? json['_id'] ?? '').toString(),
+      email: json['email'] ?? '',
+      role: json['role'] ?? 'student',
+      collegeId: json['collegeId'] ?? '',
+      name: json['name'],
+      phone: (json['phone'] ?? json['phoneNumber'])?.toString(),
+      assignedBusId: (json['assignedBusId'] ?? json['busId'])?.toString(),
+      favoriteBusIds: List<String>.from(json['favoriteBusIds'] ?? []),
+      activeBusId: json['activeBusId']?.toString(),
+      activeBusNumber: json['activeBusNumber']?.toString(),
+    );
+  }
 }

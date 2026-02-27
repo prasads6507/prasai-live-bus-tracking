@@ -169,7 +169,8 @@ final busStudentsProvider = FutureProvider.family<List<UserProfile>, String>((re
   if (response.data['success']) {
     return (response.data['data'] as List)
         .map((s) => UserProfile.fromJson(s))
-        .toList();
+        .toList()
+        .cast<UserProfile>();
   }
   return [];
 });
