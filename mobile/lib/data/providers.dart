@@ -130,3 +130,15 @@ final studentsProvider = StreamProvider.family<List<UserProfile>, String>((ref, 
   final ds = ref.watch(firestoreDataSourceProvider);
   return ds.getStudents(collegeId);
 });
+final assignedBusProvider = StreamProvider<Bus?>((ref) {
+  final userProfile = ref.watch(userProfileProvider).value;
+  if (userProfile == null || userProfile.role != 'driver') return Stream.value(null);
+
+  final collegeId = userProfile.collegeId;
+  final driverId = userProfile.id;
+
+  return ref.read(firestoreDataSourceProvider).getDriverBuses(collegeId, driverId).map((buses) {
+    if (buses.isEmpty) return null;
+    return buses.first;
+  });
+});

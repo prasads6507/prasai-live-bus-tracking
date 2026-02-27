@@ -39,7 +39,8 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
   @override
   Widget build(BuildContext context) {
     final userProfile = ref.watch(userProfileProvider).value;
-    final driverBusId = userProfile?.assignedBusId;
+    final assignedBus = ref.watch(assignedBusProvider).value;
+    final driverBusId = assignedBus?.id ?? userProfile?.assignedBusId;
     final collegeId = userProfile?.collegeId ?? '';
 
     // Fetch all students and buses in the college
@@ -175,7 +176,7 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
                                   style: TextStyle(color: Colors.orange, fontSize: 10, fontWeight: FontWeight.bold),
                                 ),
                               )
-                            else if (student.assignedBusId == driverBusId)
+                            else if (student.assignedBusId == driverBusId && driverBusId != null)
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                 decoration: BoxDecoration(
