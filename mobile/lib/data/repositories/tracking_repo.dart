@@ -32,19 +32,9 @@ class TrackingRepository {
     bool isMaintenance = false,
     String? originalBusId,
   }) async {
-    final tripId = await _firestoreDataSource.startTrip(
-      collegeId: collegeId,
-      busId: busId,
-      driverId: driverId,
-      routeId: routeId,
-      busNumber: busNumber,
-      driverName: driverName,
-      direction: direction,
-      isMaintenance: isMaintenance,
-      originalBusId: originalBusId,
-    );
+    final tripId = 'trip-$busId-${DateTime.now().millisecondsSinceEpoch}';
 
-    // Fire and forget — notify server to send FCM to students who favorited this bus
+    // Fire and forget — notify server to send FCM to students IMMEDIATELY
     _apiDataSource.notifyTripStarted(
       collegeId: collegeId,
       busId: busId,
@@ -63,8 +53,22 @@ class TrackingRepository {
       return null;
     });
 
+    await _firestoreDataSource.startTrip(
+      collegeId: collegeId,
+      busId: busId,
+      driverId: driverId,
+      routeId: routeId,
+      busNumber: busNumber,
+      driverName: driverName,
+      direction: direction,
+      isMaintenance: isMaintenance,
+      originalBusId: originalBusId,
+      predefinedTripId: tripId,
+    );
+
     return tripId;
   }
+
 
   Future<void> endTrip(String collegeId, String? tripId, String busId) async {
     await _firestoreDataSource.endTrip(tripId, busId);

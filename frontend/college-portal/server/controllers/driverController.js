@@ -498,14 +498,17 @@ const sendStudentAttendanceNotification = async ({ studentId, busId, direction, 
 
         const isPickup = direction !== 'dropoff';
         let title = '';
-        
+        let body = '';
+        const name = studentData.name || 'Student';
+        const busStr = busNumber || busId;
+
         if (isChecked) {
-            title = isPickup ? '🚌 ✅ Has Boarded' : '🚌 ✅ Has Dropped Off';
+            title = isPickup ? '🚌 ✅ Boarded' : '🚌 ✅ Dropped Off';
+            body = isPickup ? `${name} has boarded Bus ${busStr}` : `${name} has dropped off from Bus ${busStr}`;
         } else {
             title = isPickup ? '⚠️ Boarding Cancelled' : '⚠️ Drop Off Cancelled';
+            body = isPickup ? `${name}'s boarding was cancelled` : `${name}'s drop off was cancelled`;
         }
-
-        const body = `Bus ${busNumber || busId}`;
 
         await messaging.send({
             notification: { title, body },
@@ -514,7 +517,7 @@ const sendStudentAttendanceNotification = async ({ studentId, busId, direction, 
             apns: { payload: { aps: { sound: 'default', badge: 1 } } },
             token: studentData.fcmToken
         });
-        console.log(`[sendStudentAttendanceNotification] Sent real-time FCM to ${studentData.name} (${title})`);
+        console.log(`[sendStudentAttendanceNotification] Sent real-time FCM for ${name} (${title})`);
     } catch (error) {
         console.error('Error in sendStudentAttendanceNotification:', error);
     }
@@ -627,28 +630,6 @@ const historyUpload = async (req, res) => {
 
             await batch.commit();
             console.log(`[historyUpload] Written ${studentIds.length} present records (${direction})`);
-
-            // FCM: notify boarded/dropped-off students
-            if (messaging && boardedTokens.length > 0) {
-                const label = isPickup ? 'Has Boarded' : 'Has Dropped Off';
-                for (let t = 0; t < boardedTokens.length; t += 500) {
-                    const tokenBatch = boardedTokens.slice(t, t + 500);
-                    try {
-                        await messaging.sendEachForMulticast({
-                            notification: {
-                                title: `🚌 ✅ ${label}`,
-                                body: `${boardedNames[t] || 'You'} — Bus ${busNumber}`
-                            },
-                            data: { tripId: tripId || '', busId: tripData.busId || '', type: isPickup ? 'STUDENT_BOARDED' : 'STUDENT_DROPPED' },
-                            android: { notification: { channelId: 'bus_events', priority: 'high', sound: 'default' } },
-                            apns: { payload: { aps: { sound: 'default', badge: 1 } } },
-                            tokens: tokenBatch
-                        });
-                    } catch (fcmErr) {
-                        console.error('[historyUpload] FCM boarded error:', fcmErr.message);
-                    }
-                }
-            }
         }
 
         // ── B. NOT_BOARDED: always run regardless of whether attendance was empty ──

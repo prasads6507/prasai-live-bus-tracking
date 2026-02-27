@@ -449,6 +449,7 @@ class FirestoreDataSource {
     String direction = 'pickup',
     bool isMaintenance = false,
     String? originalBusId,
+    String? predefinedTripId,
   }) async {
     // 0. GUARDIAN: Ensure driver doesn't have another active trip already
     final activeTripsSnap = await _firestore.collection('trips')
@@ -463,8 +464,8 @@ class FirestoreDataSource {
 
     final batch = _firestore.batch();
     
-    // Generate trip ID
-    final tripId = 'trip-${busId}-${DateTime.now().millisecondsSinceEpoch}';
+    // Generate trip ID or use predefined
+    final tripId = predefinedTripId ?? 'trip-${busId}-${DateTime.now().millisecondsSinceEpoch}';
 
     // Load stops from Firestore
     List<RouteStop> stops = [];
