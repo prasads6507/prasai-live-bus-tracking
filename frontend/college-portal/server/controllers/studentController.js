@@ -67,7 +67,7 @@ const createStudent = async (req, res) => {
 
         await db.collection('students').doc(studentId).set(studentData);
 
-        res.status(201).json({ success: true, data: { ...studentData, passwordHash: undefined } });
+        res.status(201).json({ success: true, data: { _id: studentId, ...studentData, passwordHash: undefined } });
     } catch (error) {
         console.error('Create student error:', error);
         res.status(500).json({ message: error.message });
@@ -100,7 +100,7 @@ const getStudents = async (req, res) => {
 
         const students = snapshot.docs.map(doc => {
             const data = doc.data();
-            return { ...data, passwordHash: undefined }; // Don't expose password hash
+            return { _id: doc.id, ...data, passwordHash: undefined }; // Map doc.id to _id
         });
 
         // Manual sort in memory if fallback was used

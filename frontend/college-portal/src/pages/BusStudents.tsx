@@ -139,16 +139,22 @@ const BusStudents = () => {
         setSubmitting(true);
         setErrorMessage('');
         try {
-            const assignments = stagedStudents.map(s => ({ studentId: s._id, action: 'add' as 'add' | 'remove' }));
+            const assignments = stagedStudents.map(s => ({ studentId: s._id || (s as any).studentId, action: 'add' as 'add' | 'remove' }));
+            console.log('Submitting assignments:', assignments);
             await assignStudentsToBus(busId!, assignments);
 
-            setSuccessMessage(`${stagedStudents.length} student(s) assigned to Bus ${busNumber}!`);
+            const addedCount = stagedStudents.length;
+            setSuccessMessage(`${addedCount} student(s) successfully assigned to Bus ${busNumber}!`);
+
             // Move staged → existing
             setExistingStudents(prev => [...prev, ...stagedStudents]);
             setStagedStudents([]);
-            setTimeout(() => setSuccessMessage(''), 4000);
+
+            // Auto close success after 5s
+            setTimeout(() => setSuccessMessage(''), 5000);
         } catch (err: any) {
-            setErrorMessage(err.response?.data?.message || 'Failed to assign students');
+            console.error('Assignment error:', err);
+            setErrorMessage(err.response?.data?.message || 'Failed to assign students. Please try again.');
         } finally {
             setSubmitting(false);
         }
@@ -279,11 +285,16 @@ const BusStudents = () => {
                                                         {student.registerNumber}
                                                     </span>
                                                 )}
-                                                {student.assignedBusId && student.assignedBusId !== busId && (
+                                                {stagedStudents.some(st => st._id === student._id) ? (
+                                                    <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1">
+                                                        <CheckCircle size={10} />
+                                                        Staged
+                                                    </span>
+                                                ) : student.assignedBusId && student.assignedBusId !== busId ? (
                                                     <span className="text-xs text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full flex-shrink-0">
                                                         On another bus
                                                     </span>
-                                                )}
+                                                ) : null}
                                                 <UserPlus size={16} className="text-blue-400 flex-shrink-0" />
                                             </button>
                                         ))}

@@ -42,8 +42,17 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
     final driverBusId = userProfile?.assignedBusId;
     final collegeId = userProfile?.collegeId ?? '';
 
-    // Fetch all students in the college
+    // Fetch all students and buses in the college
     final studentsAsync = ref.watch(studentsProvider(collegeId));
+    final busesAsync = ref.watch(busesProvider(collegeId));
+
+    // Create a map for quick bus number lookup
+    final Map<String, String> busIdToNumber = {};
+    busesAsync.whenData((buses) {
+      for (var b in buses) {
+        busIdToNumber[b.id] = b.busNumber;
+      }
+    });
 
     return AppScaffold(
       appBar: AppBar(
@@ -161,8 +170,8 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
                                   borderRadius: BorderRadius.circular(8),
                                   border: Border.all(color: Colors.orange[200]!),
                                 ),
-                                child: const Text(
-                                  'Bus Assigned',
+                                child: Text(
+                                  _getBusLabel(student.assignedBusId, busIdToNumber),
                                   style: TextStyle(color: Colors.orange, fontSize: 10, fontWeight: FontWeight.bold),
                                 ),
                               )
@@ -201,7 +210,7 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
                              _showCallDialog(student);
                           },
                         ),
-                         onTap: () => _showStudentDetails(student),
+                         onTap: () => _showStudentDetails(student, busIdToNumber),
                       ),
                     );
                   },
@@ -239,7 +248,7 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
     );
   }
 
-    void _showStudentDetails(UserProfile student) {
+    void _showStudentDetails(UserProfile student, Map<String, String> busIdToNumber) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -279,7 +288,7 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
             const SizedBox(height: 24),
             _detailRow(Icons.email, 'Email', student.email),
             _detailRow(Icons.phone, 'Phone', student.phone ?? 'Not provided'),
-            _detailRow(Icons.bus_alert, 'Assigned Bus ID', student.assignedBusId ?? 'Not Assigned'),
+            _detailRow(Icons.bus_alert, 'Assigned Bus', _getBusLabel(student.assignedBusId, busIdToNumber, isFull: true)),
             const SizedBox(height: 32),
             SizedBox(
               width: double.infinity,
@@ -301,6 +310,13 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
         ),
       ),
     );
+  }
+
+  String _getBusLabel(String? busId, Map<String, String> busMap, {bool isFull = false}) {
+    if (busId == null) return 'No Bus';
+    final number = busMap[busId];
+    if (number != null) return isFull ? 'Bus $number' : 'Bus $number';
+    return isFull ? 'Assigned' : 'Assigned';
   }
 
   Widget _detailRow(IconData icon, String label, String value) {
