@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:dio/dio.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:mobile/core/theme/colors.dart';
 import 'package:mobile/core/theme/typography.dart';
 import 'package:mobile/core/widgets/app_scaffold.dart';
@@ -487,132 +488,149 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(24),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                CircleAvatar(
-                  radius: 30,
-                  backgroundColor: AppColors.primary.withOpacity(0.1),
-                  child: Text(
-                    (student.name ?? 'S')[0].toUpperCase(),
-                    style: const TextStyle(
-                        color: AppColors.primary,
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(student.name ?? 'Unknown Student',
-                          style: AppTypography.h3),
-                      Text(student.email, style: AppTypography.bodyMd),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            if (activeTripId != null)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: isAttended
-                      ? (direction == 'pickup' ? Colors.green[50] : Colors.blue[50])
-                      : Colors.grey[100],
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      isAttended ? Icons.check_circle : Icons.pending,
-                      size: 16,
-                      color: isAttended
-                          ? (direction == 'pickup' ? Colors.green : Colors.blue)
-                          : Colors.grey,
+      builder: (context) {
+        // Use a local builder to ensure variables are captured correctly if needed, 
+        // though Dart closures usually handle this fine.
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 30,
+                    backgroundColor: AppColors.primary.withOpacity(0.1),
+                    child: Text(
+                      (student.name ?? 'S')[0].toUpperCase(),
+                      style: const TextStyle(
+                          color: AppColors.primary,
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold),
                     ),
-                    const SizedBox(width: 8),
-                    Text(
-                      isAttended
-                          ? (direction == 'pickup' ? 'Picked Up ✓' : 'Dropped Off ✓')
-                          : 'Pending',
-                      style: TextStyle(
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(student.name ?? 'Unknown Student',
+                            style: AppTypography.h3),
+                        Text(student.email, style: AppTypography.bodyMd),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              if (activeTripId != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isAttended
+                        ? (direction == 'pickup' ? Colors.green[50] : Colors.blue[50])
+                        : Colors.grey[100],
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isAttended ? Icons.check_circle : Icons.pending,
+                        size: 16,
                         color: isAttended
                             ? (direction == 'pickup' ? Colors.green : Colors.blue)
                             : Colors.grey,
-                        fontWeight: FontWeight.bold,
                       ),
-                    ),
-                  ],
-                ),
-              ),
-            const SizedBox(height: 24),
-            if (student.phone != null)
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.phone, color: AppColors.primary),
-                title: Text(student.phone!),
-                onTap: () => _makePhoneCall(student.phone),
-              ),
-            _detailRow(Icons.bus_alert, 'Assigned Bus', _getBusLabel(student.assignedBusId, busIdToNumber)),
-            const SizedBox(height: 32),
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      _makePhoneCall(student.phone);
-                    },
-                    icon: const Icon(Icons.call),
-                    label: const Text('Call'),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
+                      const SizedBox(width: 8),
+                      Text(
+                        isAttended
+                            ? (direction == 'pickup' ? 'Picked Up ✓' : 'Dropped Off ✓')
+                            : 'Pending',
+                        style: TextStyle(
+                          color: isAttended
+                              ? (direction == 'pickup' ? Colors.green : Colors.blue)
+                              : Colors.grey,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                if (activeTripId != null) ...[
-                  const SizedBox(width: 12),
+              const SizedBox(height: 24),
+              if (student.phone != null)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.phone, color: AppColors.primary),
+                  title: Text(student.phone!),
+                  onTap: () => _makePhoneCall(student.phone),
+                ),
+              _detailRow(Icons.bus_alert, 'Assigned Bus', _getBusLabel(student.assignedBusId, busIdToNumber)),
+              const SizedBox(height: 32),
+              Row(
+                children: [
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: () {
                         Navigator.pop(context);
-                        _onAttendanceChanged(student, !isAttended, direction, activeTripId);
+                        _makePhoneCall(student.phone);
                       },
-                      icon: Icon(isAttended ? Icons.remove_circle_outline : Icons.check_circle_outline),
-                      label: Text(isAttended ? 'Remove Marking' : (direction == 'pickup' ? 'Pick Up' : 'Drop Off')),
+                      icon: const Icon(Icons.call),
+                      label: const Text('Call'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: isAttended ? Colors.red[50] : (direction == 'pickup' ? Colors.green : Colors.blue),
-                        foregroundColor: isAttended ? Colors.red : Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                     ),
                   ),
+                  if (activeTripId != null) ...[
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _onAttendanceChanged(student, !isAttended, direction, activeTripId);
+                        },
+                        icon: Icon(isAttended ? Icons.remove_circle_outline : Icons.check_circle_outline),
+                        label: Text(isAttended ? 'Remove Marking' : (direction == 'pickup' ? 'Pick Up' : 'Drop Off')),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: isAttended ? Colors.red[50] : (direction == 'pickup' ? Colors.green : Colors.blue),
+                          foregroundColor: isAttended ? Colors.red : Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
-              ],
-            ),
-            const SizedBox(height: 16),
-          ],
-        ),
-      ),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        );
+      },
     );
   }
 
   void _showCallDialog(UserProfile student) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Call ${student.name ?? 'Student'}?'),
+        content: Text('Phone: ${student.phone ?? 'N/A'}'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
               _makePhoneCall(student.phone);
             },
             icon: const Icon(Icons.call),
