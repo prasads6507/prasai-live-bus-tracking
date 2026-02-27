@@ -148,8 +148,14 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
     // CHECK FOR REPLACEMENT: If student is tracking their favorite, but backend says another bus is active
     final profile = ref.read(userProfileProvider).asData?.value;
     if (profile != null && profile.activeBusId != null && profile.activeBusId != busId) {
+       // C-2 FIX: Stale Check
+       // Only show replacement if it was updated within the last 6 hours
+       final isRecent = profile.lastBusUpdate != null && 
+                       DateTime.now().difference(profile.lastBusUpdate!).inHours < 6;
+
        // Only show if the student has favorited the bus they came here to track
-       if (profile.favoriteBusIds.contains(busId)) {
+       // AND it is a recent update from the backend
+       if (profile.favoriteBusIds.contains(busId) && isRecent) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(

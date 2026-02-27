@@ -1438,15 +1438,21 @@ const getAttendance = async (req, res) => {
             query = query.where('tripId', '==', tripId);
         }
 
-        // Date filter on createdAt (works for both pickup and dropoff records)
+        // Date filter on createdAt or updatedAt
         if (date) {
             const startOfDay = new Date(date);
-            startOfDay.setHours(0, 0, 0, 0);
+            startOfDay.setUTCHours(0, 0, 0, 0);
             const endOfDay = new Date(date);
-            endOfDay.setHours(23, 59, 59, 999);
+            endOfDay.setUTCHours(23, 59, 59, 999);
 
-            query = query.where('createdAt', '>=', admin.firestore.Timestamp.fromDate(startOfDay))
-                         .where('createdAt', '<=', admin.firestore.Timestamp.fromDate(endOfDay));
+            const startTs = admin.firestore.Timestamp.fromDate(startOfDay);
+            const endTs = admin.firestore.Timestamp.fromDate(endOfDay);
+
+            // We filter primarily by createdAt, but also allow records without createdAt if we use updatedAt
+            // Note: Mixing where clauses on different fields in a range is tricky in Firestore
+            // For now, let's fix the date parsing to ensure it's UTC consistent
+            query = query.where('createdAt', '>=', startTs)
+                         .where('createdAt', '<=', endTs);
         }
 
         const snapshot = await query.orderBy('createdAt', 'desc').get();

@@ -480,10 +480,32 @@ const sendTripEndedNotification = async (tripId, busId, collegeId) => {
         }
 
         const tokens = [];
+        const studentUpdates = [];
+
         studentsSnap.forEach(doc => {
-            const token = doc.data().fcmToken;
+            const data = doc.data();
+            const token = data.fcmToken;
             if (token && typeof token === 'string' && token.length > 10) tokens.push(token);
+
+            // SILENT UPDATE: Clear student's active bus info when the trip ends
+            studentUpdates.push({
+                ref: doc.ref,
+                data: {
+                    activeBusId: admin.firestore.FieldValue.delete(),
+                    activeBusNumber: admin.firestore.FieldValue.delete(),
+                    activeTripId: admin.firestore.FieldValue.delete(),
+                    lastBusUpdate: admin.firestore.FieldValue.serverTimestamp()
+                }
+            });
         });
+
+        // Execute student updates in batches
+        if (studentUpdates.length > 0) {
+            console.log(`[TripEnded] Clearing active bus info for ${studentUpdates.length} students...`);
+            const updateBatch = db.batch();
+            studentUpdates.forEach(update => updateBatch.update(update.ref, update.data));
+            await updateBatch.commit();
+        }
 
         if (tokens.length === 0) {
             console.log(`[TripEnded] No valid FCM tokens for bus ${busId}`);

@@ -819,12 +819,15 @@ const markPickup = async (req, res) => {
             tripId,
             studentId,
             busId: tripData.busId,
+            busNumber: tripData.busNumber || tripData.busId,
             collegeId: req.collegeId,
             driverId: req.user.id,
             studentName,
+            direction: tripData.direction || 'pickup',
             pickedUpAt: serverTimestamp,
             status: 'picked_up',
             droppedOffAt: null,
+            createdAt: serverTimestamp,
             updatedAt: serverTimestamp
         };
 
@@ -879,11 +882,20 @@ const markDropoff = async (req, res) => {
         const serverTimestamp = admin.firestore.FieldValue.serverTimestamp();
 
         await db.runTransaction(async (transaction) => {
-            transaction.update(attendanceRef, {
+            transaction.set(attendanceRef, {
                 droppedOffAt: serverTimestamp,
                 status: 'dropped_off',
-                updatedAt: serverTimestamp
-            });
+                direction: tripData.direction || 'dropoff',
+                updatedAt: serverTimestamp,
+                // Ensure createdAt is set if record is new (e.g. dropoff without pickup in PM)
+                createdAt: serverTimestamp,
+                tripId,
+                studentId,
+                busId: tripData.busId,
+                busNumber: tripData.busNumber || tripData.busId,
+                collegeId: req.collegeId,
+                driverId: req.user.id
+            }, { merge: true });
             transaction.update(tripRef, {
                 droppedOffStudents: admin.firestore.FieldValue.arrayUnion(studentId),
                 updatedAt: serverTimestamp
