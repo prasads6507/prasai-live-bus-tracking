@@ -111,10 +111,13 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
           ),
 
           if (!_isSearchMode && activeTripId != null)
-            studentsAsync.whenData((allStudents) {
-              final displayList = allStudents.where((s) => s.assignedBusId == driverBusId).toList();
-              return _buildAttendanceSummary(displayList, attendanceMap);
-            }) ?? const SizedBox.shrink(),
+            studentsAsync.maybeWhen(
+              data: (allStudents) {
+                final displayList = allStudents.where((s) => s.assignedBusId == driverBusId).toList();
+                return _buildAttendanceSummary(displayList, attendanceMap);
+              },
+              orElse: () => const SizedBox.shrink(),
+            ),
 
           Expanded(
             child: studentsAsync.when(
