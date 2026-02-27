@@ -143,239 +143,115 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
                   error: (err, stack) => Center(child: Text('Error: $err')),
                 ),
           ),
-
-                if (displayList.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.people_outline, size: 64, color: Colors.grey[400]),
-                        const SizedBox(height: 16),
-                        Text(
-                          _isSearchMode ? 'No students found matching "$_searchQuery"' : 'No students assigned to your bus',
-                          style: TextStyle(color: Colors.grey[600]),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                return ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: displayList.length,
-                  itemBuilder: (context, index) {
-                    final student = displayList[index];
-                    final isOnOtherBus = student.assignedBusId != null && student.assignedBusId != driverBusId;
-
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.all(12),
-                        leading: CircleAvatar(
-                          backgroundColor: AppColors.primary.withOpacity(0.1),
-                          child: Text(
-                            (student.name ?? 'S')[0].toUpperCase(),
-                            style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                        title: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                student.name ?? 'Unknown Student',
-                                style: const TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                            if (isOnOtherBus)
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Colors.orange[50],
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: Colors.orange[200]!),
-                                ),
-                                child: Text(
-                                  _getBusLabel(student.assignedBusId, busIdToNumber),
-                                  style: TextStyle(color: Colors.orange, fontSize: 10, fontWeight: FontWeight.bold),
-                                ),
-                              )
-                            else if (student.assignedBusId == driverBusId && driverBusId != null)
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Colors.green[50],
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: Colors.green[200]!),
-                                ),
-                                child: const Text(
-                                  'My Bus',
-                                  style: TextStyle(color: Colors.green, fontSize: 10, fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                          ],
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(student.email),
-                            if (student.phone != null)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 4),
-                                child: Text(
-                                  student.phone!,
-                                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                                ),
-                              ),
-                          ],
-                        ),
-                        trailing: _buildAttendanceAction(student, activeTripId, attendanceMap[student.id]),
-                         onTap: () => _showStudentDetails(student, busIdToNumber, activeTripId, attendanceMap[student.id]),
-                      ),
-                    );
-                  },
-                );
-              },
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (err, stack) => Center(child: Text('Error: $err')),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showCallDialog(UserProfile student) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Call Student'),
-        content: Text('Do you want to call ${student.name}?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _makePhoneCall(student.phone);
-            },
-            child: const Text('Call'),
-          ),
         ],
       ),
     );
   }
 
   Widget _buildStudentList(List<UserProfile> displayList, String? activeTripId, Map<String, String> attendanceMap, Map<String, String> busIdToNumber) {
-    return Column(
-      children: [
-        if (!_isSearchMode && activeTripId != null)
-          _buildAttendanceSummary(displayList, attendanceMap),
-        Expanded(
-          child: displayList.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.people_outline, size: 64, color: Colors.grey[400]),
-                      const SizedBox(height: 16),
-                      Text(
-                        _isSearchMode ? 'No students found matching "$_searchQuery"' : 'No students assigned to your bus',
-                        style: TextStyle(color: Colors.grey[600]),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: displayList.length,
-                  itemBuilder: (context, index) {
-                    final student = displayList[index];
-                    final assignedBusId = ref.watch(assignedBusProvider).value?.id;
-                    final isOnOtherBus = student.assignedBusId != null && student.assignedBusId != assignedBusId;
-
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.all(12),
-                        leading: CircleAvatar(
-                          backgroundColor: AppColors.primary.withOpacity(0.1),
-                          child: Text(
-                            (student.name ?? 'S')[0].toUpperCase(),
-                            style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                        title: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                student.name ?? 'Unknown Student',
-                                style: const TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                            if (isOnOtherBus)
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Colors.orange[50],
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: Colors.orange[200]!),
-                                ),
-                                child: Text(
-                                  _getBusLabel(student.assignedBusId, busIdToNumber),
-                                  style: const TextStyle(color: Colors.orange, fontSize: 10, fontWeight: FontWeight.bold),
-                                ),
-                              )
-                            else if (student.assignedBusId == assignedBusId && assignedBusId != null)
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Colors.green[50],
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: Colors.green[200]!),
-                                ),
-                                child: const Text(
-                                  'My Bus',
-                                  style: TextStyle(color: Colors.green, fontSize: 10, fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                          ],
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(student.email),
-                            if (student.phone != null)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 4),
-                                child: Text(
-                                  student.phone!,
-                                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                                ),
-                              ),
-                          ],
-                        ),
-                        trailing: _buildAttendanceAction(student, activeTripId, attendanceMap[student.id]),
-                        onTap: () => _showStudentDetails(student, busIdToNumber, activeTripId, attendanceMap[student.id]),
-                      ),
-                    );
-                  },
-                ),
+    if (displayList.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.people_outline, size: 64, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            Text(
+              _isSearchMode ? 'No students found matching "$_searchQuery"' : 'No students assigned to your bus',
+              style: TextStyle(color: Colors.grey[600]),
+              textAlign: TextAlign.center,
+            ),
+          ],
         ),
-      ],
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      itemCount: displayList.length,
+      itemBuilder: (context, index) {
+        final student = displayList[index];
+        final assignedBus = ref.watch(assignedBusProvider).value;
+        final driverBusId = assignedBus?.id;
+        final isOnOtherBus = student.assignedBusId != null && student.assignedBusId != driverBusId;
+
+        return Card(
+          margin: const EdgeInsets.only(bottom: 12),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: ListTile(
+            contentPadding: const EdgeInsets.all(12),
+            leading: CircleAvatar(
+              backgroundColor: AppColors.primary.withOpacity(0.1),
+              child: Text(
+                (student.name ?? 'S')[0].toUpperCase(),
+                style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
+              ),
+            ),
+            title: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    student.name ?? 'Unknown Student',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                if (isOnOtherBus)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.orange[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.orange[200]!),
+                    ),
+                    child: Text(
+                      _getBusLabel(student.assignedBusId, busIdToNumber),
+                      style: const TextStyle(color: Colors.orange, fontSize: 10, fontWeight: FontWeight.bold),
+                    ),
+                  )
+                else if (student.assignedBusId == driverBusId && driverBusId != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.green[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.green[200]!),
+                    ),
+                    child: const Text(
+                      'My Bus',
+                      style: TextStyle(color: Colors.green, fontSize: 10, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+              ],
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(student.email),
+                if (student.phone != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      student.phone!,
+                      style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                    ),
+                  ),
+              ],
+            ),
+            trailing: _buildAttendanceAction(student, activeTripId, attendanceMap[student.id]),
+            onTap: () => _showStudentDetails(student, busIdToNumber, activeTripId, attendanceMap[student.id]),
+          ),
+        );
+      },
     );
   }
+
+  Widget _buildAttendanceSummary(List<UserProfile> students, Map<String, String> attendanceMap) {
     int pickedUp = 0;
     int droppedOff = 0;
     int pending = 0;
 
-    for (var student in students) {
-      final status = attendanceMap[student.id];
+    for (var s in students) {
+      final status = attendanceMap[s.id];
       if (status == 'picked_up') {
         pickedUp++;
       } else if (status == 'dropped_off') {
@@ -386,25 +262,35 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      color: AppColors.primary.withOpacity(0.05),
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.primary.withOpacity(0.1)),
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _summaryItem('$pickedUp Picked Up', Colors.green),
-          _summaryItem('$droppedOff Dropped Off', Colors.blue),
-          _summaryItem('$pending Pending', Colors.orange),
+          _buildSummaryItem('Picked Up', pickedUp, Colors.blue),
+          _buildSummaryItem('Dropped Off', droppedOff, Colors.green),
+          _buildSummaryItem('Pending', pending, Colors.orange),
         ],
       ),
     );
   }
 
-  Widget _summaryItem(String label, Color color) {
-    return Row(
+  Widget _buildSummaryItem(String label, int count, Color color) {
+    return Column(
       children: [
-        Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-        const SizedBox(width: 4),
-        Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color)),
+        Text(
+          count.toString(),
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color),
+        ),
+        Text(
+          label,
+          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+        ),
       ],
     );
   }
@@ -497,7 +383,7 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
     );
   }
 
-    void _showStudentDetails(UserProfile student, Map<String, String> busIdToNumber, String? activeTripId, String? status) {
+  void _showStudentDetails(UserProfile student, Map<String, String> busIdToNumber, String? activeTripId, String? status) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -589,6 +475,27 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
     );
   }
 
+  void _showCallDialog(UserProfile student) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Call Student'),
+        content: Text('Do you want to call ${student.name}?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+              _makePhoneCall(student.phone);
+            },
+            icon: const Icon(Icons.call),
+            label: const Text('Call'),
+          ),
+        ],
+      ),
+    );
+  }
+
   String _getBusLabel(String? busId, Map<String, String> busMap, {bool isFull = false}) {
     if (busId == null) return 'No Bus';
     final number = busMap[busId];
@@ -606,7 +513,6 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ...
               Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
               Text(value, style: const TextStyle(fontWeight: FontWeight.w500)),
             ],
