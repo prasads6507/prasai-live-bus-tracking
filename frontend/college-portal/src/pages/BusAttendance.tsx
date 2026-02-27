@@ -11,7 +11,7 @@ import {
     ClipboardList
 } from 'lucide-react';
 import Layout from '../components/Layout';
-import { getAttendance, getBuses, getTripHistory, validateSlug } from '../services/api';
+import { api, getAttendance, getBuses, getTripHistory, validateSlug } from '../services/api';
 import { format } from 'date-fns';
 
 const BusAttendance = () => {
@@ -39,9 +39,8 @@ const BusAttendance = () => {
             ]);
             
             setAttendance(attendanceRes.data || []);
-            setBuses(busesData || []);
-            // Filter trips by date and bus for the dropdown if needed
-            setTrips(tripsRes.data || []);
+            setBuses(Array.isArray(busesData) ? busesData : (busesData.data || []));
+            setTrips(Array.isArray(tripsRes) ? tripsRes : (tripsRes.data || []));
         } catch (error) {
             console.error('Error fetching attendance:', error);
         } finally {
@@ -51,9 +50,14 @@ const BusAttendance = () => {
 
     const initializeAndFetch = async () => {
         try {
+            setLoading(true);
             if (orgSlug) {
                 const orgData = await validateSlug(orgSlug);
-                localStorage.setItem('current_college_id', orgData.collegeId);
+                if (orgData && orgData.collegeId) {
+                    localStorage.setItem('current_college_id', orgData.collegeId);
+                    // Ensure the header is updated for immediate subsequent calls if needed
+                    api.defaults.headers.common['x-tenant-id'] = orgData.collegeId;
+                }
             }
             await fetchData();
         } catch (error) {
@@ -106,12 +110,12 @@ const BusAttendance = () => {
                         </label>
                         <select 
                             value={filters.busId}
-                            onChange={(e) => setFilters({...filters, busId: e.target.value})}
+                            onChange={(e) => setFilters({...filters, busId: e.target.value, tripId: ''})}
                             className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                         >
                             <option value="">All Buses</option>
                             {buses.map(bus => (
-                                <option key={bus._id} value={bus._id}>
+                                <option key={bus._id || bus.id} value={bus._id || bus.id}>
                                     Bus {bus.busNumber || bus.number}
                                 </option>
                             ))}
@@ -143,8 +147,8 @@ const BusAttendance = () => {
                             {trips
                                 .filter(t => !filters.busId || t.busId === filters.busId)
                                 .map(trip => (
-                                <option key={trip._id} value={trip._id}>
-                                    {trip.driverName} - {format(new Date(trip.startTime), 'p')}
+                                <option key={trip._id || trip.id} value={trip._id || trip.id}>
+                                    {trip.driverName} - {trip.startTime ? format(new Date(trip.startTime), 'p') : 'N/A'}
                                 </option>
                             ))}
                         </select>

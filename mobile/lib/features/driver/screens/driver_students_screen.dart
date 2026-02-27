@@ -44,15 +44,14 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
     final collegeId = userProfile?.collegeId ?? '';
     final activeTripId = ref.watch(activeTripIdProvider).value;
 
-    Map<String, String> attendanceMap = {};
-    if (activeTripId != null) {
-      final attendanceAsync = ref.watch(tripAttendanceProvider(activeTripId));
-      attendanceAsync.whenData((data) {
-        for (var record in data) {
-          attendanceMap[record['studentId']] = record['status'] ?? '';
-        }
-      });
-    }
+    final Map<String, String> attendanceMap = activeTripId != null
+        ? ref.watch(tripAttendanceProvider(activeTripId)).maybeWhen(
+            data: (data) => {
+              for (var record in data) record['studentId'] as String: record['status'] as String? ?? '',
+            },
+            orElse: () => {},
+          )
+        : {};
 
     // Fetch students and buses
     final studentsAsync = ref.watch(studentsProvider(collegeId));
