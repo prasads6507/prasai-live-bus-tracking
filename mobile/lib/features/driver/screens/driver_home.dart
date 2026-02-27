@@ -219,7 +219,7 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
+                   Text(
                     "Assigned Vehicle",
                     style: AppTypography.textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.w900,
@@ -231,6 +231,7 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
                       onPressed: () => _showMaintenanceConsent(context),
                       icon: const Icon(Icons.build_circle_outlined, color: AppColors.primary),
                       tooltip: "Maintenance replacement",
+                      constraints: const BoxConstraints(minWidth: 48, minHeight: 48), // Accessiblity: Min touch target
                     ),
                 ],
               ),
@@ -247,8 +248,12 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
               ),
               const SizedBox(height: 32),
               
-              // Assigned Bus Card
-              _buildBusCard(bus, isMaintenance || isInactive),
+              // Assigned Bus Card - Performance: Use standalone widget
+              BusSelectionCard(
+                bus: bus, 
+                isDisabled: isMaintenance || isInactive,
+                onTap: isMaintenance || isInactive ? null : () => _handleBusSelection(bus),
+              ),
 
               const Spacer(),
 
@@ -387,6 +392,7 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
               return ListView.builder(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                 itemCount: buses.length,
+                itemExtent: 112, // Optimization: Avoid dynamic height calculation if possible
                 itemBuilder: (context, index) {
                   final bus = buses[index];
                   final isCurrentlyOnRoute = bus.status == 'ON_ROUTE' || bus.activeTripId != null;
@@ -394,9 +400,9 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
 
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 16.0),
-                    child: _buildBusCard(
-                      bus, 
-                      isCurrentlyOnRoute || isInactive,
+                    child: BusSelectionCard(
+                      bus: bus, 
+                      isDisabled: isCurrentlyOnRoute || isInactive,
                       onTap: () {
                         setState(() {
                           _maintenanceBus = bus;
@@ -416,90 +422,111 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
     );
   }
 
-  Widget _buildBusCard(Bus bus, bool isDisabled, {VoidCallback? onTap, String? statusLabel}) {
+// --- Standalone Widgets for Optimization ---
+
+class BusSelectionCard extends StatelessWidget {
+  final Bus bus;
+  final bool isDisabled;
+  final VoidCallback? onTap;
+  final String? statusLabel;
+
+  const BusSelectionCard({
+    super.key,
+    required this.bus,
+    this.isDisabled = false,
+    this.onTap,
+    this.statusLabel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     final isMaintenance = bus.status == 'MAINTENANCE';
     final isInactive = bus.status == 'INACTIVE';
     final label = statusLabel ?? (isMaintenance ? "MAINTENANCE" : (isInactive ? "INACTIVE" : null));
 
-    return InkWell(
-      onTap: isDisabled ? (onTap == null ? null : onTap) : (onTap ?? () => _handleBusSelection(bus)),
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: isDisabled ? AppColors.surface.withOpacity(0.5) : AppColors.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: label != null
-              ? AppColors.error.withOpacity(0.3) 
-              : AppColors.divider.withOpacity(0.5)
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: label != null
-                  ? AppColors.error.withOpacity(0.1) 
-                  : AppColors.primary.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Icon(
-                label != null ? Icons.build_circle_outlined : Icons.directions_bus, 
-                color: label != null ? AppColors.error : AppColors.primary, 
-                size: 28
-              ),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: isDisabled ? AppColors.surface.withOpacity(0.5) : AppColors.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: label != null
+                ? AppColors.error.withOpacity(0.3) 
+                : AppColors.divider.withOpacity(0.5)
             ),
-            const SizedBox(width: 20),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        bus.busNumber,
-                        style: AppTypography.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: isDisabled ? AppColors.textSecondary : AppColors.textPrimary,
-                        ),
-                      ),
-                      if (label != null) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: AppColors.error.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: label != null
+                    ? AppColors.error.withOpacity(0.1) 
+                    : AppColors.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(
+                  label != null ? Icons.build_circle_outlined : Icons.directions_bus, 
+                  color: label != null ? AppColors.error : AppColors.primary, 
+                  size: 28
+                ),
+              ),
+              const SizedBox(width: 20),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          bus.busNumber,
+                          style: AppTypography.textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: isDisabled ? AppColors.textSecondary : AppColors.textPrimary,
                           ),
-                          child: Text(
-                            label,
-                            style: AppTypography.textTheme.labelSmall?.copyWith(
-                              color: AppColors.error,
-                              fontWeight: FontWeight.bold,
+                        ),
+                        if (label != null) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppColors.error.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              label,
+                              style: AppTypography.textTheme.labelSmall?.copyWith(
+                                color: AppColors.error,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
-                        ),
+                        ],
                       ],
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    bus.plateNumber,
-                    style: AppTypography.textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
-                  ),
-                ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      bus.plateNumber,
+                      style: AppTypography.textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            if (!isDisabled || onTap != null)
               const Icon(Icons.chevron_right, color: AppColors.textTertiary),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
+}
 
   void _handleBusSelection(Bus bus) {
     setState(() {
@@ -610,39 +637,9 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
   Widget _buildRouteCard(BusRoute route) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12.0),
-      child: InkWell(
+      child: RouteSelectionCard(
+        route: route,
         onTap: () => setState(() => _selectedRouteId = route.id),
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.divider.withOpacity(0.5)),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.map, color: AppColors.primary),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      route.routeName,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                    ),
-                    Text(
-                      "${route.stops.length} stops",
-                      style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(Icons.chevron_right, color: AppColors.textSecondary),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -1357,9 +1354,171 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text("Error ending trip: $e")),
             );
-          }
         }
       },
+    );
+  }
+}
+
+// --- Standalone Widgets for Optimization ---
+
+class BusSelectionCard extends StatelessWidget {
+  final Bus bus;
+  final bool isDisabled;
+  final VoidCallback? onTap;
+  final String? statusLabel;
+
+  const BusSelectionCard({
+    super.key,
+    required this.bus,
+    this.isDisabled = false,
+    this.onTap,
+    this.statusLabel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isMaintenance = bus.status == 'MAINTENANCE';
+    final isInactive = bus.status == 'INACTIVE';
+    final label = statusLabel ?? (isMaintenance ? "MAINTENANCE" : (isInactive ? "INACTIVE" : null));
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: isDisabled ? AppColors.surface.withOpacity(0.5) : AppColors.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: label != null
+                ? AppColors.error.withOpacity(0.3) 
+                : AppColors.divider.withOpacity(0.5)
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: label != null
+                    ? AppColors.error.withOpacity(0.1) 
+                    : AppColors.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(
+                  label != null ? Icons.build_circle_outlined : Icons.directions_bus, 
+                  color: label != null ? AppColors.error : AppColors.primary, 
+                  size: 28
+                ),
+              ),
+              const SizedBox(width: 20),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          bus.busNumber,
+                          style: AppTypography.textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: isDisabled ? AppColors.textSecondary : AppColors.textPrimary,
+                          ),
+                        ),
+                        if (label != null) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppColors.error.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              label,
+                              style: AppTypography.textTheme.labelSmall?.copyWith(
+                                color: AppColors.error,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      bus.plateNumber,
+                      style: AppTypography.textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right, color: AppColors.textTertiary),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class RouteSelectionCard extends StatelessWidget {
+  final BusRoute route;
+  final VoidCallback onTap;
+
+  const RouteSelectionCard({
+    super.key,
+    required this.route,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(20), // Accessibility: Increased padding for touch target
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.divider.withOpacity(0.5)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.map, color: AppColors.primary, size: 24),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      route.routeName,
+                      style: AppTypography.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      "${route.stops.length} stops",
+                      style: AppTypography.textTheme.bodySmall?.copyWith(
+                        color: AppColors.textTertiary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right, color: AppColors.textSecondary, size: 20),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

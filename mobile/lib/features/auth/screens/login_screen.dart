@@ -112,19 +112,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox(height: 12),
-                  // Back Button
-                  GestureDetector(
+                  // Back Button — Accessibility: Min 48px hit area
+                  InkWell(
                     onTap: () => context.go('/college-selection'),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.arrow_back_rounded, color: AppColors.textSecondary, size: 18),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Change Organization',
-                          style: AppTypography.bodyMd.copyWith(color: AppColors.textSecondary),
-                        ),
-                      ],
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 8.0), // Creates 48px combined height
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.arrow_back_rounded, color: AppColors.textSecondary, size: 18),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Change Organization',
+                            style: AppTypography.bodyMd.copyWith(color: AppColors.textSecondary),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(height: 40),
@@ -333,12 +337,23 @@ class _GlowField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOutCubic,
       decoration: BoxDecoration(
         color: AppColors.bgCard,
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isFocused ? AppColors.primary.withOpacity(0.5) : Colors.transparent,
+          width: 1,
+        ),
         boxShadow: isFocused
-            ? [BoxShadow(color: AppColors.primary.withOpacity(0.15), blurRadius: 12)]
+            ? [
+                BoxShadow(
+                  color: AppColors.primary.withOpacity(0.08),
+                  blurRadius: 16,
+                  spreadRadius: 2,
+                )
+              ]
             : [],
       ),
       child: child,

@@ -269,79 +269,22 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
         final student = displayList[index];
         final assignedBus = ref.watch(assignedBusProvider).value;
         final driverBusId = assignedBus?.id;
-        final isOnOtherBus =
-            student.assignedBusId != null && student.assignedBusId != driverBusId;
+        final isOnOtherBus = student.assignedBusId != null && student.assignedBusId != driverBusId;
         final isAttended = _localAttendedIds.contains(student.id);
         final isPending = _pendingIds.contains(student.id);
 
-        return Card(
-          margin: const EdgeInsets.only(bottom: 12),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          child: ListTile(
-            contentPadding: const EdgeInsets.all(12),
-            leading: CircleAvatar(
-              backgroundColor: AppColors.primary.withOpacity(0.1),
-              child: Text(
-                (student.name ?? 'S')[0].toUpperCase(),
-                style: const TextStyle(
-                    color: AppColors.primary, fontWeight: FontWeight.bold),
-              ),
-            ),
-            title: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  student.name ?? 'Unknown Student',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 4),
-                if (isOnOtherBus)
-                  _buildBusTag(
-                      _getBusLabel(student.assignedBusId, busIdToNumber),
-                      Colors.orange[50]!,
-                      Colors.orange[200]!,
-                      Colors.orange)
-                else if (student.assignedBusId == driverBusId && driverBusId != null)
-                  _buildBusTag(
-                      'My Bus', Colors.green[50]!, Colors.green[200]!, Colors.green),
-              ],
-            ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(student.email),
-                if (student.phone != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Text(
-                      student.phone!,
-                      style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                    ),
-                  ),
-              ],
-            ),
-            trailing: activeTripId != null
-                ? isPending
-                    ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Checkbox(
-                        value: isAttended,
-                        activeColor:
-                            direction == 'pickup' ? Colors.green : Colors.blue,
-                        onChanged: (val) =>
-                            _onAttendanceChanged(student, val ?? false, direction,
-                                activeTripId),
-                      )
-                : IconButton(
-                    icon: const Icon(Icons.call, color: AppColors.primary),
-                    onPressed: () => _showCallDialog(student),
-                  ),
-            onTap: () => _showStudentDetails(student, busIdToNumber, activeTripId,
-                direction, isAttended),
-          ),
+        return StudentItem(
+          student: student,
+          isOnOtherBus: isOnOtherBus,
+          busLabel: _getBusLabel(student.assignedBusId, busIdToNumber),
+          isAttended: isAttended,
+          isPending: isPending,
+          activeTripId: activeTripId,
+          direction: direction,
+          onAttendanceChanged: (val) => _onAttendanceChanged(student, val, direction, activeTripId!),
+          onCall: () => _showCallDialog(student),
+          onTap: () => _showStudentDetails(student, busIdToNumber, activeTripId, direction, isAttended),
+          isMyBus: student.assignedBusId == driverBusId && driverBusId != null,
         );
       },
     );
@@ -663,6 +606,125 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class StudentItem extends StatelessWidget {
+  final UserProfile student;
+  final bool isOnOtherBus;
+  final bool isMyBus;
+  final String busLabel;
+  final bool isAttended;
+  final bool isPending;
+  final String? activeTripId;
+  final String direction;
+  final ValueChanged<bool> onAttendanceChanged;
+  final VoidCallback onCall;
+  final VoidCallback onTap;
+
+  const StudentItem({
+    super.key,
+    required this.student,
+    required this.isOnOtherBus,
+    required this.isMyBus,
+    required this.busLabel,
+    required this.isAttended,
+    required this.isPending,
+    this.activeTripId,
+    required this.direction,
+    required this.onAttendanceChanged,
+    required this.onCall,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: ListTile(
+        contentPadding: const EdgeInsets.all(12),
+        leading: CircleAvatar(
+          backgroundColor: AppColors.primary.withOpacity(0.1),
+          child: Text(
+            (student.name ?? 'S')[0].toUpperCase(),
+            style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
+          ),
+        ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              student.name ?? 'Unknown Student',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            if (isOnOtherBus)
+              _BusTag(label: busLabel, color: Colors.orange)
+            else if (isMyBus)
+              const _BusTag(label: 'My Bus', color: Colors.green),
+          ],
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(student.email),
+            if (student.phone != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  student.phone!,
+                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                ),
+              ),
+          ],
+        ),
+        trailing: activeTripId != null
+            ? isPending
+                ? const SizedBox(
+                    width: 48, height: 48,
+                    child: Center(child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))),
+                  )
+                : SizedBox(
+                    width: 48, height: 48,
+                    child: Checkbox(
+                      value: isAttended,
+                      activeColor: direction == 'pickup' ? Colors.green : Colors.blue,
+                      onChanged: (val) => onAttendanceChanged(val ?? false),
+                    ),
+                  )
+            : SizedBox(
+                width: 48, height: 48,
+                child: IconButton(
+                  icon: const Icon(Icons.call, color: AppColors.primary),
+                  onPressed: onCall,
+                ),
+              ),
+        onTap: onTap,
+      ),
+    );
+  }
+}
+
+class _BusTag extends StatelessWidget {
+  final String label;
+  final Color color;
+  const _BusTag({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold),
       ),
     );
   }

@@ -3,18 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../../core/widgets/app_scaffold.dart';
-import '../../../data/models/bus.dart';
-import '../../../data/models/route.dart';
 import '../../../data/models/trip.dart';
 import '../../../data/models/location_point.dart';
 import '../../../data/providers.dart';
 import '../widgets/student_home_header.dart';
 import '../widgets/live_tracker_card.dart';
 import '../widgets/search_bus_card.dart';
-import '../widgets/drop_off_list.dart';
 import '../../map/widgets/mobile_maplibre.dart';
 import '../../../core/theme/typography.dart';
-import '../../../core/widgets/status_chip.dart';
 import '../../../core/theme/colors.dart';
 
 class StudentHomeScreen extends ConsumerStatefulWidget {
@@ -65,14 +61,13 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
     final selectedCollege = ref.watch(selectedCollegeProvider);
     final collegeName = selectedCollege?['collegeName'] ?? collegeId?.toUpperCase() ?? "";
     
-    // Guard: don't query with empty collegeId
     if (collegeId == null || collegeId.isEmpty) {
       return AppScaffold(
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.account_balance_rounded, size: 64, color: AppColors.textTertiary),
+              Icon(Icons.account_balance_rounded, size: 64, color: AppColors.textTertiary),
               const SizedBox(height: 16),
               Text("No Institution Selected", style: AppTypography.h2),
               const SizedBox(height: 8),
@@ -107,7 +102,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
             error: (_, __) => StudentHomeHeader(studentName: "Student", collegeName: collegeName),
           ),
           
-          // Main Content
+          // Main Content — Performance: Using CustomScrollView for scroll-linked effects
           Expanded(
             child: RefreshIndicator(
               color: AppColors.primary,
@@ -116,140 +111,166 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
                 ref.invalidate(busesProvider(collegeId));
                 ref.invalidate(userProfileProvider);
               },
-              child: SingleChildScrollView(
+              child: CustomScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                  child: Column(
-                    children: [
-                      // Live Tracker
-                      busesAsync.when(
-                        data: (buses) {
-                          if (buses.isEmpty) {
-                            return _EmptyBusesState();
-                          }
-                          
-                          final profile = profileAsync.value;
-                          final favoriteBuses = buses.where((b) => profile?.favoriteBusIds.contains(b.id) ?? false).toList();
-                          
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // 1. Mini Map
-                              Container(
-                                height: 220,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(color: AppColors.borderSubtle),
-                                  boxShadow: [AppShadows.cardShadow],
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(20),
-                                  child: Stack(
-                                    children: [
-                                      MobileMapLibre(
-                                        collegeId: collegeId,
-                                        followBus: false,
-                                        focusedLocation: _studentLocation,
-                                        showStudentLocation: true,
-                                        studentLocation: _studentLocation,
-                                      ),
-                                      // Gradient overlay
-                                      Positioned(
-                                        bottom: 0, left: 0, right: 0,
-                                        child: Container(
-                                          height: 60,
-                                          decoration: BoxDecoration(
-                                            gradient: LinearGradient(
-                                              begin: Alignment.bottomCenter,
-                                              end: Alignment.topCenter,
-                                              colors: [
-                                                AppColors.bgDeep.withOpacity(0.7),
-                                                Colors.transparent,
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      // "Your location" label
-                                      Positioned(
-                                        bottom: 12, left: 12,
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                          decoration: BoxDecoration(
-                                            color: AppColors.bgCard.withOpacity(0.9),
-                                            borderRadius: BorderRadius.circular(20),
-                                            border: Border.all(color: AppColors.borderSubtle),
-                                          ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              const Icon(Icons.my_location, size: 12, color: AppColors.primary),
-                                              const SizedBox(width: 4),
-                                              Text("Your location", style: AppTypography.caption),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
+                slivers: [
+                  SliverPadding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 24.0),
+                    sliver: SliverToBoxAdapter(
+                      child: Column(
+                        children: [
+                          // 1. Mini Map - Extracted for rebuild isolation
+                          HomeMiniMap(studentLocation: _studentLocation),
+                          const SizedBox(height: 24),
+                          // 2. Search Card
+                          SearchBusCard(
+                            onTap: () => context.push('/student/buses'),
+                          ),
+                          const SizedBox(height: 24),
+                          // 3. Favorites Header
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              "MY FAVORITES",
+                              style: AppTypography.caption.copyWith(
+                                color: AppColors.textTertiary,
+                                letterSpacing: 1.2,
                               ),
-                              const SizedBox(height: 24),
-
-                              // 2. Search Card
-                              SearchBusCard(
-                                onTap: () => context.push('/student/buses'),
-                              ),
-                              const SizedBox(height: 24),
-
-                              // 3. Favorites
-                              Text(
-                                "MY FAVORITES",
-                                style: AppTypography.caption.copyWith(
-                                  color: AppColors.textTertiary,
-                                  letterSpacing: 1.2,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                      ),
+                    ),
+                  ),
+                  
+                  // 4. Favorites List - Performance: Lazy loading via SliverList
+                  busesAsync.when(
+                    data: (buses) {
+                      if (buses.isEmpty) {
+                         return SliverPadding(
+                           padding: const EdgeInsets.symmetric(horizontal: 20),
+                           sliver: SliverToBoxAdapter(child: _EmptyBusesState()),
+                         );
+                      }
+                      
+                      final profile = profileAsync.value;
+                      final favoriteBuses = buses.where((b) => profile?.favoriteBusIds.contains(b.id) ?? false).toList();
+                      
+                      if (favoriteBuses.isEmpty) {
+                        return SliverPadding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          sliver: SliverToBoxAdapter(
+                            child: _NoFavoritesState(onFind: () => context.go('/student/buses')),
+                          ),
+                        );
+                      }
+                      
+                      return SliverPadding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        sliver: SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                              final bus = favoriteBuses[index];
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 16.0),
+                                child: LiveTrackerCard(
+                                  busNumber: bus.busNumber,
+                                  currentStatus: bus.currentRoadName ?? bus.status,
+                                  licensePlate: bus.plateNumber,
+                                  isLive: bus.status == 'ON_ROUTE' || bus.status == 'ACTIVE',
+                                  onTap: () {
+                                    context.push('/student/track', extra: bus.id);
+                                  },
                                 ),
-                              ),
-                              const SizedBox(height: 12),
-                              
-                              if (favoriteBuses.isEmpty)
-                                _NoFavoritesState(onFind: () => context.go('/student/buses'))
-                              else
-                                ...favoriteBuses.map((bus) {
-                                  return Padding(
-                                    padding: const EdgeInsets.only(bottom: 16.0),
-                                    child: LiveTrackerCard(
-                                      busNumber: bus.busNumber,
-                                      currentStatus: bus.currentRoadName ?? bus.status,
-                                      licensePlate: bus.plateNumber,
-                                      isLive: bus.status == 'ON_ROUTE' || bus.status == 'ACTIVE',
-                                      onTap: () {
-                                        context.push('/student/track', extra: bus.id);
-                                      },
-                                    ),
-                                  );
-                                }),
-                            ],
-                          );
-                        },
-                        loading: () => const Padding(
-                          padding: EdgeInsets.all(40),
-                          child: Center(
-                            child: CircularProgressIndicator(color: AppColors.primary),
+                              );
+                            },
+                            childCount: favoriteBuses.length,
                           ),
                         ),
-                        error: (err, _) => _ErrorState(message: "$err"),
-                      ),
-                      
-                      const SizedBox(height: 100), // Bottom padding for nav bar
+                      );
+                    },
+                    loading: () => const SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+                    ),
+                    error: (err, _) => SliverToBoxAdapter(child: _ErrorState(message: "$err")),
+                  ),
+                  
+                  const SliverToBoxAdapter(child: SizedBox(height: 100)),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class HomeMiniMap extends ConsumerWidget {
+  final LocationPoint? studentLocation;
+  const HomeMiniMap({super.key, this.studentLocation});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final collegeId = ref.watch(selectedCollegeIdProvider) ?? '';
+    
+    return Container(
+      height: 220,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.borderSubtle),
+        boxShadow: [AppShadows.cardShadow],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Stack(
+          children: [
+            MobileMapLibre(
+              collegeId: collegeId,
+              followBus: false,
+              focusedLocation: studentLocation,
+              showStudentLocation: true,
+              studentLocation: studentLocation,
+            ),
+            Positioned(
+              bottom: 0, left: 0, right: 0,
+              child: Container(
+                height: 60,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [
+                      AppColors.bgDeep.withOpacity(0.7),
+                      Colors.transparent,
                     ],
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+            Positioned(
+              bottom: 12, left: 12,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: AppColors.bgCard.withOpacity(0.9),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppColors.borderSubtle),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.my_location, size: 12, color: AppColors.primary),
+                    const SizedBox(width: 4),
+                    Text("Your location", style: AppTypography.caption),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -267,7 +288,7 @@ class _EmptyBusesState extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Icon(Icons.directions_bus_outlined, size: 48, color: AppColors.textTertiary),
+          const Icon(Icons.directions_bus_outlined, size: 48, color: AppColors.textTertiary),
           const SizedBox(height: 16),
           Text("No Buses Found", style: AppTypography.h3),
           const SizedBox(height: 8),
@@ -300,7 +321,7 @@ class _NoFavoritesState extends StatelessWidget {
           Container(
             width: 80,
             height: 80,
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               color: AppColors.primarySoft,
               shape: BoxShape.circle,
             ),

@@ -11,8 +11,8 @@ const sendBusStartedNotification = async (tripId, busId, collegeId, busNumber, i
     try {
         console.log(`[BusStarted] Triggering for bus="${busId}" college="${collegeId}" trip="${tripId}" isMaintenance=${isMaintenance}`);
 
-        // 1. Unified Query: Get students assigned to this bus OR who have it in favorites
-        const studentsRef = db.collection('students').where('collegeId', '==', collegeId);
+        // 1. Query by busId first to avoid composite index requirement
+        const studentsRef = db.collection('students');
         const queryBusId = isMaintenance ? originalBusId : busId;
 
         if (!queryBusId) {
@@ -26,10 +26,14 @@ const sendBusStartedNotification = async (tripId, busId, collegeId, busNumber, i
             studentsRef.where('favoriteBusIds', 'array-contains', queryBusId).get()
         ]);
 
-        // Merge and de-duplicate by student ID
+        // Merge, de-duplicate by student ID, and filter by collegeId in memory
         const studentDocsMap = new Map();
-        assignedSnap.forEach(doc => studentDocsMap.set(doc.id, doc));
-        favoriteSnap.forEach(doc => studentDocsMap.set(doc.id, doc));
+        assignedSnap.forEach(doc => {
+            if (doc.data().collegeId === collegeId) studentDocsMap.set(doc.id, doc);
+        });
+        favoriteSnap.forEach(doc => {
+            if (doc.data().collegeId === collegeId) studentDocsMap.set(doc.id, doc);
+        });
 
         console.log(`[BusStarted] Unified Query (assigned=${assignedSnap.size}, favorited=${favoriteSnap.size}) found ${studentDocsMap.size} unique students`);
 
@@ -208,16 +212,20 @@ const checkProximityAndNotify = async (busId, location, collegeId, routeId) => {
     if (!location || !location.latitude || !location.longitude) return;
 
     try {
-        // 1. Unified Query: Assigned students OR favorite students
-        const studentsRef = db.collection('students').where('collegeId', '==', collegeId);
+        // 1. Query by busId first to avoid composite index requirement
+        const studentsRef = db.collection('students');
         const [assignedSnap, favoriteSnap] = await Promise.all([
             studentsRef.where('assignedBusId', '==', busId).get(),
             studentsRef.where('favoriteBusIds', 'array-contains', busId).get()
         ]);
 
         const studentDocsMap = new Map();
-        assignedSnap.forEach(doc => studentDocsMap.set(doc.id, doc));
-        favoriteSnap.forEach(doc => studentDocsMap.set(doc.id, doc));
+        assignedSnap.forEach(doc => {
+            if (doc.data().collegeId === collegeId) studentDocsMap.set(doc.id, doc);
+        });
+        favoriteSnap.forEach(doc => {
+            if (doc.data().collegeId === collegeId) studentDocsMap.set(doc.id, doc);
+        });
 
         if (studentDocsMap.size === 0) return;
 
@@ -291,16 +299,20 @@ const sendStopArrivalNotification = async (tripId, busId, collegeId, routeId, st
     try {
         console.log(`[Notification] Bus arrived at stop "${stopName}" (${stopId}) on route ${routeId}`);
 
-        // Find students who are assigned to this bus OR have favorited it
-        const studentsRef = db.collection('students').where('collegeId', '==', collegeId);
+        // Query by busId first to avoid composite index requirement
+        const studentsRef = db.collection('students');
         const [assignedSnap, favoriteSnap] = await Promise.all([
             studentsRef.where('assignedBusId', '==', busId).get(),
             studentsRef.where('favoriteBusIds', 'array-contains', busId).get()
         ]);
 
         const studentDocsMap = new Map();
-        assignedSnap.forEach(doc => studentDocsMap.set(doc.id, doc));
-        favoriteSnap.forEach(doc => studentDocsMap.set(doc.id, doc));
+        assignedSnap.forEach(doc => {
+            if (doc.data().collegeId === collegeId) studentDocsMap.set(doc.id, doc);
+        });
+        favoriteSnap.forEach(doc => {
+            if (doc.data().collegeId === collegeId) studentDocsMap.set(doc.id, doc);
+        });
 
         if (studentDocsMap.size === 0) {
             console.log(`[Notification] No students found for bus ${busId}`);
@@ -382,15 +394,19 @@ const sendStopEventNotification = async (tripId, busId, collegeId, stopId, stopN
         }
 
         // Query by assigned OR favorite — same unified pattern
-        const studentsRef = db.collection('students').where('collegeId', '==', collegeId);
+        const studentsRef = db.collection('students');
         const [assignedSnap, favoriteSnap] = await Promise.all([
             studentsRef.where('assignedBusId', '==', busId).get(),
             studentsRef.where('favoriteBusIds', 'array-contains', busId).get()
         ]);
 
         const studentDocsMap = new Map();
-        assignedSnap.forEach(doc => studentDocsMap.set(doc.id, doc));
-        favoriteSnap.forEach(doc => studentDocsMap.set(doc.id, doc));
+        assignedSnap.forEach(doc => {
+            if (doc.data().collegeId === collegeId) studentDocsMap.set(doc.id, doc);
+        });
+        favoriteSnap.forEach(doc => {
+            if (doc.data().collegeId === collegeId) studentDocsMap.set(doc.id, doc);
+        });
 
         console.log(`[StopEvent] Unified Query found ${studentDocsMap.size} unique students`);
 
@@ -471,16 +487,20 @@ const sendTripEndedNotification = async (tripId, busId, collegeId) => {
             }
         } catch (_) { }
 
-        // Query by assigned OR favorite — same unified pattern
-        const studentsRef = db.collection('students').where('collegeId', '==', collegeId);
+        // Query by assigned OR favorite (no collegeId to avoid composite index)
+        const studentsRef = db.collection('students');
         const [assignedSnap, favoriteSnap] = await Promise.all([
             studentsRef.where('assignedBusId', '==', busId).get(),
             studentsRef.where('favoriteBusIds', 'array-contains', busId).get()
         ]);
 
         const studentDocsMap = new Map();
-        assignedSnap.forEach(doc => studentDocsMap.set(doc.id, doc));
-        favoriteSnap.forEach(doc => studentDocsMap.set(doc.id, doc));
+        assignedSnap.forEach(doc => {
+            if (doc.data().collegeId === collegeId) studentDocsMap.set(doc.id, doc);
+        });
+        favoriteSnap.forEach(doc => {
+            if (doc.data().collegeId === collegeId) studentDocsMap.set(doc.id, doc);
+        });
 
         if (studentDocsMap.size === 0) {
             console.log(`[TripEnded] No students found for bus ${busId}`);

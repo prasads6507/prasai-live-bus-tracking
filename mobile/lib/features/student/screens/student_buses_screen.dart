@@ -211,11 +211,12 @@ class _StudentBusesScreenState extends ConsumerState<StudentBusesScreen> {
                   final isSelected = _filter == label;
                   return Padding(
                     padding: const EdgeInsets.only(right: 8),
-                    child: GestureDetector(
+                    child: InkWell(
                       onTap: () => setState(() => _filter = label),
+                      borderRadius: BorderRadius.circular(100),
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12), // Height ~44-48px
                         decoration: BoxDecoration(
                           color: isSelected ? AppColors.primary : AppColors.bgCard,
                           borderRadius: BorderRadius.circular(100),
@@ -274,175 +275,49 @@ class _StudentBusesScreenState extends ConsumerState<StudentBusesScreen> {
                     itemBuilder: (context, index) {
                       final bus = filteredBuses[index];
                       final isFavorite = profile?.favoriteBusIds.contains(bus.id) ?? false;
-                      final isLive = bus.status == 'ON_ROUTE';
-
-                      return Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: AppColors.bgCard,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: isLive ? AppColors.live.withOpacity(0.3) : AppColors.borderSubtle,
-                          ),
-                          boxShadow: isLive ? [AppShadows.liveGlow] : [],
-                        ),
-                        child: Column(
-                          children: [
-                            // Header
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Row(
-                                  children: [
-                                    Container(
-                                      width: 44, height: 44,
-                                      decoration: BoxDecoration(
-                                        color: isLive ? AppColors.live.withOpacity(0.15) : AppColors.primarySoft,
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: Icon(
-                                        Icons.directions_bus_rounded,
-                                        color: isLive ? AppColors.live : AppColors.primary,
-                                        size: 24,
-                                      ),
+                      
+                      return StudentBusCard(
+                        bus: bus,
+                        isFavorite: isFavorite,
+                        onToggleFavorite: () async {
+                          if (profile != null) {
+                            final currentFavorites = profile.favoriteBusIds;
+                            final isCurrentlyFav = currentFavorites.contains(bus.id);
+                            
+                            if (!isCurrentlyFav && currentFavorites.isNotEmpty) {
+                              final confirmed = await showDialog<bool>(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  backgroundColor: AppColors.bgSurface,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                  title: const Text("Switch Favorite?", style: AppTypography.h2),
+                                  content: Text(
+                                    "You can only favorite one bus. Replace with Bus ${bus.busNumber}?",
+                                    style: AppTypography.bodyMd,
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.of(ctx).pop(false),
+                                      child: const Text("Cancel", style: TextStyle(color: AppColors.textSecondary)),
                                     ),
-                                    const SizedBox(width: 12),
-                                    Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text("Bus ${bus.busNumber}", style: AppTypography.h3),
-                                        Text(
-                                          bus.plateNumber,
-                                          style: AppTypography.mono.copyWith(fontSize: 12, color: AppColors.textSecondary),
-                                        ),
-                                      ],
+                                    TextButton(
+                                      onPressed: () => Navigator.of(ctx).pop(true),
+                                      child: const Text("Switch", style: TextStyle(color: AppColors.primary)),
                                     ),
                                   ],
                                 ),
-                                Row(
-                                  children: [
-                                    StatusChip(statusString: bus.status),
-                                    const SizedBox(width: 8),
-                                    // Heart favorite
-                                    GestureDetector(
-                                      onTap: () async {
-                                        if (profile != null) {
-                                          final currentFavorites = profile.favoriteBusIds;
-                                          final isCurrentlyFav = currentFavorites.contains(bus.id);
-                                          
-                                          if (!isCurrentlyFav && currentFavorites.isNotEmpty) {
-                                            final confirmed = await showDialog<bool>(
-                                              context: context,
-                                              builder: (ctx) => AlertDialog(
-                                                backgroundColor: AppColors.bgSurface,
-                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                                                title: Text("Switch Favorite?", style: AppTypography.h2),
-                                                content: Text(
-                                                  "You can only favorite one bus. Replace with Bus ${bus.busNumber}?",
-                                                  style: AppTypography.bodyMd,
-                                                ),
-                                                actions: [
-                                                  TextButton(
-                                                    onPressed: () => Navigator.of(ctx).pop(false),
-                                                    child: Text("Cancel", style: TextStyle(color: AppColors.textSecondary)),
-                                                  ),
-                                                  TextButton(
-                                                    onPressed: () => Navigator.of(ctx).pop(true),
-                                                    child: Text("Switch", style: TextStyle(color: AppColors.primary)),
-                                                  ),
-                                                ],
-                                              ),
-                                            );
-                                            if (confirmed != true) return;
-                                          }
-                                          
-                                          await ref.read(firestoreDataSourceProvider).toggleFavoriteBus(
-                                            profile.id, bus.id, !isCurrentlyFav,
-                                          );
-                                        }
-                                      },
-                                      child: AnimatedSwitcher(
-                                        duration: const Duration(milliseconds: 300),
-                                        transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
-                                        child: Icon(
-                                          isFavorite ? Icons.favorite_rounded : Icons.favorite_outline_rounded,
-                                          key: ValueKey(isFavorite),
-                                          color: isFavorite ? AppColors.error : AppColors.textTertiary,
-                                          size: 24,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            // Driver Row
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: AppColors.bgSurface,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Row(
-                                children: [
-                                  CircleAvatar(
-                                    radius: 14,
-                                    backgroundColor: AppColors.primarySoft,
-                                    child: const Icon(Icons.person_rounded, size: 14, color: AppColors.primary),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Text(
-                                      bus.driverName ?? "Unassigned",
-                                      style: AppTypography.bodyMd.copyWith(color: AppColors.textPrimary),
-                                    ),
-                                  ),
-                                  if (bus.driverPhone != null)
-                                    GestureDetector(
-                                      onTap: () => _showCallDialog(context, bus),
-                                      child: Container(
-                                        width: 32, height: 32,
-                                        decoration: BoxDecoration(
-                                          color: AppColors.primarySoft,
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: const Icon(Icons.phone_rounded, color: AppColors.primary, size: 14),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            // Action Buttons
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: OutlinedButton(
-                                    onPressed: () => _showDetailsSheet(context, bus),
-                                    style: OutlinedButton.styleFrom(
-                                      foregroundColor: AppColors.textPrimary,
-                                      side: const BorderSide(color: AppColors.borderMid),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                                      padding: const EdgeInsets.symmetric(vertical: 14),
-                                    ),
-                                    child: Text("Details", style: AppTypography.label.copyWith(color: AppColors.textPrimary)),
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: ElevatedButton(
-                                    onPressed: () => context.push('/student/track', extra: bus.id),
-                                    style: ElevatedButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(vertical: 14),
-                                    ),
-                                    child: Text("Track Live", style: AppTypography.label.copyWith(color: AppColors.textInverse)),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
+                              );
+                              if (confirmed != true) return;
+                            }
+                            
+                            await ref.read(firestoreDataSourceProvider).toggleFavoriteBus(
+                              profile.id, bus.id, !isCurrentlyFav,
+                            );
+                          }
+                        },
+                        onDetails: () => _showDetailsSheet(context, bus),
+                        onCall: () => _showCallDialog(context, bus),
+                        onTrack: () => context.push('/student/track', extra: bus.id),
                       );
                     },
                   );
@@ -453,6 +328,172 @@ class _StudentBusesScreenState extends ConsumerState<StudentBusesScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class StudentBusCard extends StatelessWidget {
+  final Bus bus;
+  final bool isFavorite;
+  final VoidCallback onToggleFavorite;
+  final VoidCallback onDetails;
+  final VoidCallback onCall;
+  final VoidCallback onTrack;
+
+  const StudentBusCard({
+    super.key,
+    required this.bus,
+    required this.isFavorite,
+    required this.onToggleFavorite,
+    required this.onDetails,
+    required this.onCall,
+    required this.onTrack,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isLive = bus.status == 'ON_ROUTE';
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.bgCard,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isLive ? AppColors.live.withOpacity(0.3) : AppColors.borderSubtle,
+        ),
+        boxShadow: isLive ? [AppShadows.liveGlow] : [],
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 44, height: 44,
+                    decoration: BoxDecoration(
+                      color: isLive ? AppColors.live.withOpacity(0.15) : AppColors.primarySoft,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.directions_bus_rounded,
+                      color: isLive ? AppColors.live : AppColors.primary,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text("Bus ${bus.busNumber}", style: AppTypography.h3),
+                      Text(
+                        bus.plateNumber,
+                        style: AppTypography.mono.copyWith(fontSize: 12, color: AppColors.textSecondary),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              Row(
+                children: [
+                  StatusChip(statusString: bus.status),
+                  const SizedBox(width: 8),
+                  // Heart favorite — Accessibility: Min 48px hit area
+                  InkWell(
+                    onTap: onToggleFavorite,
+                    borderRadius: BorderRadius.circular(24),
+                    child: Container(
+                      width: 48, height: 48,
+                      alignment: Alignment.center,
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 300),
+                        transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
+                        child: Icon(
+                          isFavorite ? Icons.favorite_rounded : Icons.favorite_outline_rounded,
+                          key: ValueKey(isFavorite),
+                          color: isFavorite ? AppColors.error : AppColors.textTertiary,
+                          size: 24,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppColors.bgSurface,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 14,
+                  backgroundColor: AppColors.primarySoft,
+                  child: const Icon(Icons.person_rounded, size: 14, color: AppColors.primary),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    bus.driverName ?? "Unassigned",
+                    style: AppTypography.bodyMd.copyWith(color: AppColors.textPrimary),
+                  ),
+                ),
+                if (bus.driverPhone != null)
+                  // Call Button — Accessibility: Min 48px hit area
+                  InkWell(
+                    onTap: onCall,
+                    borderRadius: BorderRadius.circular(24),
+                    child: Container(
+                      width: 48, height: 48,
+                      alignment: Alignment.center,
+                      child: Container(
+                        width: 32, height: 32,
+                        decoration: BoxDecoration(
+                          color: AppColors.primarySoft,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.phone_rounded, color: AppColors.primary, size: 14),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: onDetails,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.textPrimary,
+                    side: const BorderSide(color: AppColors.borderMid),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  child: Text("Details", style: AppTypography.label.copyWith(color: AppColors.textPrimary)),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: onTrack,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  child: Text("Track Live", style: AppTypography.label.copyWith(color: AppColors.textInverse)),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

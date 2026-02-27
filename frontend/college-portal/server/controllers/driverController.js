@@ -503,10 +503,10 @@ const sendStudentAttendanceNotification = async ({ studentId, busId, direction, 
         const busStr = busNumber || busId;
 
         if (isChecked) {
-            title = isPickup ? '🚌 ✅ Boarded' : '🚌 ✅ Dropped Off';
+            title = isPickup ? `🚌 ✅ ${name} Boarded` : `🚌 ✅ ${name} Dropped Off`;
             body = isPickup ? `${name} has boarded Bus ${busStr}` : `${name} has dropped off from Bus ${busStr}`;
         } else {
-            title = isPickup ? '⚠️ Boarding Cancelled' : '⚠️ Drop Off Cancelled';
+            title = isPickup ? `⚠️ ${name} Boarding Cancelled` : `⚠️ ${name} Drop Off Cancelled`;
             body = isPickup ? `${name}'s boarding was cancelled` : `${name}'s drop off was cancelled`;
         }
 
