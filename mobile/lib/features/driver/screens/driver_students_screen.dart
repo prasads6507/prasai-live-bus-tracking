@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:mobile/core/theme/colors.dart';
 import 'package:mobile/core/theme/typography.dart';
@@ -18,6 +19,41 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
   final TextEditingController _searchController = TextEditingController();
   bool _isSearchMode = false;
   String _searchQuery = '';
+  
+  // Local state for batch attendance
+  Set<String> _localAttendedIds = {};
+  bool _isLoadingPrefs = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLocalAttendance();
+  }
+
+  Future<void> _loadLocalAttendance() async {
+    final activeTripId = ref.read(activeTripIdProvider).value;
+    if (activeTripId == null) {
+      if (mounted) setState(() => _isLoadingPrefs = false);
+      return;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final list = prefs.getStringList('shared_attendance_$activeTripId') ?? [];
+    if (mounted) {
+      setState(() {
+        _localAttendedIds = list.toSet();
+        _isLoadingPrefs = false;
+      });
+    }
+  }
+
+  Future<void> _saveLocalAttendance() async {
+    final activeTripId = ref.read(activeTripIdProvider).value;
+    if (activeTripId == null) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('shared_attendance_$activeTripId', _localAttendedIds.toList());
+  }
 
   @override
   void dispose() {
@@ -38,6 +74,10 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoadingPrefs) {
+      return const AppScaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
     final profileAsync = ref.watch(userProfileProvider);
     final assignedBusAsync = ref.watch(assignedBusProvider);
 
@@ -55,33 +95,16 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
         return assignedBusAsync.when(
           data: (assignedBus) {
             final driverBusId = assignedBus?.id ?? userProfile.assignedBusId;
-            debugPrint('[DriverStudents] profile.assignedBusId: ${userProfile.assignedBusId}');
-            debugPrint('[DriverStudents] assignedBus.id: ${assignedBus?.id}');
-            debugPrint('[DriverStudents] effective driverBusId: $driverBusId');
-
-            final Map<String, String> attendanceMap = activeTripId != null
-                ? ref.watch(tripAttendanceProvider(activeTripId)).maybeWhen(
-                    data: (data) {
-                      final map = <String, String>{};
-                      for (var record in data) {
-                        map[record['studentId'] as String] = record['status'] as String? ?? '';
-                      }
-                      return map;
-                    },
-                    orElse: () => {},
-                  )
-                : {};
+            final tripAsync = activeTripId != null ? ref.watch(tripProvider(activeTripId)) : const AsyncValue<Map<String, dynamic>?>.data(null);
 
             // Fetch students for THIS bus
             final busStudentsAsync = driverBusId != null 
                 ? ref.watch(busStudentsProvider(driverBusId)) 
                 : const AsyncValue<List<UserProfile>>.data([]);
             
-            // Still need all students for search mode
             final allStudentsAsync = ref.watch(studentsProvider(collegeId));
             final busesAsync = ref.watch(busesProvider(collegeId));
 
-            // Create a map for quick bus number lookup
             final Map<String, String> busIdToNumber = {};
             busesAsync.whenData((buses) {
               for (var b in buses) {
@@ -89,82 +112,89 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
               }
             });
 
-            return AppScaffold(
-              appBar: AppBar(
-                title: Text('Students', style: AppTypography.h2),
-                backgroundColor: Colors.transparent,
-                elevation: 0,
-              ),
-              body: Column(
-                children: [
-                  // Search Header
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: TextField(
-                      controller: _searchController,
-                      decoration: InputDecoration(
-                        hintText: 'Search all students...',
-                        prefixIcon: const Icon(Icons.search),
-                        suffixIcon: _searchQuery.isNotEmpty
-                            ? IconButton(
-                                icon: const Icon(Icons.clear),
-                                onPressed: () {
-                                  setState(() {
-                                    _searchController.clear();
-                                    _searchQuery = '';
-                                    _isSearchMode = false;
-                                  });
-                                },
-                              )
-                            : null,
-                        filled: true,
-                        fillColor: Colors.white,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
+            return tripAsync.when(
+              data: (tripData) {
+                final direction = tripData?['direction'] ?? 'pickup';
+
+                return AppScaffold(
+                  appBar: AppBar(
+                    title: Text('Students', style: AppTypography.h2),
+                    backgroundColor: Colors.transparent,
+                    elevation: 0,
+                  ),
+                  body: Column(
+                    children: [
+                      // Search Header
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: TextField(
+                          controller: _searchController,
+                          decoration: InputDecoration(
+                            hintText: 'Search all students...',
+                            prefixIcon: const Icon(Icons.search),
+                            suffixIcon: _searchQuery.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.clear),
+                                    onPressed: () {
+                                      setState(() {
+                                        _searchController.clear();
+                                        _searchQuery = '';
+                                        _isSearchMode = false;
+                                      });
+                                    },
+                                  )
+                                : null,
+                            filled: true,
+                            fillColor: Colors.white,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                          onChanged: (val) {
+                            setState(() {
+                              _searchQuery = val.trim();
+                              _isSearchMode = _searchQuery.isNotEmpty;
+                            });
+                          },
                         ),
                       ),
-                      onChanged: (val) {
-                        setState(() {
-                          _searchQuery = val.trim();
-                          _isSearchMode = _searchQuery.isNotEmpty;
-                        });
-                      },
-                    ),
-                  ),
 
-                  if (!_isSearchMode && activeTripId != null)
-                    busStudentsAsync.maybeWhen(
-                      data: (assignedStudents) => _buildAttendanceSummary(assignedStudents, attendanceMap),
-                      orElse: () => const SizedBox.shrink(),
-                    ),
-
-                  Expanded(
-                    child: _isSearchMode 
-                      ? allStudentsAsync.when(
-                          data: (allStudents) {
-                            final q = _searchQuery.toLowerCase();
-                            final displayList = allStudents.where((s) {
-                              final nameMatch = (s.name ?? '').toLowerCase().contains(q);
-                              final emailMatch = (s.email ?? '').toLowerCase().contains(q);
-                              return nameMatch || emailMatch;
-                            }).toList();
-                            return _buildStudentList(displayList, activeTripId, attendanceMap, busIdToNumber);
-                          },
-                          loading: () => const Center(child: CircularProgressIndicator()),
-                          error: (err, stack) => Center(child: Text('Error: $err')),
-                        )
-                      : busStudentsAsync.when(
-                          data: (assignedStudents) {
-                            debugPrint('[DriverStudents] Showing ${assignedStudents.length} assigned students');
-                            return _buildStudentList(assignedStudents, activeTripId, attendanceMap, busIdToNumber);
-                          },
-                          loading: () => const Center(child: CircularProgressIndicator()),
-                          error: (err, stack) => Center(child: Text('Error: $err')),
+                      if (!_isSearchMode && activeTripId != null)
+                        busStudentsAsync.maybeWhen(
+                          data: (assignedStudents) => _buildAttendanceSummary(assignedStudents, direction),
+                          orElse: () => const SizedBox.shrink(),
                         ),
+
+                      Expanded(
+                        child: _isSearchMode 
+                          ? allStudentsAsync.when(
+                              data: (allStudents) {
+                                final q = _searchQuery.toLowerCase();
+                                final displayList = allStudents.where((s) {
+                                  final nameMatch = (s.name ?? '').toLowerCase().contains(q);
+                                  final emailMatch = (s.email ?? '').toLowerCase().contains(q);
+                                  return nameMatch || emailMatch;
+                                }).toList();
+                                return _buildStudentList(displayList, activeTripId, direction, busIdToNumber);
+                              },
+                              loading: () => const Center(child: CircularProgressIndicator()),
+                              error: (err, stack) => Center(child: Text('Error: $err')),
+                            )
+                          : busStudentsAsync.when(
+                              data: (assignedStudents) {
+                                return _buildStudentList(assignedStudents, activeTripId, direction, busIdToNumber);
+                              },
+                              loading: () => const Center(child: CircularProgressIndicator()),
+                              error: (err, stack) => Center(child: Text('Error: $err')),
+                            ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                );
+              },
+              loading: () => const AppScaffold(body: Center(child: CircularProgressIndicator())),
+              error: (err, stack) => AppScaffold(body: Center(child: Text('Error loading trip: $err'))),
             );
           },
           loading: () => const AppScaffold(body: Center(child: CircularProgressIndicator())),
@@ -176,7 +206,7 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
     );
   }
 
-  Widget _buildStudentList(List<UserProfile> displayList, String? activeTripId, Map<String, String> attendanceMap, Map<String, String> busIdToNumber) {
+  Widget _buildStudentList(List<UserProfile> displayList, String? activeTripId, String direction, Map<String, String> busIdToNumber) {
     if (displayList.isEmpty) {
       return Center(
         child: Column(
@@ -202,6 +232,7 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
         final assignedBus = ref.watch(assignedBusProvider).value;
         final driverBusId = assignedBus?.id;
         final isOnOtherBus = student.assignedBusId != null && student.assignedBusId != driverBusId;
+        final isAttended = _localAttendedIds.contains(student.id);
 
         return Card(
           margin: const EdgeInsets.only(bottom: 12),
@@ -265,29 +296,28 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
                   ),
               ],
             ),
-            trailing: _buildAttendanceAction(student, activeTripId, attendanceMap[student.id]),
-            onTap: () => _showStudentDetails(student, busIdToNumber, activeTripId, attendanceMap[student.id]),
+            trailing: activeTripId != null 
+                ? Checkbox(
+                    value: isAttended,
+                    activeColor: direction == 'pickup' ? Colors.green : Colors.blue,
+                    onChanged: (val) => _onAttendanceChanged(student, val ?? false, direction),
+                  )
+                : IconButton(
+                    icon: const Icon(Icons.call, color: AppColors.primary),
+                    onPressed: () => _showCallDialog(student),
+                  ),
+            onTap: () => _showStudentDetails(student, busIdToNumber, activeTripId, direction, isAttended),
           ),
         );
       },
     );
   }
 
-  Widget _buildAttendanceSummary(List<UserProfile> students, Map<String, String> attendanceMap) {
-    int pickedUp = 0;
-    int droppedOff = 0;
-    int pending = 0;
-
-    for (var s in students) {
-      final status = attendanceMap[s.id];
-      if (status == 'picked_up') {
-        pickedUp++;
-      } else if (status == 'dropped_off') {
-        droppedOff++;
-      } else {
-        pending++;
-      }
-    }
+  Widget _buildAttendanceSummary(List<UserProfile> students, String direction) {
+    final total = students.length;
+    final marked = students.where((s) => _localAttendedIds.contains(s.id)).length;
+    final pending = total - marked;
+    final label = direction == 'pickup' ? 'Picked Up' : 'Dropped Off';
 
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -300,8 +330,8 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildSummaryItem('Picked Up', pickedUp, Colors.blue),
-          _buildSummaryItem('Dropped Off', droppedOff, Colors.green),
+          _buildSummaryItem('Total', total, Colors.black87),
+          _buildSummaryItem(label, marked, direction == 'pickup' ? Colors.green : Colors.blue),
           _buildSummaryItem('Pending', pending, Colors.orange),
         ],
       ),
@@ -323,95 +353,39 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
     );
   }
 
-  Widget _buildAttendanceAction(UserProfile student, String? activeTripId, String? status) {
-    if (activeTripId == null) {
-      return IconButton(
-        icon: const Icon(Icons.call, color: AppColors.primary),
-        onPressed: () => _showCallDialog(student),
-      );
-    }
-
-    if (status == null) {
-      return ElevatedButton(
-        onPressed: () => _markAttendance(student, activeTripId, 'pickup'),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.green,
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          minimumSize: const Size(0, 32),
+  void _onAttendanceChanged(UserProfile student, bool checked, String direction) async {
+    if (!checked) {
+      // Show confirmation alert for unchecking
+      final label = direction == 'pickup' ? 'not picked up' : 'not dropped off';
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Confirm Action'),
+          content: Text('Do you want to mark ${student.name} as $label?'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('No, keep it')),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text('Yes, mark as $label', style: const TextStyle(color: Colors.red)),
+            ),
+          ],
         ),
-        child: const Text('Pick Up', style: TextStyle(fontSize: 12)),
       );
+
+      if (confirmed != true) return;
     }
 
-    if (status == 'picked_up') {
-      return ElevatedButton(
-        onPressed: () => _confirmDropOff(student, activeTripId),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.blue,
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          minimumSize: const Size(0, 32),
-        ),
-        child: const Text('Drop Off', style: TextStyle(fontSize: 12)),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.grey[200],
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: const Text('Done ✓', style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold)),
-    );
-  }
-
-  void _markAttendance(UserProfile student, String tripId, String type) async {
-    try {
-      final dio = ref.read(dioProvider);
-      final endpoint = type == 'pickup' ? 'pickup' : 'dropoff';
-      final response = await dio.post('/driver/trips/$tripId/attendance/$endpoint', data: {'studentId': student.id});
-      
-      if (response.data['success']) {
-        // Refresh attendance provider
-        ref.invalidate(tripAttendanceProvider(tripId));
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('${student.name} marked as ${type == 'pickup' ? 'picked up' : 'dropped off'}')),
-          );
-        }
+    setState(() {
+      if (checked) {
+        _localAttendedIds.add(student.id);
+      } else {
+        _localAttendedIds.remove(student.id);
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to mark attendance: $e')),
-        );
-      }
-    }
+    });
+    _saveLocalAttendance();
   }
 
-  void _confirmDropOff(UserProfile student, String tripId) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Confirm Drop Off'),
-        content: Text('Confirm drop off for ${student.name}?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _markAttendance(student, tripId, 'dropoff');
-            },
-            child: const Text('Confirm'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showStudentDetails(UserProfile student, Map<String, String> busIdToNumber, String? activeTripId, String? status) {
+  void _showStudentDetails(UserProfile student, Map<String, String> busIdToNumber, String? activeTripId, String direction, bool isAttended) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -453,7 +427,7 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
             _detailRow(Icons.phone, 'Phone', student.phone ?? 'Not provided'),
             _detailRow(Icons.bus_alert, 'Assigned Bus', _getBusLabel(student.assignedBusId, busIdToNumber, isFull: true)),
             if (activeTripId != null)
-              _detailRow(Icons.check_circle_outline, 'Status', status == 'picked_up' ? 'On Bus' : (status == 'dropped_off' ? 'Dropped Off' : 'Pending')),
+              _detailRow(Icons.check_circle_outline, 'Status', isAttended ? (direction == 'pickup' ? 'Picked Up' : 'Dropped Off') : 'Pending'),
             const SizedBox(height: 32),
             Row(
               children: [
@@ -471,23 +445,19 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
                     ),
                   ),
                 ),
-                if (activeTripId != null && status != 'dropped_off') ...[
+                if (activeTripId != null) ...[
                   const SizedBox(width: 12),
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: () {
                         Navigator.pop(context);
-                        if (status == null) {
-                          _markAttendance(student, activeTripId, 'pickup');
-                        } else {
-                          _confirmDropOff(student, activeTripId);
-                        }
+                        _onAttendanceChanged(student, !isAttended, direction);
                       },
-                      icon: Icon(status == null ? Icons.login : Icons.logout),
-                      label: Text(status == null ? 'Pick Up' : 'Drop Off'),
+                      icon: Icon(isAttended ? Icons.remove_circle_outline : Icons.check_circle_outline),
+                      label: Text(isAttended ? 'Remove Marking' : (direction == 'pickup' ? 'Pick Up' : 'Drop Off')),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: status == null ? Colors.green : Colors.blue,
-                        foregroundColor: Colors.white,
+                        backgroundColor: isAttended ? Colors.red[50] : (direction == 'pickup' ? Colors.green : Colors.blue),
+                        foregroundColor: isAttended ? Colors.red : Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),

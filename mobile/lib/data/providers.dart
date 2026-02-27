@@ -144,6 +144,9 @@ final assignedBusProvider = StreamProvider<Bus?>((ref) {
   });
 });
 
+  });
+});
+
 final activeTripIdProvider = StreamProvider<String?>((ref) {
   final assignedBus = ref.watch(assignedBusProvider).value;
   if (assignedBus == null) return Stream.value(null);
@@ -152,6 +155,13 @@ final activeTripIdProvider = StreamProvider<String?>((ref) {
   return firestore.collection('buses').doc(assignedBus.id).snapshots().map((snapshot) {
     if (!snapshot.exists) return null;
     return snapshot.data()?['activeTripId'] as String?;
+  });
+});
+
+final tripProvider = StreamProvider.family<Map<String, dynamic>?, String>((ref, tripId) {
+  final firestore = ref.watch(firestoreProvider);
+  return firestore.collection('trips').doc(tripId).snapshots().map((snapshot) {
+    return snapshot.data();
   });
 });
 

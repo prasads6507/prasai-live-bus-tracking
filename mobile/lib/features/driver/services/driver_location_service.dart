@@ -92,7 +92,11 @@ class DriverLocationService {
 
           final String polyline = PolylineEncoder.encode(coords);
 
-          // 3. Upload to API
+          // 3. Batch Attendance Retrieval
+          final attendanceList = prefs.getStringList('shared_attendance_$tripId') ?? [];
+          debugPrint("[History] Found ${attendanceList.length} attended students to upload");
+
+          // 4. Upload to API
           final dio = Dio();
           final user = FirebaseAuth.instance.currentUser;
           if (user != null) {
@@ -111,10 +115,14 @@ class DriverLocationService {
             avgSpeedMph: compressed.isNotEmpty ? (sumSpeedMph / compressed.length).round() : 0,
             pointsCount: compressed.length,
             path: compressed,
+            attendance: attendanceList.isNotEmpty ? attendanceList : null,
           );
           
           uploaded = true;
           debugPrint("Successfully uploaded trip history for $tripId (${compressed.length} compressed points)");
+
+          // Clear attendance after success
+          await prefs.remove('shared_attendance_$tripId');
         } else {
           // Empty buffer, consider it "done"
           uploaded = true;

@@ -489,7 +489,7 @@ const saveTripHistory = async (req, res) => {
 const historyUpload = async (req, res) => {
     try {
         const { tripId } = req.params;
-        const { polyline, distanceMeters, durationSeconds, maxSpeedMph, avgSpeedMph, pointsCount, path } = req.body;
+        const { polyline, distanceMeters, durationSeconds, maxSpeedMph, avgSpeedMph, pointsCount, path, attendance } = req.body;
 
 
 
@@ -526,6 +526,60 @@ const historyUpload = async (req, res) => {
         if (path && Array.isArray(path) && path.length <= 5000) {
             updateData.path = path;
             updateData.totalPoints = path.length;
+        }
+
+        const serverTimestamp = admin.firestore.FieldValue.serverTimestamp();
+
+        // Batch Attendance Processing
+        if (attendance && Array.isArray(attendance) && attendance.length > 0) {
+            const direction = tripData.direction || 'pickup';
+            const isPickup = direction === 'pickup';
+            
+            const studentIds = [...new Set(attendance)]; // Unique IDs
+            const studentDocs = await Promise.all(
+                studentIds.map(id => db.collection('students').doc(id).get())
+            );
+
+            const batch = db.batch();
+
+            for (let i = 0; i < studentIds.length; i++) {
+                const studentId = studentIds[i];
+                const studentDoc = studentDocs[i];
+                const studentName = studentDoc.exists ? studentDoc.data().name : 'Unknown Student';
+                
+                const attendanceId = `${tripId}__${studentId}`;
+                const attendanceRef = db.collection('attendance').doc(attendanceId);
+
+                const attendanceData = {
+                    tripId,
+                    studentId,
+                    busId: tripData.busId,
+                    collegeId: req.collegeId,
+                    driverId: req.user.id,
+                    studentName,
+                    status: isPickup ? 'picked_up' : 'dropped_off',
+                    updatedAt: serverTimestamp
+                };
+
+                if (isPickup) {
+                    attendanceData.pickedUpAt = serverTimestamp;
+                    attendanceData.droppedOffAt = null;
+                } else {
+                    attendanceData.droppedOffAt = serverTimestamp;
+                }
+
+                batch.set(attendanceRef, attendanceData, { merge: true });
+            }
+
+            // Update trip doc with full lists
+            if (isPickup) {
+                updateData.pickedUpStudents = admin.firestore.FieldValue.arrayUnion(...studentIds);
+            } else {
+                updateData.droppedOffStudents = admin.firestore.FieldValue.arrayUnion(...studentIds);
+            }
+
+            await batch.commit();
+            console.log(`[historyUpload] Processed attendance for ${studentIds.length} students (${direction})`);
         }
 
         await tripRef.update(updateData);

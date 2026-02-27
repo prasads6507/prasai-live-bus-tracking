@@ -141,15 +141,9 @@ class ApiDataSource {
   }
 
   /// Upload trip history (polyline + summary) at trip end.
-  Future<void> uploadTripHistory(
-    String tripId, {
-    required String polyline,
-    required int distanceMeters,
-    required int durationSeconds,
-    required int maxSpeedMph,
-    required int avgSpeedMph,
-    required int pointsCount,
+    int pointsCount,
     List<Map<String, dynamic>>? path,
+    List<String>? attendance,
   }) async {
     final data = {
       'polyline': polyline,
@@ -160,6 +154,7 @@ class ApiDataSource {
       'pointsCount': pointsCount,
     };
     if (path != null) data['path'] = path;
+    if (attendance != null) data['attendance'] = attendance;
 
     await _dio.post(
       '${Env.apiUrl}/api/driver/trips/$tripId/history-upload',
