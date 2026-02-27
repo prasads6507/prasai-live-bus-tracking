@@ -12,7 +12,8 @@ const {
     markPickup,
     markDropoff,
     getTripAttendance,
-    getBusStudents
+    getBusStudents,
+    notifyStudentAttendance
 } = require('../controllers/driverController');
 const { sendStopEventNotification, sendTripEndedNotification } = require('../controllers/notificationController');
 const { protect, authorize } = require('../middleware/auth');

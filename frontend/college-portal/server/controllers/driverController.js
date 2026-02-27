@@ -926,6 +926,7 @@ module.exports = {
     markPickup,
     markDropoff,
     getTripAttendance,
-    getBusStudents
+    getBusStudents,
+    notifyStudentAttendance
 };
 
