@@ -8,7 +8,9 @@ import {
     Users, 
     CheckCircle2, 
     Bus as BusIcon,
-    ClipboardList
+    ClipboardList,
+    ArrowUpCircle,
+    ArrowDownCircle
 } from 'lucide-react';
 import Layout from '../components/Layout';
 import { api, getAttendance, getBuses, getTripHistory, validateSlug } from '../services/api';
@@ -26,14 +28,15 @@ const BusAttendance = () => {
     const [filters, setFilters] = useState({
         busId: '',
         date: format(new Date(), 'yyyy-MM-dd'),
-        tripId: ''
+        tripId: '',
+        direction: ''
     });
 
     const fetchData = async () => {
         setLoading(true);
         try {
             const [attendanceRes, busesData, tripsRes] = await Promise.all([
-                getAttendance(filters),
+                getAttendance({ busId: filters.busId, date: filters.date, tripId: filters.tripId }),
                 getBuses(),
                 getTripHistory()
             ]);
@@ -55,7 +58,6 @@ const BusAttendance = () => {
                 const orgData = await validateSlug(orgSlug);
                 if (orgData && orgData.collegeId) {
                     localStorage.setItem('current_college_id', orgData.collegeId);
-                    // Ensure the header is updated for immediate subsequent calls if needed
                     api.defaults.headers.common['x-tenant-id'] = orgData.collegeId;
                 }
             }
@@ -70,11 +72,22 @@ const BusAttendance = () => {
         initializeAndFetch();
     }, [orgSlug, filters.date, filters.busId, filters.tripId]);
 
+    const filteredAttendance = filters.direction 
+        ? attendance.filter((a: any) => a.direction === filters.direction) 
+        : attendance;
+
     const stats = {
-        total: attendance.length,
-        onBus: attendance.filter(a => a.status === 'picked_up').length,
-        completed: attendance.filter(a => a.status === 'dropped_off').length
+        total: filteredAttendance.length,
+        pickedUp: filteredAttendance.filter((a: any) => a.status === 'picked_up').length,
+        droppedOff: filteredAttendance.filter((a: any) => a.status === 'dropped_off').length
     };
+
+    const getBusNumber = (busId: string) => {
+        const bus = buses.find((b: any) => (b._id || b.id) === busId);
+        return bus?.busNumber || bus?.number || 'N/A';
+    };
+
+    const filteredTrips = trips.filter((t: any) => !filters.busId || t.busId === filters.busId);
 
     return (
         <Layout activeItem="attendance">
@@ -103,7 +116,7 @@ const BusAttendance = () => {
                 </div>
 
                 {/* Filters */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
                     <div className="space-y-1.5">
                         <label className="text-xs font-semibold text-slate-500 uppercase flex items-center gap-1.5">
                             <BusIcon size={14} /> Bus Number
@@ -114,7 +127,7 @@ const BusAttendance = () => {
                             className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                         >
                             <option value="">All Buses</option>
-                            {buses.map(bus => (
+                            {buses.map((bus: any) => (
                                 <option key={bus._id || bus.id} value={bus._id || bus.id}>
                                     Bus {bus.busNumber || bus.number}
                                 </option>
@@ -144,37 +157,35 @@ const BusAttendance = () => {
                             className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                         >
                             <option value="">All Trips</option>
-                            {trips
-                                .filter(t => !filters.busId || t.busId === filters.busId)
-                                .map(trip => (
-                                <option key={trip._id || trip.id} value={trip._id || trip.id}>
-                                    {trip.driverName} - {trip.startTime ? format(new Date(trip.startTime), 'p') : 'N/A'}
+                            {filteredTrips.map((trip: any) => (
+                                <option key={trip._id || trip.id || trip.tripId} value={trip._id || trip.id || trip.tripId}>
+                                    {trip.direction === 'dropoff' ? '⬇ Drop Off' : '⬆ Pickup'} — {trip.driverName || 'Driver'} {trip.startTime ? `(${format(new Date(trip.startTime), 'p')})` : ''}
                                 </option>
                             ))}
+                        </select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-slate-500 uppercase flex items-center gap-1.5">
+                            Direction
+                        </label>
+                        <select 
+                            value={filters.direction}
+                            onChange={(e) => setFilters({...filters, direction: e.target.value})}
+                            className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                        >
+                            <option value="">All Directions</option>
+                            <option value="pickup">⬆ Pickup Only</option>
+                            <option value="dropoff">⬇ Drop Off Only</option>
                         </select>
                     </div>
                 </div>
 
                 {/* Stats Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                    <StatCard 
-                        title="Total Students" 
-                        value={stats.total} 
-                        icon={<Users className="text-blue-500" />} 
-                        color="bg-blue-50"
-                    />
-                    <StatCard 
-                        title="Currently On Bus" 
-                        value={stats.onBus} 
-                        icon={<BusIcon className="text-emerald-500" />} 
-                        color="bg-emerald-50"
-                    />
-                    <StatCard 
-                        title="Completed Trips" 
-                        value={stats.completed} 
-                        icon={<CheckCircle2 className="text-violet-500" />} 
-                        color="bg-violet-50"
-                    />
+                    <StatCard title="Total Students" value={stats.total} icon={<Users className="text-blue-500" />} color="bg-blue-50" />
+                    <StatCard title="Picked Up" value={stats.pickedUp} icon={<ArrowUpCircle className="text-emerald-500" />} color="bg-emerald-50" />
+                    <StatCard title="Dropped Off" value={stats.droppedOff} icon={<ArrowDownCircle className="text-violet-500" />} color="bg-violet-50" />
                 </div>
 
                 {/* Attendance Table */}
@@ -185,9 +196,9 @@ const BusAttendance = () => {
                                 <tr>
                                     <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase">Student</th>
                                     <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase">Bus</th>
+                                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase">Direction</th>
                                     <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase">Status</th>
-                                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase">Picked Up</th>
-                                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase">Dropped Off</th>
+                                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase">Time</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
@@ -197,7 +208,7 @@ const BusAttendance = () => {
                                             <td colSpan={5} className="px-6 py-4"><div className="h-4 bg-slate-100 rounded w-full"></div></td>
                                         </tr>
                                     ))
-                                ) : attendance.length === 0 ? (
+                                ) : filteredAttendance.length === 0 ? (
                                     <tr>
                                         <td colSpan={5} className="px-6 py-20 text-center">
                                             <div className="flex flex-col items-center gap-2 text-slate-400">
@@ -207,7 +218,7 @@ const BusAttendance = () => {
                                         </td>
                                     </tr>
                                 ) : (
-                                    attendance.map((record, i) => (
+                                    filteredAttendance.map((record: any, i: number) => (
                                         <motion.tr 
                                             initial={{ opacity: 0, y: 10 }}
                                             animate={{ opacity: 1, y: 0 }}
@@ -217,36 +228,49 @@ const BusAttendance = () => {
                                         >
                                             <td className="px-6 py-4">
                                                 <div className="font-semibold text-slate-900">{record.studentName}</div>
-                                                <div className="text-xs text-slate-500">ID: {record.studentId.split('-').pop()}</div>
+                                                <div className="text-xs text-slate-500">ID: {(record.studentId || '').split('-').pop()}</div>
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-2">
                                                     <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg">
                                                         <BusIcon size={14} />
                                                     </div>
-                                                    <span className="font-medium">Bus {buses.find(b => b._id === record.busId)?.busNumber || 'N/A'}</span>
+                                                    <span className="font-medium">Bus {record.busNumber || getBusNumber(record.busId)}</span>
                                                 </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                {record.direction === 'dropoff' ? (
+                                                    <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-violet-50 text-violet-700 rounded-full text-xs font-bold border border-violet-100">
+                                                        <ArrowDownCircle size={12} />
+                                                        Drop Off
+                                                    </span>
+                                                ) : (
+                                                    <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-700 rounded-full text-xs font-bold border border-amber-100">
+                                                        <ArrowUpCircle size={12} />
+                                                        Pickup
+                                                    </span>
+                                                )}
                                             </td>
                                             <td className="px-6 py-4">
                                                 {record.status === 'picked_up' ? (
                                                     <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full text-xs font-bold border border-emerald-100">
                                                         <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
-                                                        On Bus
+                                                        Picked Up
                                                     </span>
                                                 ) : (
                                                     <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-bold border border-blue-100">
                                                         <CheckCircle2 size={12} />
-                                                        Completed
+                                                        Dropped Off
                                                     </span>
                                                 )}
                                             </td>
                                             <td className="px-6 py-4 text-sm text-slate-600 font-medium">
-                                                {format(new Date(record.pickedUpAt), 'p')}
-                                            </td>
-                                            <td className="px-6 py-4 text-sm text-slate-600 font-medium">
-                                                {record.droppedOffAt ? format(new Date(record.droppedOffAt), 'p') : (
-                                                    <span className="text-slate-300">—</span>
-                                                )}
+                                                {record.status === 'picked_up' && record.pickedUpAt
+                                                    ? format(new Date(record.pickedUpAt), 'p')
+                                                    : record.droppedOffAt
+                                                    ? format(new Date(record.droppedOffAt), 'p')
+                                                    : <span className="text-slate-300">—</span>
+                                                }
                                             </td>
                                         </motion.tr>
                                     ))

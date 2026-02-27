@@ -1438,23 +1438,24 @@ const getAttendance = async (req, res) => {
             query = query.where('tripId', '==', tripId);
         }
 
-        // Date filter logic (check if pickedUpAt matches the date)
+        // Date filter on createdAt (works for both pickup and dropoff records)
         if (date) {
             const startOfDay = new Date(date);
             startOfDay.setHours(0, 0, 0, 0);
             const endOfDay = new Date(date);
             endOfDay.setHours(23, 59, 59, 999);
 
-            query = query.where('pickedUpAt', '>=', admin.firestore.Timestamp.fromDate(startOfDay))
-                         .where('pickedUpAt', '<=', admin.firestore.Timestamp.fromDate(endOfDay));
+            query = query.where('createdAt', '>=', admin.firestore.Timestamp.fromDate(startOfDay))
+                         .where('createdAt', '<=', admin.firestore.Timestamp.fromDate(endOfDay));
         }
 
-        const snapshot = await query.orderBy('pickedUpAt', 'desc').get();
+        const snapshot = await query.orderBy('createdAt', 'desc').get();
         const attendance = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data(),
-            pickedUpAt: doc.data().pickedUpAt?.toDate()?.toISOString(),
-            droppedOffAt: doc.data().droppedOffAt?.toDate()?.toISOString() || null
+            pickedUpAt: doc.data().pickedUpAt?.toDate?.()?.toISOString() || null,
+            droppedOffAt: doc.data().droppedOffAt?.toDate?.()?.toISOString() || null,
+            createdAt: doc.data().createdAt?.toDate?.()?.toISOString() || null
         }));
 
         res.status(200).json({

@@ -246,14 +246,14 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
                 style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
               ),
             ),
-            title: Row(
+            title: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Text(
-                    student.name ?? 'Unknown Student',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
+                Text(
+                  student.name ?? 'Unknown Student',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
+                const SizedBox(height: 4),
                 if (isOnOtherBus)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),

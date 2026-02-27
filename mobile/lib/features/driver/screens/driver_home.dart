@@ -1319,6 +1319,14 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
         try {
           final String? activeTripId = bus.activeTripId;
 
+          // Get attended count for confirmation message
+          int attendedCount = 0;
+          if (activeTripId != null) {
+            final prefs = await SharedPreferences.getInstance();
+            final attendanceList = prefs.getStringList('shared_attendance_$activeTripId') ?? [];
+            attendedCount = attendanceList.length;
+          }
+
           // 1. Stop location stream immediately (local UI & Background service)
           _stopTracking();
 
@@ -1333,12 +1341,13 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
           
           _liveTrackBuffer.clear();
 
-          // 3. Navigate home immediately
+          // 3. Navigate home immediately with professional attendance confirmation
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text("Trip ending... Returning home."),
-                duration: Duration(seconds: 2),
+              SnackBar(
+                content: Text("✅ Trip ended. Attendance report for $attendedCount student${attendedCount == 1 ? '' : 's'} submitted successfully."),
+                backgroundColor: Colors.green[700],
+                duration: const Duration(seconds: 4),
               ),
             );
             widget.onBack();
