@@ -578,7 +578,7 @@ const markPickup = async (req, res) => {
         }
 
         // Get student details for the record
-        const studentDoc = await db.collection('users').doc(studentId).get();
+        const studentDoc = await db.collection('students').doc(studentId).get();
         const studentName = studentDoc.exists ? studentDoc.data().name : 'Unknown Student';
 
         const attendanceId = `${tripId}__${studentId}`;
@@ -704,10 +704,9 @@ const getBusStudents = async (req, res) => {
         }
 
         // Fetch students who have assignedBusId === busId
-        const snapshot = await db.collection('users')
+        const snapshot = await db.collection('students')
             .where('collegeId', '==', collegeId)
             .where('assignedBusId', '==', busId)
-            .where('role', '==', 'student')
             .get();
 
         const students = snapshot.docs.map(doc => {
