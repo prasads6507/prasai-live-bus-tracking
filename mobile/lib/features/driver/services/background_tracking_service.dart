@@ -158,31 +158,31 @@ void onStart(ServiceInstance service) async {
           lastWriteMs = now.millisecondsSinceEpoch;
           currentMode = newMode;
           currentStatus = newStatus;
-          
-          // F. Geofence / Stop Arrival logic (Latching Entry)
-          if (distToNextStop <= nextStopRadius && !hasArrivedCurrent) {
-             await prefs.setBool('has_arrived_current', true);
-             await BackgroundTrackingService._handleArrivalEntry(prefs, collegeId!, busId!, tripId!, nextStopId, position);
-          }
-          // H. Geofence / Exit logic (Latching Exit)
-          else if (distToNextStop > (nextStopRadius + 30) && hasArrivedCurrent) {
-             await prefs.setBool('has_arrived_current', false);
-             await BackgroundTrackingService._handleStopCompletion(prefs, collegeId!, busId!, tripId!, nextStopId);
-          }
-          // G. Skip logic: Using more reliable 500m proximity to next stop
-          else if (!hasArrivedCurrent && distToNextStop > nextStopRadius) {
-            await BackgroundTrackingService._checkForSkip(prefs, collegeId!, busId!, tripId!, nextStopId, position, distToNextStop);
-          }
+        }
 
-            // G2. Arriving Soon Notification (Trigger once per stop at 0.5 mile)
-          if (newStatus == 'ARRIVING' && !arrivingNotifiedIds.contains(nextStopId)) {
-             arrivingNotifiedIds.add(nextStopId);
-             BackgroundTrackingService._notifyServer(
-               tripId!, busId!, collegeId!, nextStopId, "ARRIVING",
-               stopName: nextStopName,
-               prefs: prefs,
-             );
-          }
+        // F. Geofence / Stop Arrival logic (Latching Entry) - Checked on EVERY point for immediate notifications
+        if (distToNextStop <= nextStopRadius && !hasArrivedCurrent) {
+            await prefs.setBool('has_arrived_current', true);
+            await BackgroundTrackingService._handleArrivalEntry(prefs, collegeId!, busId!, tripId!, nextStopId, position);
+        }
+        // H. Geofence / Exit logic (Latching Exit)
+        else if (distToNextStop > (nextStopRadius + 30) && hasArrivedCurrent) {
+            await prefs.setBool('has_arrived_current', false);
+            await BackgroundTrackingService._handleStopCompletion(prefs, collegeId!, busId!, tripId!, nextStopId);
+        }
+        // G. Skip logic: Using more reliable 500m proximity to next stop
+        else if (!hasArrivedCurrent && distToNextStop > nextStopRadius) {
+          await BackgroundTrackingService._checkForSkip(prefs, collegeId!, busId!, tripId!, nextStopId, position, distToNextStop);
+        }
+
+        // G2. Arriving Soon Notification (Trigger once per stop at 0.5 mile)
+        if (newStatus == 'ARRIVING' && !arrivingNotifiedIds.contains(nextStopId)) {
+            arrivingNotifiedIds.add(nextStopId);
+            BackgroundTrackingService._notifyServer(
+              tripId!, busId!, collegeId!, nextStopId, "ARRIVING",
+              stopName: nextStopName,
+              prefs: prefs,
+            );
         }
         
         lastPosition = position;
