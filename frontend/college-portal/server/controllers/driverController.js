@@ -513,7 +513,7 @@ const sendStudentAttendanceNotification = async ({ studentId, busId, direction, 
         await messaging.send({
             notification: { title, body },
             data: { tripId: tripId || '', busId, type: isChecked ? (isPickup ? 'STUDENT_BOARDED' : 'STUDENT_DROPPED') : 'STUDENT_UNCHECKED' },
-            android: { notification: { channelId: 'bus_events', priority: 'high', sound: 'default' } },
+            android: { priority: 'high', notification: { channelId: 'bus_events', sound: 'default' } },
             apns: { payload: { aps: { sound: 'default', badge: 1 } } },
             token: studentData.fcmToken
         });

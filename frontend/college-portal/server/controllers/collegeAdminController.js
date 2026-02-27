@@ -1438,36 +1438,46 @@ const getAttendance = async (req, res) => {
             query = query.where('tripId', '==', tripId);
         }
 
-        // Date filter on createdAt or updatedAt
+        // Remove date-based query filters from Firestore entirely to prevent composite index crashes
+        // Fetch raw data using ONLY equality on collegeId/busId to avoid index errors
+        const snapshot = await query.get();
+        let attendanceObjects = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                ...data,
+                // Handle different date formats seamlessly
+                pickedUpAt: data.pickedUpAt?.toDate?.()?.toISOString() || data.pickedUpAt || null,
+                droppedOffAt: data.droppedOffAt?.toDate?.()?.toISOString() || data.droppedOffAt || null,
+                createdAt: data.createdAt?.toDate?.()?.toISOString() || data.createdAt || null
+            };
+        });
+
+        // In-memory Date filter on createdAt
         if (date) {
-            const startOfDay = new Date(date);
-            startOfDay.setUTCHours(0, 0, 0, 0);
-            const endOfDay = new Date(date);
-            endOfDay.setUTCHours(23, 59, 59, 999);
-
-            const startTs = admin.firestore.Timestamp.fromDate(startOfDay);
-            const endTs = admin.firestore.Timestamp.fromDate(endOfDay);
-
-            // We filter primarily by createdAt, but also allow records without createdAt if we use updatedAt
-            // Note: Mixing where clauses on different fields in a range is tricky in Firestore
-            // For now, let's fix the date parsing to ensure it's UTC consistent
-            query = query.where('createdAt', '>=', startTs)
-                         .where('createdAt', '<=', endTs);
+            // date from frontend is yyyy-MM-dd
+            // We just check if the ISO string starts with that, or string match
+            // Users timezone differences are generally fine when comparing prefix,
+            // but if rigorous comparison is needed, we match the prefix.
+            const targetPrefix = date.split('T')[0];
+            attendanceObjects = attendanceObjects.filter(item => {
+                if (!item.createdAt) return false;
+                // Since we parsed everything to ISO strings above, we just check string include
+                return item.createdAt.includes(targetPrefix);
+            });
         }
 
-        const snapshot = await query.orderBy('createdAt', 'desc').get();
-        const attendance = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            pickedUpAt: doc.data().pickedUpAt?.toDate?.()?.toISOString() || null,
-            droppedOffAt: doc.data().droppedOffAt?.toDate?.()?.toISOString() || null,
-            createdAt: doc.data().createdAt?.toDate?.()?.toISOString() || null
-        }));
+        // In-memory sort by createdAt descending
+        attendanceObjects.sort((a, b) => {
+            const tA = new Date(a.createdAt || 0).getTime();
+            const tB = new Date(b.createdAt || 0).getTime();
+            return tB - tA; // descending
+        });
 
         res.status(200).json({
             success: true,
-            count: attendance.length,
-            data: attendance
+            count: attendanceObjects.length,
+            data: attendanceObjects
         });
     } catch (error) {
         console.error('Error fetching attendance records:', error);

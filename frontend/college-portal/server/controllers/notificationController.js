@@ -93,9 +93,9 @@ const sendBusStartedNotification = async (tripId, busId, collegeId, busNumber, i
                     type: 'BUS_STARTED'
                 },
                 android: {
+                    priority: 'high',
                     notification: {
                         channelId: 'bus_events',
-                        priority: 'high',
                         sound: 'default'
                     }
                 },
@@ -430,7 +430,7 @@ const sendStopEventNotification = async (tripId, busId, collegeId, stopId, stopN
                     const msg = {
                         notification: { title, body },
                         data: { tripId: tripId || '', busId: busId || '', stopId: stopId || '', type },
-                        android: { notification: { channelId: 'bus_events', priority: 'high', sound: 'default' } },
+                        android: { priority: 'high', notification: { channelId: 'bus_events', sound: 'default' } },
                         apns: { payload: { aps: { sound: 'default', badge: 1 } } },
                         tokens: batch,
                     };
@@ -549,7 +549,7 @@ const sendTripEndedNotification = async (tripId, busId, collegeId) => {
                 const msg = {
                     notification: { title, body },
                     data: { tripId: tripId || '', busId: busId || '', type: 'TRIP_ENDED' },
-                    android: { notification: { channelId: 'bus_events', priority: 'high', sound: 'default' } },
+                    android: { priority: 'high', notification: { channelId: 'bus_events', sound: 'default' } },
                     apns: { payload: { aps: { sound: 'default', badge: 1 } } },
                     tokens: batch,
                 };
