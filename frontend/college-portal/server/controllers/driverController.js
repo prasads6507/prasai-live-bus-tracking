@@ -483,6 +483,43 @@ const saveTripHistory = async (req, res) => {
     }
 };
 
+// Helper to send student attendance notification
+const sendStudentAttendanceNotification = async ({ studentId, busId, direction, isChecked, busNumber, tripId }) => {
+    if (!messaging) return;
+
+    try {
+        const studentDoc = await db.collection('students').doc(studentId).get();
+        if (!studentDoc.exists) return;
+
+        const studentData = studentDoc.data();
+        if (!studentData.fcmToken || typeof studentData.fcmToken !== 'string' || studentData.fcmToken.length < 10) {
+            return;
+        }
+
+        const isPickup = direction !== 'dropoff';
+        let title = '';
+        
+        if (isChecked) {
+            title = isPickup ? '🚌 ✅ Has Boarded' : '🚌 ✅ Has Dropped Off';
+        } else {
+            title = isPickup ? '⚠️ Boarding Cancelled' : '⚠️ Drop Off Cancelled';
+        }
+
+        const body = `Bus ${busNumber || busId}`;
+
+        await messaging.send({
+            notification: { title, body },
+            data: { tripId: tripId || '', busId, type: isChecked ? (isPickup ? 'STUDENT_BOARDED' : 'STUDENT_DROPPED') : 'STUDENT_UNCHECKED' },
+            android: { notification: { channelId: 'bus_events', priority: 'high', sound: 'default' } },
+            apns: { payload: { aps: { sound: 'default', badge: 1 } } },
+            token: studentData.fcmToken
+        });
+        console.log(`[sendStudentAttendanceNotification] Sent real-time FCM to ${studentData.name} (${title})`);
+    } catch (error) {
+        console.error('Error in sendStudentAttendanceNotification:', error);
+    }
+};
+
 // @desc    Upload complete trip history at trip end (replaces per-second writes)
 // @route   POST /api/driver/trips/:tripId/history-upload
 // @access  Private (Driver)
@@ -653,6 +690,40 @@ const historyUpload = async (req, res) => {
                     }
                     console.log(`[historyUpload] Sent pending notification to ${pendingTokens.length} students`);
                 }
+
+                // --- RECORD NOT BOARDED STATUS ---
+                const nbBatch = db.batch();
+                let nbCount = 0;
+                allBusStudents.forEach(doc => {
+                    if (!studentIds.includes(doc.id)) {
+                        const studentId = doc.id;
+                        const studentData = doc.data();
+                        const attendanceId = `${tripId}__${studentId}`;
+                        const attendanceRef = db.collection('attendance').doc(attendanceId);
+                        
+                        // Only create if it doesn't exist (to avoid overwriting if somehow they were marked differently)
+                        nbBatch.set(attendanceRef, {
+                            tripId,
+                            studentId,
+                            busId: tripData.busId,
+                            busNumber: busNumber,
+                            collegeId: req.collegeId,
+                            driverId: req.user.id,
+                            studentName: studentData.name || 'Unknown Student',
+                            direction: direction,
+                            status: isPickup ? 'not_boarded' : 'not_dropped',
+                            createdAt: serverTimestamp,
+                            updatedAt: serverTimestamp,
+                            pickedUpAt: null,
+                            droppedOffAt: null
+                        }, { merge: true });
+                        nbCount++;
+                    }
+                });
+                if (nbCount > 0) {
+                    await nbBatch.commit();
+                    console.log(`[historyUpload] Recorded ${nbCount} students as not_boarded/not_dropped`);
+                }
             } catch (pendingErr) {
                 console.error('[historyUpload] Pending students FCM error:', pendingErr.message);
             }
@@ -680,38 +751,14 @@ const notifyStudentAttendance = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Missing required parameters' });
         }
 
-        const studentDoc = await db.collection('students').doc(studentId).get();
-        if (!studentDoc.exists) {
-            return res.status(404).json({ success: false, message: 'Student not found' });
-        }
-
-        const studentData = studentDoc.data();
-        if (!studentData.fcmToken || typeof studentData.fcmToken !== 'string' || studentData.fcmToken.length < 10) {
-            // Student doesn't have an active FCM token, ignore silently
-            return res.status(200).json({ success: true, message: 'No FCM token for student' });
-        }
-
-        if (messaging) {
-            const isPickup = direction !== 'dropoff';
-            let title = '';
-            
-            if (isChecked) {
-                title = isPickup ? '🚌 ✅ Has Boarded' : '🚌 ✅ Has Dropped Off';
-            } else {
-                title = isPickup ? '⚠️ Boarding Cancelled' : '⚠️ Drop Off Cancelled';
-            }
-
-            const body = `Bus ${busNumber || busId}`;
-
-            await messaging.send({
-                notification: { title, body },
-                data: { tripId: tripId || '', busId, type: isChecked ? 'STUDENT_BOARDED' : 'STUDENT_UNCHECKED' },
-                android: { notification: { channelId: 'bus_events', priority: 'high', sound: 'default' } },
-                apns: { payload: { aps: { sound: 'default', badge: 1 } } },
-                token: studentData.fcmToken
-            });
-            console.log(`[notifyStudentAttendance] Sent real-time FCM to ${studentData.name} (${title})`);
-        }
+        await sendStudentAttendanceNotification({
+            studentId,
+            busId,
+            direction,
+            isChecked,
+            busNumber,
+            tripId
+        });
 
         res.status(200).json({ success: true, message: 'Notification sent' });
     } catch (error) {
@@ -790,6 +837,16 @@ const markPickup = async (req, res) => {
         });
 
         res.status(200).json({ success: true, attendance: attendanceData });
+
+        // Immediate notification
+        sendStudentAttendanceNotification({
+            studentId,
+            busId: tripData.busId,
+            direction: 'pickup',
+            isChecked: true,
+            busNumber: tripData.busNumber,
+            tripId
+        }).catch(err => console.error('[markPickupNotify] error:', err));
     } catch (error) {
         console.error('Error marking pickup:', error);
         res.status(500).json({ success: false, message: 'Server Error', error: error.message });
@@ -834,6 +891,16 @@ const markDropoff = async (req, res) => {
         });
 
         res.status(200).json({ success: true, message: 'Student dropped off' });
+
+        // Immediate notification
+        sendStudentAttendanceNotification({
+            studentId,
+            busId: tripData.busId,
+            direction: 'dropoff',
+            isChecked: true,
+            busNumber: tripData.busNumber,
+            tripId
+        }).catch(err => console.error('[markDropoffNotify] error:', err));
     } catch (error) {
         console.error('Error marking dropoff:', error);
         res.status(500).json({ success: false, message: 'Server Error', error: error.message });

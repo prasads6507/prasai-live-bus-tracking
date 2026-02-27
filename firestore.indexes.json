@@ -77,6 +77,56 @@
                     "order": "DESCENDING"
                 }
             ]
+        },
+        {
+            "collectionGroup": "attendance",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "collegeId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "createdAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "attendance",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "collegeId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "busId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "createdAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "attendance",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "collegeId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "tripId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "createdAt",
+                    "order": "DESCENDING"
+                }
+            ]
         }
     ],
     "fieldOverrides": []

@@ -257,10 +257,18 @@ const BusAttendance = () => {
                                                         <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
                                                         Picked Up
                                                     </span>
-                                                ) : (
+                                                ) : record.status === 'dropped_off' ? (
                                                     <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-bold border border-blue-100">
                                                         <CheckCircle2 size={12} />
                                                         Dropped Off
+                                                    </span>
+                                                ) : record.status === 'not_boarded' ? (
+                                                    <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-rose-50 text-rose-700 rounded-full text-xs font-bold border border-rose-100">
+                                                        Not Boarded
+                                                    </span>
+                                                ) : (
+                                                    <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-50 text-slate-700 rounded-full text-xs font-bold border border-slate-100">
+                                                        Not Dropped
                                                     </span>
                                                 )}
                                             </td>
