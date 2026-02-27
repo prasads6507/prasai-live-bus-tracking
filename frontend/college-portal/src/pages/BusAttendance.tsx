@@ -11,11 +11,11 @@ import {
     ClipboardList
 } from 'lucide-react';
 import Layout from '../components/Layout';
-import { getAttendance, getBuses, getTripHistory } from '../services/api';
+import { getAttendance, getBuses, getTripHistory, validateSlug } from '../services/api';
 import { format } from 'date-fns';
 
 const BusAttendance = () => {
-    useParams<{ orgSlug: string }>();
+    const { orgSlug } = useParams<{ orgSlug: string }>();
     const navigate = useNavigate();
     
     const [loading, setLoading] = useState(true);
@@ -49,9 +49,22 @@ const BusAttendance = () => {
         }
     };
 
+    const initializeAndFetch = async () => {
+        try {
+            if (orgSlug) {
+                const orgData = await validateSlug(orgSlug);
+                localStorage.setItem('current_college_id', orgData.collegeId);
+            }
+            await fetchData();
+        } catch (error) {
+            console.error("Failed to initialize:", error);
+            setLoading(false);
+        }
+    };
+
     useEffect(() => {
-        fetchData();
-    }, [filters.date, filters.busId, filters.tripId]);
+        initializeAndFetch();
+    }, [orgSlug, filters.date, filters.busId, filters.tripId]);
 
     const stats = {
         total: attendance.length,

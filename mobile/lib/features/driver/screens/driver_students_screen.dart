@@ -54,8 +54,12 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
       });
     }
 
-    // Fetch all students and buses in the college
+    // Fetch students and buses
     final studentsAsync = ref.watch(studentsProvider(collegeId));
+    final busStudentsAsync = driverBusId != null 
+        ? ref.watch(busStudentsProvider(driverBusId)) 
+        : const AsyncValue<List<UserProfile>>.data([]);
+    
     final busesAsync = ref.watch(busesProvider(collegeId));
 
     // Create a map for quick bus number lookup
@@ -111,33 +115,34 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
           ),
 
           if (!_isSearchMode && activeTripId != null)
-            studentsAsync.maybeWhen(
-              data: (allStudents) {
-                final displayList = allStudents.where((s) => s.assignedBusId == driverBusId).toList();
-                return _buildAttendanceSummary(displayList, attendanceMap);
-              },
+            busStudentsAsync.maybeWhen(
+              data: (assignedStudents) => _buildAttendanceSummary(assignedStudents, attendanceMap),
               orElse: () => const SizedBox.shrink(),
             ),
 
           Expanded(
-            child: studentsAsync.when(
-              data: (allStudents) {
-                // Determine which students to show
-                List<UserProfile> displayList;
-
-                if (_isSearchMode) {
-                  // Search all students by name, email, or roll number
-                  final q = _searchQuery.toLowerCase();
-                  displayList = allStudents.where((s) {
-                    final nameMatch = (s.name ?? '').toLowerCase().contains(q);
-                    final emailMatch = (s.email ?? '').toLowerCase().contains(q);
-                    // Using email or name as fallback if rollNumber isn't there
-                    return nameMatch || emailMatch;
-                  }).toList();
-                } else {
-                  // Default Mode: Only show students assigned to THIS driver's bus
-                  displayList = allStudents.where((s) => s.assignedBusId == driverBusId).toList();
-                }
+            child: _isSearchMode 
+              ? studentsAsync.when(
+                  data: (allStudents) {
+                    final q = _searchQuery.toLowerCase();
+                    final displayList = allStudents.where((s) {
+                      final nameMatch = (s.name ?? '').toLowerCase().contains(q);
+                      final emailMatch = (s.email ?? '').toLowerCase().contains(q);
+                      return nameMatch || emailMatch;
+                    }).toList();
+                    return _buildStudentList(displayList, activeTripId, attendanceMap, busIdToNumber);
+                  },
+                  loading: () => const Center(child: CircularProgressIndicator()),
+                  error: (err, stack) => Center(child: Text('Error: $err')),
+                )
+              : busStudentsAsync.when(
+                  data: (assignedStudents) {
+                    return _buildStudentList(assignedStudents, activeTripId, attendanceMap, busIdToNumber);
+                  },
+                  loading: () => const Center(child: CircularProgressIndicator()),
+                  error: (err, stack) => Center(child: Text('Error: $err')),
+                ),
+          ),
 
                 if (displayList.isEmpty) {
                   return Center(
@@ -264,7 +269,107 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
     );
   }
 
-  Widget _buildAttendanceSummary(List<UserProfile> students, Map<String, String> attendanceMap) {
+  Widget _buildStudentList(List<UserProfile> displayList, String? activeTripId, Map<String, String> attendanceMap, Map<String, String> busIdToNumber) {
+    return Column(
+      children: [
+        if (!_isSearchMode && activeTripId != null)
+          _buildAttendanceSummary(displayList, attendanceMap),
+        Expanded(
+          child: displayList.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.people_outline, size: 64, color: Colors.grey[400]),
+                      const SizedBox(height: 16),
+                      Text(
+                        _isSearchMode ? 'No students found matching "$_searchQuery"' : 'No students assigned to your bus',
+                        style: TextStyle(color: Colors.grey[600]),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: displayList.length,
+                  itemBuilder: (context, index) {
+                    final student = displayList[index];
+                    final assignedBusId = ref.watch(assignedBusProvider).value?.id;
+                    final isOnOtherBus = student.assignedBusId != null && student.assignedBusId != assignedBusId;
+
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.all(12),
+                        leading: CircleAvatar(
+                          backgroundColor: AppColors.primary.withOpacity(0.1),
+                          child: Text(
+                            (student.name ?? 'S')[0].toUpperCase(),
+                            style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        title: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                student.name ?? 'Unknown Student',
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            if (isOnOtherBus)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange[50],
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.orange[200]!),
+                                ),
+                                child: Text(
+                                  _getBusLabel(student.assignedBusId, busIdToNumber),
+                                  style: const TextStyle(color: Colors.orange, fontSize: 10, fontWeight: FontWeight.bold),
+                                ),
+                              )
+                            else if (student.assignedBusId == assignedBusId && assignedBusId != null)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.green[50],
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.green[200]!),
+                                ),
+                                child: const Text(
+                                  'My Bus',
+                                  style: TextStyle(color: Colors.green, fontSize: 10, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                          ],
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(student.email),
+                            if (student.phone != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text(
+                                  student.phone!,
+                                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                                ),
+                              ),
+                          ],
+                        ),
+                        trailing: _buildAttendanceAction(student, activeTripId, attendanceMap[student.id]),
+                        onTap: () => _showStudentDetails(student, busIdToNumber, activeTripId, attendanceMap[student.id]),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
     int pickedUp = 0;
     int droppedOff = 0;
     int pending = 0;

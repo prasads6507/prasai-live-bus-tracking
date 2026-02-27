@@ -682,6 +682,57 @@ const getTripAttendance = async (req, res) => {
     }
 };
 
+// @desc    Get students assigned to a specific bus (for drivers)
+// @route   GET /api/driver/buses/:busId/students
+// @access  Private (Driver)
+const getBusStudents = async (req, res) => {
+    try {
+        const { busId } = req.params;
+        const collegeId = req.collegeId;
+
+        // Verify the driver is assigned to this bus or has permission
+        const busRef = db.collection('buses').doc(busId);
+        const busDoc = await busRef.get();
+
+        if (!busDoc.exists) {
+            return res.status(404).json({ success: false, message: 'Bus not found' });
+        }
+        
+        const busData = busDoc.data();
+        if (busData.collegeId !== collegeId) {
+            return res.status(403).json({ success: false, message: 'Access denied: College mismatch' });
+        }
+
+        // Fetch students who have assignedBusId === busId
+        const snapshot = await db.collection('users')
+            .where('collegeId', '==', collegeId)
+            .where('assignedBusId', '==', busId)
+            .where('role', '==', 'student')
+            .get();
+
+        const students = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                name: data.name || '',
+                email: data.email || '',
+                phone: data.phone || data.phoneNumber || null,
+                registerNumber: data.registerNumber || null,
+                rollNumber: data.rollNumber || null,
+                assignedBusId: data.assignedBusId || null,
+            };
+        });
+
+        res.status(200).json({
+            success: true,
+            data: students
+        });
+    } catch (error) {
+        console.error('Error fetching bus students for driver:', error);
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+    }
+};
+
 module.exports = {
     getDriverBuses,
     searchDriverBuses,
@@ -693,6 +744,7 @@ module.exports = {
     checkProximity,
     markPickup,
     markDropoff,
-    getTripAttendance
+    getTripAttendance,
+    getBusStudents
 };
 

@@ -11,7 +11,8 @@ const {
     checkProximity,
     markPickup,
     markDropoff,
-    getTripAttendance
+    getTripAttendance,
+    getBusStudents
 } = require('../controllers/driverController');
 const { sendStopEventNotification, sendTripEndedNotification } = require('../controllers/notificationController');
 const { protect, authorize } = require('../middleware/auth');
@@ -39,6 +40,7 @@ router.post('/notifications/proximity', checkProximity);
 router.post('/trips/:tripId/attendance/pickup', markPickup);
 router.post('/trips/:tripId/attendance/dropoff', markDropoff);
 router.get('/trips/:tripId/attendance', getTripAttendance);
+router.get('/buses/:busId/students', getBusStudents);
 
 // POST /api/driver/trip-started-notify
 router.post('/trip-started-notify', async (req, res) => {

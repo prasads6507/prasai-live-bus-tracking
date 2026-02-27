@@ -162,3 +162,14 @@ final tripAttendanceProvider = FutureProvider.family<List<Map<String, dynamic>>,
   }
   return [];
 });
+
+final busStudentsProvider = FutureProvider.family<List<UserProfile>, String>((ref, busId) async {
+  final dio = ref.watch(dioProvider);
+  final response = await dio.get('/driver/buses/$busId/students');
+  if (response.data['success']) {
+    return (response.data['data'] as List)
+        .map((s) => UserProfile.fromJson(s))
+        .toList();
+  }
+  return [];
+});
