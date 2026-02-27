@@ -154,7 +154,8 @@ void onStart(ServiceInstance service) async {
         final intervalElapsed = elapsedMs >= (intervalSec * 1000);
 
         if (statusChanged || modeChanged || intervalElapsed) {
-          await BackgroundTrackingService._writeToFirestore(prefs, busId!, tripId!, position, newMode, newStatus, nextStopId, finalSpeedMph);
+          // Fire and forget Firestore update to keep the location loop spinning
+          BackgroundTrackingService._writeToFirestore(prefs, busId!, tripId!, position, newMode, newStatus, nextStopId, finalSpeedMph);
           lastWriteMs = now.millisecondsSinceEpoch;
           currentMode = newMode;
           currentStatus = newStatus;
@@ -163,16 +164,19 @@ void onStart(ServiceInstance service) async {
         // F. Geofence / Stop Arrival logic (Latching Entry) - Checked on EVERY point for immediate notifications
         if (distToNextStop <= nextStopRadius && !hasArrivedCurrent) {
             await prefs.setBool('has_arrived_current', true);
-            await BackgroundTrackingService._handleArrivalEntry(prefs, collegeId!, busId!, tripId!, nextStopId, position);
+            // Non-blocking arrival entry
+            BackgroundTrackingService._handleArrivalEntry(prefs, collegeId!, busId!, tripId!, nextStopId, position);
         }
         // H. Geofence / Exit logic (Latching Exit)
         else if (distToNextStop > (nextStopRadius + 30) && hasArrivedCurrent) {
             await prefs.setBool('has_arrived_current', false);
-            await BackgroundTrackingService._handleStopCompletion(prefs, collegeId!, busId!, tripId!, nextStopId);
+            // Non-blocking stop completion
+            BackgroundTrackingService._handleStopCompletion(prefs, collegeId!, busId!, tripId!, nextStopId);
         }
         // G. Skip logic: Using more reliable 500m proximity to next stop
         else if (!hasArrivedCurrent && distToNextStop > nextStopRadius) {
-          await BackgroundTrackingService._checkForSkip(prefs, collegeId!, busId!, tripId!, nextStopId, position, distToNextStop);
+          // Non-blocking skip check
+          BackgroundTrackingService._checkForSkip(prefs, collegeId!, busId!, tripId!, nextStopId, position, distToNextStop);
         }
 
         // G2. Arriving Soon Notification (Trigger once per stop at 0.5 mile)

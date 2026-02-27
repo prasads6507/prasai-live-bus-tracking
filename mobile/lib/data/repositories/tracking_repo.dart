@@ -35,25 +35,24 @@ class TrackingRepository {
     final tripId = 'trip-$busId-${DateTime.now().millisecondsSinceEpoch}';
 
     // Wait for the start-trip notification to be sent reliably before returning
-    try {
-      await _apiDataSource.notifyTripStarted(
-        collegeId: collegeId,
-        busId: busId,
-        tripId: tripId,
-        busNumber: busNumber,
-        driverId: driverId,
-        routeId: routeId,
-        isMaintenance: isMaintenance,
-        originalBusId: originalBusId,
-      );
-      debugPrint('[TripRepo] notifyTripStarted success');
-    } catch (e) {
+    // Dispatch start-trip notification asynchronously to avoid blocking the UI/Firestore flow
+    _apiDataSource.notifyTripStarted(
+      collegeId: collegeId,
+      busId: busId,
+      tripId: tripId,
+      busNumber: busNumber,
+      driverId: driverId,
+      routeId: routeId,
+      isMaintenance: isMaintenance,
+      originalBusId: originalBusId,
+    ).catchError((e) {
       if (e is DioException) {
         debugPrint('[TripRepo] notifyTripStarted failed: ${e.message} | ${e.response?.statusCode} | ${e.response?.data}');
       } else {
         debugPrint('[TripRepo] notifyTripStarted failed: $e');
       }
-    }
+      return null;
+    });
 
     await _firestoreDataSource.startTrip(
       collegeId: collegeId,
