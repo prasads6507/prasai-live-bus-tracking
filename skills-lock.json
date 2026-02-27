@@ -1,6 +1,26 @@
 {
   "version": 1,
   "skills": {
+    "api-documentation-generator": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "computedHash": "eaba03ac6921892f4eaac0c0c87184bdf62fba84ef7c62e8b73cf4524ae1a897"
+    },
+    "api-security-best-practices": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "computedHash": "ce16d10df486a28a3ba894d646de3243fc2bf9990f563fc7a9b074fd720e24d5"
+    },
+    "clean-code": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "computedHash": "af77b8995f255140f1643de753007baf87b734e8b87175489524aadc3559c42a"
+    },
+    "firebase": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "computedHash": "fc4e4a2a7102937e444707e879b58ef539452d1ae18da0bd46a8be459fbd7d76"
+    },
     "frontend-design": {
       "source": "sickn33/antigravity-awesome-skills",
       "sourceType": "github",
@@ -16,10 +36,30 @@
       "sourceType": "github",
       "computedHash": "63843b274e951c940fcd408ba39a8800489fe0b9eeff4fe6bda39478bc4f662d"
     },
+    "nodejs-best-practices": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "computedHash": "7340b396c662e9d794d7bc48c6e5d2b8f33128b045be24e1d84bc7249a610867"
+    },
     "react-ui-patterns": {
       "source": "sickn33/antigravity-awesome-skills",
       "sourceType": "github",
       "computedHash": "6d4eb6b0bda3479324f508314a737ed7cac0c4ed60538bd7bf892b1977a3e09e"
+    },
+    "senior-fullstack": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "computedHash": "a3e26f868bae6318f058c6184333fd68a9ec27fe7ad3e3970ec713f455ff67ee"
+    },
+    "software-architecture": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "computedHash": "de98595ceee4cf6e97dc88a80f8693a614c10e70170562b692531a60e655d57d"
+    },
+    "ui-ux-pro-max": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "computedHash": "d8e1cbc119ea771b4f537a92f8b67eba51a2becdb4de0c7a0e265d101986372e"
     },
     "vercel-deployment": {
       "source": "sickn33/antigravity-awesome-skills",
