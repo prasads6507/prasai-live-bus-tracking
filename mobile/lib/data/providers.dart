@@ -132,7 +132,7 @@ final studentsProvider = StreamProvider.family<List<UserProfile>, String>((ref, 
 });
 final assignedBusProvider = StreamProvider<Bus?>((ref) {
   final userProfile = ref.watch(userProfileProvider).value;
-  if (userProfile == null || userProfile.role != 'driver') return Stream.value(null);
+  if (userProfile == null || userProfile.role.toLowerCase() != 'driver') return Stream.value(null);
 
   final collegeId = userProfile.collegeId;
   final driverId = userProfile.id;

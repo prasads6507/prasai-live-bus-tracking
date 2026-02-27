@@ -38,112 +38,141 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final userProfile = ref.watch(userProfileProvider).value;
-    final assignedBus = ref.watch(assignedBusProvider).value;
-    final driverBusId = assignedBus?.id ?? userProfile?.assignedBusId;
-    final collegeId = userProfile?.collegeId ?? '';
-    final activeTripId = ref.watch(activeTripIdProvider).value;
+    final profileAsync = ref.watch(userProfileProvider);
+    final assignedBusAsync = ref.watch(assignedBusProvider);
 
-    final Map<String, String> attendanceMap = activeTripId != null
-        ? ref.watch(tripAttendanceProvider(activeTripId)).maybeWhen(
-            data: (data) => {
-              for (var record in data) record['studentId'] as String: record['status'] as String? ?? '',
-            },
-            orElse: () => {},
-          )
-        : {};
+    return profileAsync.when(
+      data: (userProfile) {
+        if (userProfile == null) {
+          return const AppScaffold(
+            body: Center(child: Text('User profile not found')),
+          );
+        }
 
-    // Fetch students and buses
-    final studentsAsync = ref.watch(studentsProvider(collegeId));
-    final busStudentsAsync = driverBusId != null 
-        ? ref.watch(busStudentsProvider(driverBusId)) 
-        : const AsyncValue<List<UserProfile>>.data([]);
-    
-    final busesAsync = ref.watch(busesProvider(collegeId));
+        final collegeId = userProfile.collegeId;
+        final activeTripId = ref.watch(activeTripIdProvider).value;
 
-    // Create a map for quick bus number lookup
-    final Map<String, String> busIdToNumber = {};
-    busesAsync.whenData((buses) {
-      for (var b in buses) {
-        busIdToNumber[b.id] = b.busNumber;
-      }
-    });
+        return assignedBusAsync.when(
+          data: (assignedBus) {
+            final driverBusId = assignedBus?.id ?? userProfile.assignedBusId;
+            debugPrint('[DriverStudents] profile.assignedBusId: ${userProfile.assignedBusId}');
+            debugPrint('[DriverStudents] assignedBus.id: ${assignedBus?.id}');
+            debugPrint('[DriverStudents] effective driverBusId: $driverBusId');
 
-    return AppScaffold(
-      appBar: AppBar(
-        title: Text('Students', style: AppTypography.h2),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-      ),
-      body: Column(
-        children: [
-          // Search Header
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'Search all students...',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () {
-                          setState(() {
-                            _searchController.clear();
-                            _searchQuery = '';
-                            _isSearchMode = false;
-                          });
-                        },
-                      )
-                    : null,
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
+            final Map<String, String> attendanceMap = activeTripId != null
+                ? ref.watch(tripAttendanceProvider(activeTripId)).maybeWhen(
+                    data: (data) {
+                      final map = <String, String>{};
+                      for (var record in data) {
+                        map[record['studentId'] as String] = record['status'] as String? ?? '';
+                      }
+                      return map;
+                    },
+                    orElse: () => {},
+                  )
+                : {};
+
+            // Fetch students for THIS bus
+            final busStudentsAsync = driverBusId != null 
+                ? ref.watch(busStudentsProvider(driverBusId)) 
+                : const AsyncValue<List<UserProfile>>.data([]);
+            
+            // Still need all students for search mode
+            final allStudentsAsync = ref.watch(studentsProvider(collegeId));
+            final busesAsync = ref.watch(busesProvider(collegeId));
+
+            // Create a map for quick bus number lookup
+            final Map<String, String> busIdToNumber = {};
+            busesAsync.whenData((buses) {
+              for (var b in buses) {
+                busIdToNumber[b.id] = b.busNumber;
+              }
+            });
+
+            return AppScaffold(
+              appBar: AppBar(
+                title: Text('Students', style: AppTypography.h2),
+                backgroundColor: Colors.transparent,
+                elevation: 0,
               ),
-              onChanged: (val) {
-                setState(() {
-                  _searchQuery = val.trim();
-                  _isSearchMode = _searchQuery.isNotEmpty;
-                });
-              },
-            ),
-          ),
+              body: Column(
+                children: [
+                  // Search Header
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: TextField(
+                      controller: _searchController,
+                      decoration: InputDecoration(
+                        hintText: 'Search all students...',
+                        prefixIcon: const Icon(Icons.search),
+                        suffixIcon: _searchQuery.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear),
+                                onPressed: () {
+                                  setState(() {
+                                    _searchController.clear();
+                                    _searchQuery = '';
+                                    _isSearchMode = false;
+                                  });
+                                },
+                              )
+                            : null,
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                      onChanged: (val) {
+                        setState(() {
+                          _searchQuery = val.trim();
+                          _isSearchMode = _searchQuery.isNotEmpty;
+                        });
+                      },
+                    ),
+                  ),
 
-          if (!_isSearchMode && activeTripId != null)
-            busStudentsAsync.maybeWhen(
-              data: (assignedStudents) => _buildAttendanceSummary(assignedStudents, attendanceMap),
-              orElse: () => const SizedBox.shrink(),
-            ),
+                  if (!_isSearchMode && activeTripId != null)
+                    busStudentsAsync.maybeWhen(
+                      data: (assignedStudents) => _buildAttendanceSummary(assignedStudents, attendanceMap),
+                      orElse: () => const SizedBox.shrink(),
+                    ),
 
-          Expanded(
-            child: _isSearchMode 
-              ? studentsAsync.when(
-                  data: (allStudents) {
-                    final q = _searchQuery.toLowerCase();
-                    final displayList = allStudents.where((s) {
-                      final nameMatch = (s.name ?? '').toLowerCase().contains(q);
-                      final emailMatch = (s.email ?? '').toLowerCase().contains(q);
-                      return nameMatch || emailMatch;
-                    }).toList();
-                    return _buildStudentList(displayList, activeTripId, attendanceMap, busIdToNumber);
-                  },
-                  loading: () => const Center(child: CircularProgressIndicator()),
-                  error: (err, stack) => Center(child: Text('Error: $err')),
-                )
-              : busStudentsAsync.when(
-                  data: (assignedStudents) {
-                    return _buildStudentList(assignedStudents, activeTripId, attendanceMap, busIdToNumber);
-                  },
-                  loading: () => const Center(child: CircularProgressIndicator()),
-                  error: (err, stack) => Center(child: Text('Error: $err')),
-                ),
-          ),
-        ],
-      ),
+                  Expanded(
+                    child: _isSearchMode 
+                      ? allStudentsAsync.when(
+                          data: (allStudents) {
+                            final q = _searchQuery.toLowerCase();
+                            final displayList = allStudents.where((s) {
+                              final nameMatch = (s.name ?? '').toLowerCase().contains(q);
+                              final emailMatch = (s.email ?? '').toLowerCase().contains(q);
+                              return nameMatch || emailMatch;
+                            }).toList();
+                            return _buildStudentList(displayList, activeTripId, attendanceMap, busIdToNumber);
+                          },
+                          loading: () => const Center(child: CircularProgressIndicator()),
+                          error: (err, stack) => Center(child: Text('Error: $err')),
+                        )
+                      : busStudentsAsync.when(
+                          data: (assignedStudents) {
+                            debugPrint('[DriverStudents] Showing ${assignedStudents.length} assigned students');
+                            return _buildStudentList(assignedStudents, activeTripId, attendanceMap, busIdToNumber);
+                          },
+                          loading: () => const Center(child: CircularProgressIndicator()),
+                          error: (err, stack) => Center(child: Text('Error: $err')),
+                        ),
+                  ),
+                ],
+              ),
+            );
+          },
+          loading: () => const AppScaffold(body: Center(child: CircularProgressIndicator())),
+          error: (err, stack) => AppScaffold(body: Center(child: Text('Error loading bus: $err'))),
+        );
+      },
+      loading: () => const AppScaffold(body: Center(child: CircularProgressIndicator())),
+      error: (err, stack) => AppScaffold(body: Center(child: Text('Error loading profile: $err'))),
     );
   }
 
