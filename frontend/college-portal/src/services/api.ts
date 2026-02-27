@@ -229,6 +229,11 @@ export const getTripPath = async (tripId: string) => {
     return response.data;
 };
 
+export const getAttendance = async (params: { busId?: string, date?: string, tripId?: string }) => {
+    const response = await api.get('/admin/attendance', { params });
+    return response.data;
+};
+
 export const uploadRoutesFile = async (file: File) => {
     const formData = new FormData();
     formData.append('file', file);

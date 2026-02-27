@@ -1421,6 +1421,53 @@ const assignStudentsToBusRoute = async (req, res) => {
     }
 };
 
+// @desc    Get attendance records for the college
+// @route   GET /api/admin/attendance
+// @access  Private (College Admin)
+const getAttendance = async (req, res) => {
+    try {
+        const { busId, date, tripId } = req.query;
+        let query = db.collection('attendance')
+            .where('collegeId', '==', req.collegeId);
+
+        if (busId) {
+            query = query.where('busId', '==', busId);
+        }
+
+        if (tripId) {
+            query = query.where('tripId', '==', tripId);
+        }
+
+        // Date filter logic (check if pickedUpAt matches the date)
+        if (date) {
+            const startOfDay = new Date(date);
+            startOfDay.setHours(0, 0, 0, 0);
+            const endOfDay = new Date(date);
+            endOfDay.setHours(23, 59, 59, 999);
+
+            query = query.where('pickedUpAt', '>=', admin.firestore.Timestamp.fromDate(startOfDay))
+                         .where('pickedUpAt', '<=', admin.firestore.Timestamp.fromDate(endOfDay));
+        }
+
+        const snapshot = await query.orderBy('pickedUpAt', 'desc').get();
+        const attendance = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            pickedUpAt: doc.data().pickedUpAt?.toDate()?.toISOString(),
+            droppedOffAt: doc.data().droppedOffAt?.toDate()?.toISOString() || null
+        }));
+
+        res.status(200).json({
+            success: true,
+            count: attendance.length,
+            data: attendance
+        });
+    } catch (error) {
+        console.error('Error fetching attendance records:', error);
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+    }
+};
+
 module.exports = {
     createBus,
     getBuses,
@@ -1450,5 +1497,6 @@ module.exports = {
     assignStudentsToStop,
     getStudentAssignments,
     getBusStudents,
-    assignStudentsToBusRoute
+    assignStudentsToBusRoute,
+    getAttendance
 };

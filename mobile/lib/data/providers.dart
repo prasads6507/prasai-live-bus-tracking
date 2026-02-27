@@ -142,3 +142,23 @@ final assignedBusProvider = StreamProvider<Bus?>((ref) {
     return buses.first;
   });
 });
+
+final activeTripIdProvider = StreamProvider<String?>((ref) {
+  final assignedBus = ref.watch(assignedBusProvider).value;
+  if (assignedBus == null) return Stream.value(null);
+
+  final firestore = ref.watch(firestoreProvider);
+  return firestore.collection('buses').doc(assignedBus.id).snapshots().map((snapshot) {
+    if (!snapshot.exists) return null;
+    return snapshot.data()?['activeTripId'] as String?;
+  });
+});
+
+final tripAttendanceProvider = FutureProvider.family<List<Map<String, dynamic>>, String>((ref, tripId) async {
+  final dio = ref.watch(dioProvider);
+  final response = await dio.get('/driver/trips/$tripId/attendance');
+  if (response.data['success']) {
+    return List<Map<String, dynamic>>.from(response.data['data']);
+  }
+  return [];
+});

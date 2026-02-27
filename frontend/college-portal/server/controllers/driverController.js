@@ -557,6 +557,131 @@ const checkProximity = async (req, res) => {
     }
 };
 
+// @desc    Mark student as picked up
+// @route   POST /api/driver/trips/:tripId/attendance/pickup
+// @access  Private (Driver)
+const markPickup = async (req, res) => {
+    try {
+        const { tripId } = req.params;
+        const { studentId } = req.body;
+
+        if (!studentId) return res.status(400).json({ success: false, message: 'Student ID required' });
+
+        const tripRef = db.collection('trips').doc(tripId);
+        const tripDoc = await tripRef.get();
+
+        if (!tripDoc.exists) return res.status(404).json({ success: false, message: 'Trip not found' });
+        
+        const tripData = tripDoc.data();
+        if (tripData.driverId !== req.user.id) {
+            return res.status(403).json({ success: false, message: 'Unauthorized trip access' });
+        }
+
+        // Get student details for the record
+        const studentDoc = await db.collection('users').doc(studentId).get();
+        const studentName = studentDoc.exists ? studentDoc.data().name : 'Unknown Student';
+
+        const attendanceId = `${tripId}__${studentId}`;
+        const attendanceRef = db.collection('attendance').doc(attendanceId);
+
+        const serverTimestamp = admin.firestore.FieldValue.serverTimestamp();
+
+        const attendanceData = {
+            tripId,
+            studentId,
+            busId: tripData.busId,
+            collegeId: req.collegeId,
+            driverId: req.user.id,
+            studentName,
+            pickedUpAt: serverTimestamp,
+            status: 'picked_up',
+            droppedOffAt: null,
+            updatedAt: serverTimestamp
+        };
+
+        await db.runTransaction(async (transaction) => {
+            transaction.set(attendanceRef, attendanceData, { merge: true });
+            transaction.update(tripRef, {
+                pickedUpStudents: admin.firestore.FieldValue.arrayUnion(studentId),
+                updatedAt: serverTimestamp
+            });
+        });
+
+        res.status(200).json({ success: true, attendance: attendanceData });
+    } catch (error) {
+        console.error('Error marking pickup:', error);
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+    }
+};
+
+// @desc    Mark student as dropped off
+// @route   POST /api/driver/trips/:tripId/attendance/dropoff
+// @access  Private (Driver)
+const markDropoff = async (req, res) => {
+    try {
+        const { tripId } = req.params;
+        const { studentId } = req.body;
+
+        if (!studentId) return res.status(400).json({ success: false, message: 'Student ID required' });
+
+        const tripRef = db.collection('trips').doc(tripId);
+        const tripDoc = await tripRef.get();
+
+        if (!tripDoc.exists) return res.status(404).json({ success: false, message: 'Trip not found' });
+        
+        const tripData = tripDoc.data();
+        if (tripData.driverId !== req.user.id) {
+            return res.status(403).json({ success: false, message: 'Unauthorized trip access' });
+        }
+
+        const attendanceId = `${tripId}__${studentId}`;
+        const attendanceRef = db.collection('attendance').doc(attendanceId);
+
+        const serverTimestamp = admin.firestore.FieldValue.serverTimestamp();
+
+        await db.runTransaction(async (transaction) => {
+            transaction.update(attendanceRef, {
+                droppedOffAt: serverTimestamp,
+                status: 'dropped_off',
+                updatedAt: serverTimestamp
+            });
+            transaction.update(tripRef, {
+                droppedOffStudents: admin.firestore.FieldValue.arrayUnion(studentId),
+                updatedAt: serverTimestamp
+            });
+        });
+
+        res.status(200).json({ success: true, message: 'Student dropped off' });
+    } catch (error) {
+        console.error('Error marking dropoff:', error);
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+    }
+};
+
+// @desc    Get all attendance records for a trip
+// @route   GET /api/driver/trips/:tripId/attendance
+// @access  Private (Driver)
+const getTripAttendance = async (req, res) => {
+    try {
+        const { tripId } = req.params;
+
+        const attendanceSnapshot = await db.collection('attendance')
+            .where('tripId', '==', tripId)
+            .where('collegeId', '==', req.collegeId)
+            .get();
+
+        const attendance = attendanceSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+
+        res.status(200).json({ success: true, data: attendance });
+    } catch (error) {
+        console.error('Error fetching trip attendance:', error);
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+    }
+};
+
 module.exports = {
     getDriverBuses,
     searchDriverBuses,
@@ -565,6 +690,9 @@ module.exports = {
     endTrip,
     saveTripHistory,
     historyUpload,
-    checkProximity
+    checkProximity,
+    markPickup,
+    markDropoff,
+    getTripAttendance
 };
 

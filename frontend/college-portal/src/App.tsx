@@ -18,6 +18,7 @@ import TripDetail from './pages/TripDetail';
 import StudentTripHistory from './pages/StudentTripHistory';
 import CollegeAdmins from './pages/CollegeAdmins';
 import StudentAssignment from './pages/StudentAssignment';
+import BusAttendance from './pages/BusAttendance';
 
 import ProtectedRoute from './components/ProtectedRoute';
 
@@ -46,6 +47,7 @@ function App() {
         <Route path="/:orgSlug/trips/:tripId" element={<ProtectedRoute><TripDetail /></ProtectedRoute>} />
         <Route path="/:orgSlug/admins" element={<ProtectedRoute><CollegeAdmins /></ProtectedRoute>} />
         <Route path="/:orgSlug/student-assignment" element={<ProtectedRoute><StudentAssignment /></ProtectedRoute>} />
+        <Route path="/:orgSlug/attendance" element={<ProtectedRoute><BusAttendance /></ProtectedRoute>} />
 
         {/* Driver Portal */}
         <Route path="/:orgSlug/driver" element={<DriverLogin />} />

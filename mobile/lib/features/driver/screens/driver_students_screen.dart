@@ -42,6 +42,17 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
     final assignedBus = ref.watch(assignedBusProvider).value;
     final driverBusId = assignedBus?.id ?? userProfile?.assignedBusId;
     final collegeId = userProfile?.collegeId ?? '';
+    final activeTripId = ref.watch(activeTripIdProvider).value;
+
+    Map<String, String> attendanceMap = {};
+    if (activeTripId != null) {
+      final attendanceAsync = ref.watch(tripAttendanceProvider(activeTripId));
+      attendanceAsync.whenData((data) {
+        for (var record in data) {
+          attendanceMap[record['studentId']] = record['status'] ?? '';
+        }
+      });
+    }
 
     // Fetch all students and buses in the college
     final studentsAsync = ref.watch(studentsProvider(collegeId));
@@ -98,6 +109,12 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
               },
             ),
           ),
+
+          if (!_isSearchMode && activeTripId != null)
+            studentsAsync.whenData((allStudents) {
+              final displayList = allStudents.where((s) => s.assignedBusId == driverBusId).toList();
+              return _buildAttendanceSummary(displayList, attendanceMap);
+            }) ?? const SizedBox.shrink(),
 
           Expanded(
             child: studentsAsync.when(
@@ -205,13 +222,8 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
                               ),
                           ],
                         ),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.call, color: AppColors.primary),
-                          onPressed: () {
-                             _showCallDialog(student);
-                          },
-                        ),
-                         onTap: () => _showStudentDetails(student, busIdToNumber),
+                        trailing: _buildAttendanceAction(student, activeTripId, attendanceMap[student.id]),
+                         onTap: () => _showStudentDetails(student, busIdToNumber, activeTripId, attendanceMap[student.id]),
                       ),
                     );
                   },
@@ -249,7 +261,135 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
     );
   }
 
-    void _showStudentDetails(UserProfile student, Map<String, String> busIdToNumber) {
+  Widget _buildAttendanceSummary(List<UserProfile> students, Map<String, String> attendanceMap) {
+    int pickedUp = 0;
+    int droppedOff = 0;
+    int pending = 0;
+
+    for (var student in students) {
+      final status = attendanceMap[student.id];
+      if (status == 'picked_up') {
+        pickedUp++;
+      } else if (status == 'dropped_off') {
+        droppedOff++;
+      } else {
+        pending++;
+      }
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: AppColors.primary.withOpacity(0.05),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _summaryItem('$pickedUp Picked Up', Colors.green),
+          _summaryItem('$droppedOff Dropped Off', Colors.blue),
+          _summaryItem('$pending Pending', Colors.orange),
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryItem(String label, Color color) {
+    return Row(
+      children: [
+        Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+        const SizedBox(width: 4),
+        Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color)),
+      ],
+    );
+  }
+
+  Widget _buildAttendanceAction(UserProfile student, String? activeTripId, String? status) {
+    if (activeTripId == null) {
+      return IconButton(
+        icon: const Icon(Icons.call, color: AppColors.primary),
+        onPressed: () => _showCallDialog(student),
+      );
+    }
+
+    if (status == null) {
+      return ElevatedButton(
+        onPressed: () => _markAttendance(student, activeTripId, 'pickup'),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.green,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          minimumSize: const Size(0, 32),
+        ),
+        child: const Text('Pick Up', style: TextStyle(fontSize: 12)),
+      );
+    }
+
+    if (status == 'picked_up') {
+      return ElevatedButton(
+        onPressed: () => _confirmDropOff(student, activeTripId),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.blue,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          minimumSize: const Size(0, 32),
+        ),
+        child: const Text('Drop Off', style: TextStyle(fontSize: 12)),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.grey[200],
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: const Text('Done ✓', style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold)),
+    );
+  }
+
+  void _markAttendance(UserProfile student, String tripId, String type) async {
+    try {
+      final dio = ref.read(dioProvider);
+      final endpoint = type == 'pickup' ? 'pickup' : 'dropoff';
+      final response = await dio.post('/driver/trips/$tripId/attendance/$endpoint', data: {'studentId': student.id});
+      
+      if (response.data['success']) {
+        // Refresh attendance provider
+        ref.invalidate(tripAttendanceProvider(tripId));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('${student.name} marked as ${type == 'pickup' ? 'picked up' : 'dropped off'}')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to mark attendance: $e')),
+        );
+      }
+    }
+  }
+
+  void _confirmDropOff(UserProfile student, String tripId) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirm Drop Off'),
+        content: Text('Confirm drop off for ${student.name}?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _markAttendance(student, tripId, 'dropoff');
+            },
+            child: const Text('Confirm'),
+          ),
+        ],
+      ),
+    );
+  }
+
+    void _showStudentDetails(UserProfile student, Map<String, String> busIdToNumber, String? activeTripId, String? status) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -290,21 +430,49 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
             _detailRow(Icons.email, 'Email', student.email),
             _detailRow(Icons.phone, 'Phone', student.phone ?? 'Not provided'),
             _detailRow(Icons.bus_alert, 'Assigned Bus', _getBusLabel(student.assignedBusId, busIdToNumber, isFull: true)),
+            if (activeTripId != null)
+              _detailRow(Icons.check_circle_outline, 'Status', status == 'picked_up' ? 'On Bus' : (status == 'dropped_off' ? 'Dropped Off' : 'Pending')),
             const SizedBox(height: 32),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.pop(context);
-                  _makePhoneCall(student.phone);
-                },
-                icon: const Icon(Icons.call),
-                label: const Text('Call Student Directly'),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _makePhoneCall(student.phone);
+                    },
+                    icon: const Icon(Icons.call),
+                    label: const Text('Call'),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
                 ),
-              ),
+                if (activeTripId != null && status != 'dropped_off') ...[
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        if (status == null) {
+                          _markAttendance(student, activeTripId, 'pickup');
+                        } else {
+                          _confirmDropOff(student, activeTripId);
+                        }
+                      },
+                      icon: Icon(status == null ? Icons.login : Icons.logout),
+                      label: Text(status == null ? 'Pick Up' : 'Drop Off'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: status == null ? Colors.green : Colors.blue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
             const SizedBox(height: 16),
           ],
@@ -330,6 +498,7 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // ...
               Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
               Text(value, style: const TextStyle(fontWeight: FontWeight.w500)),
             ],
