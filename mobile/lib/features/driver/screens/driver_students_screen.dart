@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:dio/dio.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:mobile/core/theme/colors.dart';
 import 'package:mobile/core/theme/typography.dart';
 import 'package:mobile/core/widgets/app_scaffold.dart';
 import 'package:mobile/data/providers.dart';
 import 'package:mobile/data/models/user_profile.dart';
+import 'package:mobile/data/datasources/api_ds.dart';
 
 class DriverStudentsScreen extends ConsumerStatefulWidget {
   const DriverStudentsScreen({super.key});
@@ -383,6 +386,32 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
       }
     });
     _saveLocalAttendance();
+
+    try {
+      final bus = ref.read(assignedBusProvider).value;
+      final activeTripId = bus?.activeTripId;
+      if (activeTripId != null && bus != null) {
+        final prefs = await SharedPreferences.getInstance();
+        final token = prefs.getString('auth_token');
+        final dio = Dio();
+        if (token != null) {
+          dio.options.headers['Authorization'] = 'Bearer $token';
+        }
+        final apiDS = ApiDataSource(dio, FirebaseFirestore.instance);
+        
+        // Fire asynchronously, no await blocking the UI
+        apiDS.notifyStudentAttendance(
+          tripId: activeTripId,
+          studentId: student.id,
+          busId: bus.id,
+          direction: direction,
+          isChecked: checked,
+          busNumber: bus.busNumber,
+        );
+      }
+    } catch (e) {
+      debugPrint('[DriverStudentsScreen] Failed to trigger student notification: $e');
+    }
   }
 
   void _showStudentDetails(UserProfile student, Map<String, String> busIdToNumber, String? activeTripId, String direction, bool isAttended) {

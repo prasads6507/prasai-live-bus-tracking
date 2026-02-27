@@ -668,6 +668,58 @@ const historyUpload = async (req, res) => {
     }
 };
 
+// @desc    Notify single student on attendance tick
+// @route   POST /api/driver/trips/:tripId/attendance/notify
+// @access  Private (Driver)
+const notifyStudentAttendance = async (req, res) => {
+    try {
+        const { tripId } = req.params;
+        const { studentId, busId, direction, isChecked, busNumber } = req.body;
+
+        if (!studentId || !busId) {
+            return res.status(400).json({ success: false, message: 'Missing required parameters' });
+        }
+
+        const studentDoc = await db.collection('students').doc(studentId).get();
+        if (!studentDoc.exists) {
+            return res.status(404).json({ success: false, message: 'Student not found' });
+        }
+
+        const studentData = studentDoc.data();
+        if (!studentData.fcmToken || typeof studentData.fcmToken !== 'string' || studentData.fcmToken.length < 10) {
+            // Student doesn't have an active FCM token, ignore silently
+            return res.status(200).json({ success: true, message: 'No FCM token for student' });
+        }
+
+        if (messaging) {
+            const isPickup = direction !== 'dropoff';
+            let title = '';
+            
+            if (isChecked) {
+                title = isPickup ? '🚌 ✅ Has Boarded' : '🚌 ✅ Has Dropped Off';
+            } else {
+                title = isPickup ? '⚠️ Boarding Cancelled' : '⚠️ Drop Off Cancelled';
+            }
+
+            const body = `Bus ${busNumber || busId}`;
+
+            await messaging.send({
+                notification: { title, body },
+                data: { tripId: tripId || '', busId, type: isChecked ? 'STUDENT_BOARDED' : 'STUDENT_UNCHECKED' },
+                android: { notification: { channelId: 'bus_events', priority: 'high', sound: 'default' } },
+                apns: { payload: { aps: { sound: 'default', badge: 1 } } },
+                token: studentData.fcmToken
+            });
+            console.log(`[notifyStudentAttendance] Sent real-time FCM to ${studentData.name} (${title})`);
+        }
+
+        res.status(200).json({ success: true, message: 'Notification sent' });
+    } catch (error) {
+        console.error('Error in notifyStudentAttendance:', error);
+        res.status(500).json({ success: false, message: 'Server error', error: error.message });
+    }
+};
+
 // @desc    Trigger proximity check (Phase 4.3)
 // @route   POST /api/driver/notifications/proximity
 // @access  Private (Driver)

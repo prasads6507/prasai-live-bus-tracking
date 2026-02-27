@@ -167,4 +167,29 @@ class ApiDataSource {
       data: data,
     );
   }
+
+  Future<void> notifyStudentAttendance({
+    required String tripId,
+    required String studentId,
+    required String busId,
+    required String direction,
+    required bool isChecked,
+    String? busNumber,
+  }) async {
+    try {
+      await _dio.post(
+        '${Env.apiUrl}/api/driver/trips/$tripId/attendance/notify',
+        data: {
+          'studentId': studentId,
+          'busId': busId,
+          'direction': direction,
+          'isChecked': isChecked,
+          'busNumber': busNumber,
+        },
+      );
+    } catch (e) {
+      debugPrint('[ApiDataSource] Failed to notify student: $e');
+    }
+  }
 }
+
