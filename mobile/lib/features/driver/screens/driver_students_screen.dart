@@ -682,7 +682,7 @@ class StudentItem extends StatelessWidget {
           ],
         ),
         trailing: activeTripId != null
-            ? isPending
+            ? (isPending
                 ? const SizedBox(
                     width: 48, height: 48,
                     child: Center(child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))),
@@ -694,7 +694,7 @@ class StudentItem extends StatelessWidget {
                       activeColor: direction == 'pickup' ? Colors.green : Colors.blue,
                       onChanged: (val) => onAttendanceChanged(val ?? false),
                     ),
-                  )
+                  ))
             : SizedBox(
                 width: 48, height: 48,
                 child: IconButton(

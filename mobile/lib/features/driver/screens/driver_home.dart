@@ -422,112 +422,6 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
     );
   }
 
-// --- Standalone Widgets for Optimization ---
-
-class BusSelectionCard extends StatelessWidget {
-  final Bus bus;
-  final bool isDisabled;
-  final VoidCallback? onTap;
-  final String? statusLabel;
-
-  const BusSelectionCard({
-    super.key,
-    required this.bus,
-    this.isDisabled = false,
-    this.onTap,
-    this.statusLabel,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isMaintenance = bus.status == 'MAINTENANCE';
-    final isInactive = bus.status == 'INACTIVE';
-    final label = statusLabel ?? (isMaintenance ? "MAINTENANCE" : (isInactive ? "INACTIVE" : null));
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: isDisabled ? AppColors.surface.withOpacity(0.5) : AppColors.surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: label != null
-                ? AppColors.error.withOpacity(0.3) 
-                : AppColors.divider.withOpacity(0.5)
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: label != null
-                    ? AppColors.error.withOpacity(0.1) 
-                    : AppColors.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Icon(
-                  label != null ? Icons.build_circle_outlined : Icons.directions_bus, 
-                  color: label != null ? AppColors.error : AppColors.primary, 
-                  size: 28
-                ),
-              ),
-              const SizedBox(width: 20),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          bus.busNumber,
-                          style: AppTypography.textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: isDisabled ? AppColors.textSecondary : AppColors.textPrimary,
-                          ),
-                        ),
-                        if (label != null) ...[
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: AppColors.error.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              label,
-                              style: AppTypography.textTheme.labelSmall?.copyWith(
-                                color: AppColors.error,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      bus.plateNumber,
-                      style: AppTypography.textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(Icons.chevron_right, color: AppColors.textTertiary),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
   void _handleBusSelection(Bus bus) {
     setState(() {
       _selectedBusId = bus.id;
@@ -1354,6 +1248,7 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text("Error ending trip: $e")),
             );
+          }
         }
       },
     );
@@ -1484,7 +1379,7 @@ class RouteSelectionCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         child: Container(
-          padding: const EdgeInsets.all(20), // Accessibility: Increased padding for touch target
+          padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             color: AppColors.surface,
             borderRadius: BorderRadius.circular(16),

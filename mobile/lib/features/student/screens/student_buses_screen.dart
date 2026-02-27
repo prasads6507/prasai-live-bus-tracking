@@ -290,7 +290,7 @@ class _StudentBusesScreenState extends ConsumerState<StudentBusesScreen> {
                                 builder: (ctx) => AlertDialog(
                                   backgroundColor: AppColors.bgSurface,
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                                  title: const Text("Switch Favorite?", style: AppTypography.h2),
+                                  title: Text("Switch Favorite?", style: AppTypography.h2),
                                   content: Text(
                                     "You can only favorite one bus. Replace with Bus ${bus.busNumber}?",
                                     style: AppTypography.bodyMd,

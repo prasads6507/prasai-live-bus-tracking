@@ -1,0 +1,352 @@
+Analyzing mobile...                                             
+
+   info • Don't invoke 'print' in production code • lib/core/errors/crash_reporter.dart:4:5 • avoid_print
+   info • Don't invoke 'print' in production code • lib/core/errors/crash_reporter.dart:6:7 • avoid_print
+warning • Unused import: 'package:flutter_background_service/flutter_background_service.dart' • lib/core/services/tracking_lifecycle_manager.dart:3:8 • unused_import
+   info • Don't invoke 'print' in production code • lib/core/services/tracking_lifecycle_manager.dart:43:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/core/services/tracking_lifecycle_manager.dart:45:7 • avoid_print
+   info • 'background' is deprecated and shouldn't be used. Use surface instead. This feature was deprecated after v3.18.0-0.1.pre • lib/core/theme/app_theme.dart:16:7 • deprecated_member_use
+   info • 'onBackground' is deprecated and shouldn't be used. Use onSurface instead. This feature was deprecated after v3.18.0-0.1.pre • lib/core/theme/app_theme.dart:19:7 • deprecated_member_use
+   info • 'background' is deprecated and shouldn't be used. Use surface instead. This feature was deprecated after v3.18.0-0.1.pre • lib/core/theme/app_theme.dart:99:7 • deprecated_member_use
+   info • 'onBackground' is deprecated and shouldn't be used. Use onSurface instead. This feature was deprecated after v3.18.0-0.1.pre • lib/core/theme/app_theme.dart:102:7 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/core/theme/colors.dart:63:36 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/core/theme/colors.dart:68:30 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/core/theme/colors.dart:73:27 • deprecated_member_use
+   info • Dangling library doc comment • lib/core/utils/polyline_encoder.dart:1:1 • dangling_library_doc_comments
+   info • The import of 'dart:ui' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/material.dart' • lib/core/widgets/glass_card.dart:1:8 • unnecessary_import
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/core/widgets/notification_banner.dart:201:35 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/core/widgets/notification_banner.dart:203:50 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/core/widgets/notification_banner.dart:206:35 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/core/widgets/notification_banner.dart:218:37 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/core/widgets/pulsing_dot.dart:56:41 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/core/widgets/pulsing_dot.dart:70:45 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/core/widgets/status_chip.dart:53:29 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/core/widgets/status_chip.dart:55:48 • deprecated_member_use
+warning • Unnecessary cast • lib/data/datasources/firestore_ds.dart:27:20 • unnecessary_cast
+warning • The receiver can't be null, so the null-aware operator '?.' is unnecessary • lib/data/datasources/firestore_ds.dart:36:33 • invalid_null_aware_operator
+warning • Unnecessary cast • lib/data/datasources/firestore_ds.dart:89:22 • unnecessary_cast
+warning • Unnecessary cast • lib/data/datasources/firestore_ds.dart:101:20 • unnecessary_cast
+warning • The receiver can't be null, so the null-aware operator '?.' is unnecessary • lib/data/datasources/firestore_ds.dart:192:33 • invalid_null_aware_operator
+warning • The receiver can't be null, so the null-aware operator '?.' is unnecessary • lib/data/datasources/firestore_ds.dart:265:35 • invalid_null_aware_operator
+warning • The receiver can't be null, so the null-aware operator '?.' is unnecessary • lib/data/datasources/firestore_ds.dart:266:36 • invalid_null_aware_operator
+   info • Use interpolation to compose strings and values • lib/data/datasources/firestore_ds.dart:307:50 • prefer_interpolation_to_compose_strings
+   info • Use interpolation to compose strings and values • lib/data/datasources/firestore_ds.dart:315:52 • prefer_interpolation_to_compose_strings
+   info • Unnecessary braces in a string interpolation • lib/data/datasources/firestore_ds.dart:468:46 • unnecessary_brace_in_string_interps
+   info • Don't invoke 'print' in production code • lib/data/repositories/auth_repo.dart:29:7 • avoid_print
+warning • Unused import: 'package:cloud_firestore/cloud_firestore.dart' • lib/data/repositories/user_repo.dart:1:8 • unused_import
+warning • Unused import: 'package:firebase_auth/firebase_auth.dart' • lib/features/auth/controllers/auth_controller.dart:5:8 • unused_import
+warning • The value of the field '_currentCollegeId' isn't used • lib/features/auth/controllers/auth_controller.dart:24:11 • unused_field
+warning • Unused import: '../../../core/widgets/primary_button.dart' • lib/features/auth/screens/college_selection_screen.dart:9:8 • unused_import
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/auth/screens/college_selection_screen.dart:127:65 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/auth/screens/college_selection_screen.dart:234:67 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/auth/screens/login_screen.dart:100:39 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/auth/screens/login_screen.dart:147:73 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/auth/screens/login_screen.dart:163:51 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/auth/screens/login_screen.dart:165:70 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/auth/screens/login_screen.dart:346:48 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/auth/screens/login_screen.dart:352:44 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/auth/screens/login_screen.dart:377:32 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/auth/screens/login_screen.dart:379:51 • deprecated_member_use
+  error • The method '_buildMaintenanceRouteSelection' isn't defined for the type '_DriverHomeScreenState' • lib/features/driver/screens/driver_home.dart:80:23 • undefined_method
+  error • The method '_buildRouteSelection' isn't defined for the type '_DriverHomeScreenState' • lib/features/driver/screens/driver_home.dart:82:23 • undefined_method
+  error • The method '_buildDirectionSelection' isn't defined for the type '_DriverHomeScreenState' • lib/features/driver/screens/driver_home.dart:84:23 • undefined_method
+  error • The method '_DriverContent' isn't defined for the type '_DriverHomeScreenState' • lib/features/driver/screens/driver_home.dart:86:23 • undefined_method
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/driver/screens/driver_home.dart:130:64 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/driver/screens/driver_home.dart:130:101 • deprecated_member_use
+  error • The method 'BusSelectionCard' isn't defined for the type '_DriverHomeScreenState' • lib/features/driver/screens/driver_home.dart:252:15 • undefined_method
+  error • The method '_handleBusSelection' isn't defined for the type '_DriverHomeScreenState' • lib/features/driver/screens/driver_home.dart:255:67 • undefined_method
+  error • The method '_handleBusSelection' isn't defined for the type '_DriverHomeScreenState' • lib/features/driver/screens/driver_home.dart:264:27 • undefined_method
+  error • The method '_buildEmptyState' isn't defined for the type '_DriverHomeScreenState' • lib/features/driver/screens/driver_home.dart:299:12 • undefined_method
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/driver/screens/driver_home.dart:350:63 • deprecated_member_use
+  error • The method '_buildEmptyState' isn't defined for the type '_DriverHomeScreenState' • lib/features/driver/screens/driver_home.dart:389:24 • undefined_method
+  error • The method 'BusSelectionCard' isn't defined for the type '_DriverHomeScreenState' • lib/features/driver/screens/driver_home.dart:403:28 • undefined_method
+  error • Classes can't be declared inside other classes • lib/features/driver/screens/driver_home.dart:427:1 • class_in_class
+  error • Expected a class member • lib/features/driver/screens/driver_home.dart:427:24 • expected_class_member
+   info • The variable name 'StatelessWidget' isn't a lowerCamelCase identifier • lib/features/driver/screens/driver_home.dart:427:32 • non_constant_identifier_names
+  error • Methods must have an explicit list of parameters • lib/features/driver/screens/driver_home.dart:427:32 • missing_method_parameters
+  error • The name 'BusSelectionCard' isn't a class • lib/features/driver/screens/driver_home.dart:433:9 • creation_with_non_type
+  error • The getter 'key' isn't defined in a superclass of '_DriverHomeScreenState' • lib/features/driver/screens/driver_home.dart:434:11 • undefined_super_member
+   info • 'required' is deprecated and shouldn't be used. In Dart 2.12 and later, use the built-in `required` keyword to mark a named parameter as required • lib/features/driver/screens/driver_home.dart:435:5 • deprecated_member_use
+  error • Expected to find ',' • lib/features/driver/screens/driver_home.dart:435:14 • expected_token
+  error • The getter 'bus' isn't defined for the type '_DriverHomeScreenState' • lib/features/driver/screens/driver_home.dart:435:19 • undefined_getter
+  error • The setter 'isDisabled' isn't defined for the type '_DriverHomeScreenState' • lib/features/driver/screens/driver_home.dart:436:10 • undefined_setter
+  error • The getter 'onTap' isn't defined for the type '_DriverHomeScreenState' • lib/features/driver/screens/driver_home.dart:437:10 • undefined_getter
+  error • The getter 'statusLabel' isn't defined for the type '_DriverHomeScreenState' • lib/features/driver/screens/driver_home.dart:438:10 • undefined_getter
+warning • The declaration 'build' isn't referenced • lib/features/driver/screens/driver_home.dart:442:10 • unused_element
+  error • The final variable 'bus' can't be read because it's potentially unassigned at this point • lib/features/driver/screens/driver_home.dart:443:27 • read_potentially_unassigned_final
+  error • The final variable 'bus' can't be read because it's potentially unassigned at this point • lib/features/driver/screens/driver_home.dart:444:24 • read_potentially_unassigned_final
+  error • The final variable 'statusLabel' can't be read because it's potentially unassigned at this point • lib/features/driver/screens/driver_home.dart:445:19 • read_potentially_unassigned_final
+  error • The final variable 'onTap' can't be read because it's potentially unassigned at this point • lib/features/driver/screens/driver_home.dart:450:16 • read_potentially_unassigned_final
+  error • The final variable 'isDisabled' can't be read because it's potentially unassigned at this point • lib/features/driver/screens/driver_home.dart:455:20 • read_potentially_unassigned_final
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/driver/screens/driver_home.dart:455:51 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/driver/screens/driver_home.dart:459:35 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/driver/screens/driver_home.dart:460:37 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/driver/screens/driver_home.dart:470:39 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/driver/screens/driver_home.dart:471:41 • deprecated_member_use
+  error • Expected to find ';' • lib/features/driver/screens/driver_home.dart:479:16 • expected_token
+  error • Expected to find ')' • lib/features/driver/screens/driver_home.dart:480:1 • expected_token
+  error • Expected to find ']' • lib/features/driver/screens/driver_home.dart:480:1 • expected_token
+   info • The local variable '_handleBusSelection' starts with an underscore • lib/features/driver/screens/driver_home.dart:482:8 • no_leading_underscores_for_local_identifiers
+warning • The declaration '_handleBusSelection' isn't referenced • lib/features/driver/screens/driver_home.dart:482:8 • unused_element
+   info • The local variable '_buildMaintenanceRouteSelection' starts with an underscore • lib/features/driver/screens/driver_home.dart:494:10 • no_leading_underscores_for_local_identifiers
+warning • The declaration '_buildMaintenanceRouteSelection' isn't referenced • lib/features/driver/screens/driver_home.dart:494:10 • unused_element
+  error • Local variable '_buildSectionHeader' can't be referenced before it is declared • lib/features/driver/screens/driver_home.dart:530:17 • referenced_before_declaration
+  error • Local variable '_buildRouteCard' can't be referenced before it is declared • lib/features/driver/screens/driver_home.dart:539:32 • referenced_before_declaration
+  error • Local variable '_buildSectionHeader' can't be referenced before it is declared • lib/features/driver/screens/driver_home.dart:549:17 • referenced_before_declaration
+  error • Local variable '_buildRouteCard' can't be referenced before it is declared • lib/features/driver/screens/driver_home.dart:554:28 • referenced_before_declaration
+  error • Local variable '_buildSectionHeader' can't be referenced before it is declared • lib/features/driver/screens/driver_home.dart:562:15 • referenced_before_declaration
+   info • The local variable '_buildSectionHeader' starts with an underscore • lib/features/driver/screens/driver_home.dart:574:10 • no_leading_underscores_for_local_identifiers
+   info • The local variable '_buildRouteCard' starts with an underscore • lib/features/driver/screens/driver_home.dart:588:10 • no_leading_underscores_for_local_identifiers
+  error • The method 'RouteSelectionCard' isn't defined for the type '_DriverHomeScreenState' • lib/features/driver/screens/driver_home.dart:591:14 • undefined_method
+   info • The local variable '_buildRouteSelection' starts with an underscore • lib/features/driver/screens/driver_home.dart:598:10 • no_leading_underscores_for_local_identifiers
+warning • The declaration '_buildRouteSelection' isn't referenced • lib/features/driver/screens/driver_home.dart:598:10 • unused_element
+   info • The local variable '_buildDirectionSelection' starts with an underscore • lib/features/driver/screens/driver_home.dart:656:10 • no_leading_underscores_for_local_identifiers
+warning • The declaration '_buildDirectionSelection' isn't referenced • lib/features/driver/screens/driver_home.dart:656:10 • unused_element
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/driver/screens/driver_home.dart:697:71 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/driver/screens/driver_home.dart:701:60 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/driver/screens/driver_home.dart:729:69 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/driver/screens/driver_home.dart:733:59 • deprecated_member_use
+   info • The local variable '_buildEmptyState' starts with an underscore • lib/features/driver/screens/driver_home.dart:760:10 • no_leading_underscores_for_local_identifiers
+warning • The declaration '_buildEmptyState' isn't referenced • lib/features/driver/screens/driver_home.dart:760:10 • unused_element
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/driver/screens/driver_home.dart:775:45 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/driver/screens/driver_home.dart:788:62 • deprecated_member_use
+  error • Classes can't be declared inside other classes • lib/features/driver/screens/driver_home.dart:797:1 • class_in_class
+  error • Expected a class member • lib/features/driver/screens/driver_home.dart:797:22 • expected_class_member
+   info • The variable name 'ConsumerStatefulWidget' isn't a lowerCamelCase identifier • lib/features/driver/screens/driver_home.dart:797:30 • non_constant_identifier_names
+  error • Methods must have an explicit list of parameters • lib/features/driver/screens/driver_home.dart:797:30 • missing_method_parameters
+warning • The value of the local variable 'collegeId' isn't used • lib/features/driver/screens/driver_home.dart:798:16 • unused_local_variable
+warning • The value of the local variable 'isMaintenance' isn't used • lib/features/driver/screens/driver_home.dart:799:14 • unused_local_variable
+warning • The value of the local variable 'originalBusId' isn't used • lib/features/driver/screens/driver_home.dart:800:17 • unused_local_variable
+warning • The value of the local variable 'busId' isn't used • lib/features/driver/screens/driver_home.dart:801:16 • unused_local_variable
+warning • The value of the local variable 'routeId' isn't used • lib/features/driver/screens/driver_home.dart:802:16 • unused_local_variable
+warning • The value of the local variable 'driverId' isn't used • lib/features/driver/screens/driver_home.dart:803:16 • unused_local_variable
+warning • The value of the local variable 'direction' isn't used • lib/features/driver/screens/driver_home.dart:804:16 • unused_local_variable
+warning • The value of the local variable 'onBack' isn't used • lib/features/driver/screens/driver_home.dart:805:22 • unused_local_variable
+warning • The value of the local variable 'onChangeRoute' isn't used • lib/features/driver/screens/driver_home.dart:806:22 • unused_local_variable
+  error • The name '_DriverContent' isn't a class • lib/features/driver/screens/driver_home.dart:808:9 • creation_with_non_type
+   info • 'required' is deprecated and shouldn't be used. In Dart 2.12 and later, use the built-in `required` keyword to mark a named parameter as required • lib/features/driver/screens/driver_home.dart:809:5 • deprecated_member_use
+  error • Expected to find ',' • lib/features/driver/screens/driver_home.dart:809:14 • expected_token
+  error • The getter 'collegeId' isn't defined for the type '_DriverHomeScreenState' • lib/features/driver/screens/driver_home.dart:809:19 • undefined_getter
+   info • 'required' is deprecated and shouldn't be used. In Dart 2.12 and later, use the built-in `required` keyword to mark a named parameter as required • lib/features/driver/screens/driver_home.dart:810:5 • deprecated_member_use
+  error • Expected to find ',' • lib/features/driver/screens/driver_home.dart:810:14 • expected_token
+  error • The getter 'busId' isn't defined for the type '_DriverHomeScreenState' • lib/features/driver/screens/driver_home.dart:810:19 • undefined_getter
+   info • 'required' is deprecated and shouldn't be used. In Dart 2.12 and later, use the built-in `required` keyword to mark a named parameter as required • lib/features/driver/screens/driver_home.dart:811:5 • deprecated_member_use
+  error • Expected to find ',' • lib/features/driver/screens/driver_home.dart:811:14 • expected_token
+  error • The getter 'routeId' isn't defined for the type '_DriverHomeScreenState' • lib/features/driver/screens/driver_home.dart:811:19 • undefined_getter
+   info • 'required' is deprecated and shouldn't be used. In Dart 2.12 and later, use the built-in `required` keyword to mark a named parameter as required • lib/features/driver/screens/driver_home.dart:812:5 • deprecated_member_use
+  error • Expected to find ',' • lib/features/driver/screens/driver_home.dart:812:14 • expected_token
+  error • The getter 'driverId' isn't defined for the type '_DriverHomeScreenState' • lib/features/driver/screens/driver_home.dart:812:19 • undefined_getter
+   info • 'required' is deprecated and shouldn't be used. In Dart 2.12 and later, use the built-in `required` keyword to mark a named parameter as required • lib/features/driver/screens/driver_home.dart:813:5 • deprecated_member_use
+  error • Expected to find ',' • lib/features/driver/screens/driver_home.dart:813:14 • expected_token
+  error • The getter 'direction' isn't defined for the type '_DriverHomeScreenState' • lib/features/driver/screens/driver_home.dart:813:19 • undefined_getter
+   info • 'required' is deprecated and shouldn't be used. In Dart 2.12 and later, use the built-in `required` keyword to mark a named parameter as required • lib/features/driver/screens/driver_home.dart:814:5 • deprecated_member_use
+  error • Expected to find ',' • lib/features/driver/screens/driver_home.dart:814:14 • expected_token
+  error • The getter 'onBack' isn't defined for the type '_DriverHomeScreenState' • lib/features/driver/screens/driver_home.dart:814:19 • undefined_getter
+   info • 'required' is deprecated and shouldn't be used. In Dart 2.12 and later, use the built-in `required` keyword to mark a named parameter as required • lib/features/driver/screens/driver_home.dart:815:5 • deprecated_member_use
+  error • Expected to find ',' • lib/features/driver/screens/driver_home.dart:815:14 • expected_token
+  error • The getter 'onChangeRoute' isn't defined for the type '_DriverHomeScreenState' • lib/features/driver/screens/driver_home.dart:815:19 • undefined_getter
+  error • The setter 'isMaintenance' isn't defined for the type '_DriverHomeScreenState' • lib/features/driver/screens/driver_home.dart:816:10 • undefined_setter
+  error • The getter 'originalBusId' isn't defined for the type '_DriverHomeScreenState' • lib/features/driver/screens/driver_home.dart:817:10 • undefined_getter
+  error • ConsumerState isn't a type • lib/features/driver/screens/driver_home.dart:821:3 • not_a_type
+  error • The name '_DriverContent' isn't a type, so it can't be used as a type argument • lib/features/driver/screens/driver_home.dart:821:17 • non_type_as_type_argument
+warning • The declaration 'createState' isn't referenced • lib/features/driver/screens/driver_home.dart:821:33 • unused_element
+  error • The method '_DriverContentState' isn't defined for the type '_DriverHomeScreenState' • lib/features/driver/screens/driver_home.dart:821:50 • undefined_method
+  error • Classes can't be declared inside other classes • lib/features/driver/screens/driver_home.dart:824:1 • class_in_class
+  error • Expected a class member • lib/features/driver/screens/driver_home.dart:824:27 • expected_class_member
+   info • The variable name 'ConsumerState' isn't a lowerCamelCase identifier • lib/features/driver/screens/driver_home.dart:824:35 • non_constant_identifier_names
+  error • Methods must have an explicit list of parameters • lib/features/driver/screens/driver_home.dart:824:35 • missing_method_parameters
+   info • The local variable '_locationUpdateSubscription' starts with an underscore • lib/features/driver/screens/driver_home.dart:825:46 • no_leading_underscores_for_local_identifiers
+   info • The local variable '_pathHistoryTimer' starts with an underscore • lib/features/driver/screens/driver_home.dart:826:10 • no_leading_underscores_for_local_identifiers
+   info • The local variable '_isLoading' starts with an underscore • lib/features/driver/screens/driver_home.dart:827:8 • no_leading_underscores_for_local_identifiers
+   info • The local variable '_isTrackingStarting' starts with an underscore • lib/features/driver/screens/driver_home.dart:828:8 • no_leading_underscores_for_local_identifiers
+   info • The local variable '_currentSpeed' starts with an underscore • lib/features/driver/screens/driver_home.dart:829:10 • no_leading_underscores_for_local_identifiers
+   info • The local variable '_statusText' starts with an underscore • lib/features/driver/screens/driver_home.dart:830:10 • no_leading_underscores_for_local_identifiers
+warning • The value of the local variable '_statusText' isn't used • lib/features/driver/screens/driver_home.dart:830:10 • unused_local_variable
+   info • The local variable '_currentRoad' starts with an underscore • lib/features/driver/screens/driver_home.dart:831:10 • no_leading_underscores_for_local_identifiers
+   info • The local variable '_liveTrackBuffer' starts with an underscore • lib/features/driver/screens/driver_home.dart:832:23 • no_leading_underscores_for_local_identifiers
+   info • The local variable '_currentRoute' starts with an underscore • lib/features/driver/screens/driver_home.dart:833:13 • no_leading_underscores_for_local_identifiers
+   info • The local variable '_lastRecordedPoint' starts with an underscore • lib/features/driver/screens/driver_home.dart:834:18 • no_leading_underscores_for_local_identifiers
+warning • The value of the local variable '_lastRecordedPoint' isn't used • lib/features/driver/screens/driver_home.dart:834:18 • unused_local_variable
+   info • The local variable '_lastUpdate' starts with an underscore • lib/features/driver/screens/driver_home.dart:835:10 • no_leading_underscores_for_local_identifiers
+warning • The declaration 'initState' isn't referenced • lib/features/driver/screens/driver_home.dart:838:8 • unused_element
+  error • Local variable '_fetchRoute' can't be referenced before it is declared • lib/features/driver/screens/driver_home.dart:840:5 • referenced_before_declaration
+   info • The local variable '_fetchRoute' starts with an underscore • lib/features/driver/screens/driver_home.dart:843:16 • no_leading_underscores_for_local_identifiers
+  error • The getter 'routeId' isn't defined for the type 'DriverHomeScreen' • lib/features/driver/screens/driver_home.dart:844:79 • undefined_getter
+warning • The declaration 'dispose' isn't referenced • lib/features/driver/screens/driver_home.dart:851:8 • unused_element
+   info • The local variable '_updateRoadName' starts with an underscore • lib/features/driver/screens/driver_home.dart:857:16 • no_leading_underscores_for_local_identifiers
+  error • The getter 'busId' isn't defined for the type 'DriverHomeScreen' • lib/features/driver/screens/driver_home.dart:866:77 • undefined_getter
+   info • Empty catch block • lib/features/driver/screens/driver_home.dart:867:22 • empty_catches
+   info • The local variable '_startTracking' starts with an underscore • lib/features/driver/screens/driver_home.dart:875:16 • no_leading_underscores_for_local_identifiers
+  error • The getter 'collegeId' isn't defined for the type 'DriverHomeScreen' • lib/features/driver/screens/driver_home.dart:975:56 • undefined_getter
+  error • The getter 'busId' isn't defined for the type 'DriverHomeScreen' • lib/features/driver/screens/driver_home.dart:976:52 • undefined_getter
+  error • The getter 'collegeId' isn't defined for the type 'DriverHomeScreen' • lib/features/driver/screens/driver_home.dart:979:73 • undefined_getter
+  error • The getter 'busId' isn't defined for the type 'DriverHomeScreen' • lib/features/driver/screens/driver_home.dart:979:98 • undefined_getter
+   info • The local variable '_stopTracking' starts with an underscore • lib/features/driver/screens/driver_home.dart:1044:8 • no_leading_underscores_for_local_identifiers
+warning • The declaration 'build' isn't referenced • lib/features/driver/screens/driver_home.dart:1062:10 • unused_element
+  error • The getter 'collegeId' isn't defined for the type 'DriverHomeScreen' • lib/features/driver/screens/driver_home.dart:1063:76 • undefined_getter
+  error • The getter 'busId' isn't defined for the type 'DriverHomeScreen' • lib/features/driver/screens/driver_home.dart:1063:94 • undefined_getter
+  error • The getter 'collegeId' isn't defined for the type 'DriverHomeScreen' • lib/features/driver/screens/driver_home.dart:1093:38 • undefined_getter
+  error • The getter 'busId' isn't defined for the type 'DriverHomeScreen' • lib/features/driver/screens/driver_home.dart:1094:34 • undefined_getter
+   info • Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check • lib/features/driver/screens/driver_home.dart:1101:39 • use_build_context_synchronously
+  error • The method 'onBack' isn't defined for the type 'DriverHomeScreen' • lib/features/driver/screens/driver_home.dart:1107:25 • undefined_method
+  error • The getter 'onBack' isn't defined for the type 'DriverHomeScreen' • lib/features/driver/screens/driver_home.dart:1120:39 • undefined_getter
+  error • The getter 'onChangeRoute' isn't defined for the type 'DriverHomeScreen' • lib/features/driver/screens/driver_home.dart:1150:37 • undefined_getter
+  error • Local variable '_buildControlPanel' can't be referenced before it is declared • lib/features/driver/screens/driver_home.dart:1158:15 • referenced_before_declaration
+   info • The local variable '_buildControlPanel' starts with an underscore • lib/features/driver/screens/driver_home.dart:1175:10 • no_leading_underscores_for_local_identifiers
+  error • The getter 'driverId' isn't defined for the type 'DriverHomeScreen' • lib/features/driver/screens/driver_home.dart:1178:70 • undefined_getter
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/driver/screens/driver_home.dart:1184:34 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/driver/screens/driver_home.dart:1186:53 • deprecated_member_use
+  error • The getter 'onBack' isn't defined for the type 'DriverHomeScreen' • lib/features/driver/screens/driver_home.dart:1210:33 • undefined_getter
+  error • The getter 'collegeId' isn't defined for the type 'DriverHomeScreen' • lib/features/driver/screens/driver_home.dart:1226:31 • undefined_getter
+  error • The getter 'busId' isn't defined for the type 'DriverHomeScreen' • lib/features/driver/screens/driver_home.dart:1227:27 • undefined_getter
+  error • The getter 'driverId' isn't defined for the type 'DriverHomeScreen' • lib/features/driver/screens/driver_home.dart:1228:30 • undefined_getter
+  error • The getter 'routeId' isn't defined for the type 'DriverHomeScreen' • lib/features/driver/screens/driver_home.dart:1229:29 • undefined_getter
+  error • The getter 'direction' isn't defined for the type 'DriverHomeScreen' • lib/features/driver/screens/driver_home.dart:1232:31 • undefined_getter
+  error • The getter 'isMaintenance' isn't defined for the type 'DriverHomeScreen' • lib/features/driver/screens/driver_home.dart:1233:35 • undefined_getter
+  error • The getter 'originalBusId' isn't defined for the type 'DriverHomeScreen' • lib/features/driver/screens/driver_home.dart:1234:35 • undefined_getter
+  error • The getter 'collegeId' isn't defined for the type 'DriverHomeScreen' • lib/features/driver/screens/driver_home.dart:1284:33 • undefined_getter
+  error • The getter 'busId' isn't defined for the type 'DriverHomeScreen' • lib/features/driver/screens/driver_home.dart:1285:29 • undefined_getter
+  error • The method 'onBack' isn't defined for the type 'DriverHomeScreen' • lib/features/driver/screens/driver_home.dart:1301:20 • undefined_method
+  error • Classes can't be declared inside other classes • lib/features/driver/screens/driver_home.dart:1317:1 • class_in_class
+  error • Expected a class member • lib/features/driver/screens/driver_home.dart:1317:24 • expected_class_member
+   info • The variable name 'StatelessWidget' isn't a lowerCamelCase identifier • lib/features/driver/screens/driver_home.dart:1317:32 • non_constant_identifier_names
+  error • Methods must have an explicit list of parameters • lib/features/driver/screens/driver_home.dart:1317:32 • missing_method_parameters
+  error • The name 'StatelessWidget' is already defined • lib/features/driver/screens/driver_home.dart:1317:32 • duplicate_definition
+  error • The name 'BusSelectionCard' isn't a class • lib/features/driver/screens/driver_home.dart:1323:9 • creation_with_non_type
+  error • The getter 'key' isn't defined in a superclass of '_DriverHomeScreenState' • lib/features/driver/screens/driver_home.dart:1324:11 • undefined_super_member
+   info • 'required' is deprecated and shouldn't be used. In Dart 2.12 and later, use the built-in `required` keyword to mark a named parameter as required • lib/features/driver/screens/driver_home.dart:1325:5 • deprecated_member_use
+  error • Expected to find ',' • lib/features/driver/screens/driver_home.dart:1325:14 • expected_token
+  error • The getter 'bus' isn't defined for the type '_DriverHomeScreenState' • lib/features/driver/screens/driver_home.dart:1325:19 • undefined_getter
+  error • The setter 'isDisabled' isn't defined for the type '_DriverHomeScreenState' • lib/features/driver/screens/driver_home.dart:1326:10 • undefined_setter
+  error • The getter 'onTap' isn't defined for the type '_DriverHomeScreenState' • lib/features/driver/screens/driver_home.dart:1327:10 • undefined_getter
+  error • The getter 'statusLabel' isn't defined for the type '_DriverHomeScreenState' • lib/features/driver/screens/driver_home.dart:1328:10 • undefined_getter
+warning • The declaration 'build' isn't referenced • lib/features/driver/screens/driver_home.dart:1332:10 • unused_element
+  error • The final variable 'bus' can't be read because it's potentially unassigned at this point • lib/features/driver/screens/driver_home.dart:1333:27 • read_potentially_unassigned_final
+  error • The final variable 'bus' can't be read because it's potentially unassigned at this point • lib/features/driver/screens/driver_home.dart:1334:24 • read_potentially_unassigned_final
+  error • The final variable 'statusLabel' can't be read because it's potentially unassigned at this point • lib/features/driver/screens/driver_home.dart:1335:19 • read_potentially_unassigned_final
+  error • The final variable 'onTap' can't be read because it's potentially unassigned at this point • lib/features/driver/screens/driver_home.dart:1340:16 • read_potentially_unassigned_final
+  error • The final variable 'isDisabled' can't be read because it's potentially unassigned at this point • lib/features/driver/screens/driver_home.dart:1345:20 • read_potentially_unassigned_final
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/driver/screens/driver_home.dart:1345:51 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/driver/screens/driver_home.dart:1349:35 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/driver/screens/driver_home.dart:1350:37 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/driver/screens/driver_home.dart:1360:39 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/driver/screens/driver_home.dart:1361:41 • deprecated_member_use
+  error • The final variable 'bus' can't be read because it's potentially unassigned at this point • lib/features/driver/screens/driver_home.dart:1379:27 • read_potentially_unassigned_final
+  error • The final variable 'isDisabled' can't be read because it's potentially unassigned at this point • lib/features/driver/screens/driver_home.dart:1382:36 • read_potentially_unassigned_final
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/driver/screens/driver_home.dart:1390:54 • deprecated_member_use
+  error • The final variable 'bus' can't be read because it's potentially unassigned at this point • lib/features/driver/screens/driver_home.dart:1406:23 • read_potentially_unassigned_final
+  error • Classes can't be declared inside other classes • lib/features/driver/screens/driver_home.dart:1421:1 • class_in_class
+  error • Expected a class member • lib/features/driver/screens/driver_home.dart:1421:26 • expected_class_member
+   info • The variable name 'StatelessWidget' isn't a lowerCamelCase identifier • lib/features/driver/screens/driver_home.dart:1421:34 • non_constant_identifier_names
+  error • Methods must have an explicit list of parameters • lib/features/driver/screens/driver_home.dart:1421:34 • missing_method_parameters
+  error • The name 'StatelessWidget' is already defined • lib/features/driver/screens/driver_home.dart:1421:34 • duplicate_definition
+  error • The name 'RouteSelectionCard' isn't a class • lib/features/driver/screens/driver_home.dart:1425:9 • creation_with_non_type
+  error • The getter 'key' isn't defined in a superclass of '_DriverHomeScreenState' • lib/features/driver/screens/driver_home.dart:1426:11 • undefined_super_member
+   info • 'required' is deprecated and shouldn't be used. In Dart 2.12 and later, use the built-in `required` keyword to mark a named parameter as required • lib/features/driver/screens/driver_home.dart:1427:5 • deprecated_member_use
+  error • Expected to find ',' • lib/features/driver/screens/driver_home.dart:1427:14 • expected_token
+  error • The getter 'route' isn't defined for the type '_DriverHomeScreenState' • lib/features/driver/screens/driver_home.dart:1427:19 • undefined_getter
+   info • 'required' is deprecated and shouldn't be used. In Dart 2.12 and later, use the built-in `required` keyword to mark a named parameter as required • lib/features/driver/screens/driver_home.dart:1428:5 • deprecated_member_use
+  error • Expected to find ',' • lib/features/driver/screens/driver_home.dart:1428:14 • expected_token
+  error • The getter 'onTap' isn't defined for the type '_DriverHomeScreenState' • lib/features/driver/screens/driver_home.dart:1428:19 • undefined_getter
+warning • The declaration 'build' isn't referenced • lib/features/driver/screens/driver_home.dart:1432:10 • unused_element
+  error • The final variable 'onTap' can't be read because it's potentially unassigned at this point • lib/features/driver/screens/driver_home.dart:1436:16 • read_potentially_unassigned_final
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/driver/screens/driver_home.dart:1443:57 • deprecated_member_use
+  error • The final variable 'route' can't be read because it's potentially unassigned at this point • lib/features/driver/screens/driver_home.dart:1454:23 • read_potentially_unassigned_final
+  error • The final variable 'route' can't be read because it's potentially unassigned at this point • lib/features/driver/screens/driver_home.dart:1461:26 • read_potentially_unassigned_final
+   info • The private field _pendingIds could be 'final' • lib/features/driver/screens/driver_students_screen.dart:30:15 • prefer_final_fields
+warning • The left operand can't be null, so the right operand is never executed • lib/features/driver/screens/driver_students_screen.dart:200:53 • dead_null_aware_expression
+warning • The declaration '_buildBusTag' isn't referenced • lib/features/driver/screens/driver_students_screen.dart:293:10 • unused_element
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/driver/screens/driver_students_screen.dart:318:34 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/driver/screens/driver_students_screen.dart:320:53 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/driver/screens/driver_students_screen.dart:451:56 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/driver/screens/driver_students_screen.dart:650:46 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/driver/screens/driver_students_screen.dart:721:22 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/driver/screens/driver_students_screen.dart:723:41 • deprecated_member_use
+warning • Unused import: 'dart:math' • lib/features/driver/services/background_tracking_service.dart:3:8 • unused_import
+   info • The constant name '_ARRIVING_DISTANCE_M' isn't a lowerCamelCase identifier • lib/features/driver/services/background_tracking_service.dart:18:14 • constant_identifier_names
+   info • The constant name '_ARRIVED_RADIUS_M' isn't a lowerCamelCase identifier • lib/features/driver/services/background_tracking_service.dart:19:14 • constant_identifier_names
+warning • The declaration '_ARRIVED_RADIUS_M' isn't referenced • lib/features/driver/services/background_tracking_service.dart:19:14 • unused_element
+   info • The constant name '_FAR_UPDATE_SEC' isn't a lowerCamelCase identifier • lib/features/driver/services/background_tracking_service.dart:20:11 • constant_identifier_names
+   info • The constant name '_NEAR_UPDATE_SEC' isn't a lowerCamelCase identifier • lib/features/driver/services/background_tracking_service.dart:21:11 • constant_identifier_names
+warning • The '!' will have no effect because the receiver can't be null • lib/features/driver/services/background_tracking_service.dart:157:73 • unnecessary_non_null_assertion
+warning • The '!' will have no effect because the receiver can't be null • lib/features/driver/services/background_tracking_service.dart:157:82 • unnecessary_non_null_assertion
+warning • The '!' will have no effect because the receiver can't be null • lib/features/driver/services/background_tracking_service.dart:166:81 • unnecessary_non_null_assertion
+warning • The '!' will have no effect because the receiver can't be null • lib/features/driver/services/background_tracking_service.dart:166:89 • unnecessary_non_null_assertion
+warning • The '!' will have no effect because the receiver can't be null • lib/features/driver/services/background_tracking_service.dart:166:98 • unnecessary_non_null_assertion
+warning • The '!' will have no effect because the receiver can't be null • lib/features/driver/services/background_tracking_service.dart:171:83 • unnecessary_non_null_assertion
+warning • The '!' will have no effect because the receiver can't be null • lib/features/driver/services/background_tracking_service.dart:171:91 • unnecessary_non_null_assertion
+warning • The '!' will have no effect because the receiver can't be null • lib/features/driver/services/background_tracking_service.dart:171:100 • unnecessary_non_null_assertion
+warning • The '!' will have no effect because the receiver can't be null • lib/features/driver/services/background_tracking_service.dart:175:73 • unnecessary_non_null_assertion
+warning • The '!' will have no effect because the receiver can't be null • lib/features/driver/services/background_tracking_service.dart:175:81 • unnecessary_non_null_assertion
+warning • The '!' will have no effect because the receiver can't be null • lib/features/driver/services/background_tracking_service.dart:175:90 • unnecessary_non_null_assertion
+warning • The '!' will have no effect because the receiver can't be null • lib/features/driver/services/background_tracking_service.dart:182:21 • unnecessary_non_null_assertion
+warning • The '!' will have no effect because the receiver can't be null • lib/features/driver/services/background_tracking_service.dart:182:29 • unnecessary_non_null_assertion
+warning • The '!' will have no effect because the receiver can't be null • lib/features/driver/services/background_tracking_service.dart:182:41 • unnecessary_non_null_assertion
+warning • The declaration '_retryPendingUpload' isn't referenced • lib/features/driver/services/driver_location_service.dart:12:23 • unused_element
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/driver/widgets/driver_header.dart:77:38 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/driver/widgets/telemetry_card.dart:40:46 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/driver/widgets/telemetry_card.dart:74:52 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/driver/widgets/telemetry_card.dart:146:41 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/driver/widgets/telemetry_card.dart:152:75 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/driver/widgets/trip_control_panel.dart:31:53 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/driver/widgets/trip_control_panel.dart:62:42 • deprecated_member_use
+warning • Unused import: 'dart:math' • lib/features/map/logic/map_animation_ticker.dart:4:8 • unused_import
+   info • Statements in a while should be enclosed in a block • lib/features/map/logic/map_animation_ticker.dart:69:27 • curly_braces_in_flow_control_structures
+   info • Statements in a while should be enclosed in a block • lib/features/map/logic/map_animation_ticker.dart:70:26 • curly_braces_in_flow_control_structures
+   info • The import of 'dart:typed_data' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/services.dart' • lib/features/map/widgets/mobile_maplibre.dart:6:8 • unnecessary_import
+   info • 'MaplibreMapController' is deprecated and shouldn't be used. MaplibreMapController was renamed to MapLibreMapController • lib/features/map/widgets/mobile_maplibre.dart:53:3 • deprecated_member_use
+   info • 'MaplibreMapController' is deprecated and shouldn't be used. MaplibreMapController was renamed to MapLibreMapController • lib/features/map/widgets/mobile_maplibre.dart:123:22 • deprecated_member_use
+   info • Statements in an if should be enclosed in a block • lib/features/map/widgets/mobile_maplibre.dart:259:26 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block • lib/features/map/widgets/mobile_maplibre.dart:260:29 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block • lib/features/map/widgets/mobile_maplibre.dart:261:29 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block • lib/features/map/widgets/mobile_maplibre.dart:262:26 • curly_braces_in_flow_control_structures
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/map/widgets/mobile_maplibre.dart:484:32 • deprecated_member_use
+   info • 'MaplibreMap' is deprecated and shouldn't be used. MaplibreMap was renamed to MapLibreMap • lib/features/map/widgets/mobile_maplibre.dart:542:12 • deprecated_member_use
+warning • Unused import: '../auth/controllers/auth_controller.dart' • lib/features/shell/app_router.dart:7:8 • unused_import
+warning • The member 'notifyListeners' can only be used within 'package:flutter/src/foundation/change_notifier.dart' or a test • lib/features/shell/app_router.dart:27:76 • invalid_use_of_visible_for_testing_member
+warning • The member 'notifyListeners' can only be used within instance members of subclasses of 'ChangeNotifier' • lib/features/shell/app_router.dart:27:76 • invalid_use_of_protected_member
+warning • The member 'notifyListeners' can only be used within 'package:flutter/src/foundation/change_notifier.dart' or a test • lib/features/shell/app_router.dart:28:84 • invalid_use_of_visible_for_testing_member
+warning • The member 'notifyListeners' can only be used within instance members of subclasses of 'ChangeNotifier' • lib/features/shell/app_router.dart:28:84 • invalid_use_of_protected_member
+warning • The member 'notifyListeners' can only be used within 'package:flutter/src/foundation/change_notifier.dart' or a test • lib/features/shell/app_router.dart:29:78 • invalid_use_of_visible_for_testing_member
+warning • The member 'notifyListeners' can only be used within instance members of subclasses of 'ChangeNotifier' • lib/features/shell/app_router.dart:29:78 • invalid_use_of_protected_member
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/shell/driver_shell.dart:25:39 • deprecated_member_use
+warning • Unused import: '../auth/controllers/auth_controller.dart' • lib/features/shell/role_router.dart:4:8 • unused_import
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/shell/student_shell.dart:25:39 • deprecated_member_use
+warning • Unused import: '../../../core/widgets/pulsing_dot.dart' • lib/features/student/screens/student_buses_screen.dart:9:8 • unused_import
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/student/screens/student_buses_screen.dart:364:42 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/student/screens/student_buses_screen.dart:378:54 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/student/screens/student_home.dart:246:40 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/student/screens/student_home.dart:258:43 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/student/screens/student_profile_screen.dart:232:52 • deprecated_member_use
+warning • Unused import: '../../../../data/datasources/api_ds.dart' • lib/features/student/screens/student_track_screen.dart:10:8 • unused_import
+warning • Unused import: 'package:dio/dio.dart' • lib/features/student/screens/student_track_screen.dart:11:8 • unused_import
+warning • The value of the field '_tripEta' isn't used • lib/features/student/screens/student_track_screen.dart:62:24 • unused_field
+warning • The value of the field '_tripDirection' isn't used • lib/features/student/screens/student_track_screen.dart:63:11 • unused_field
+warning • The value of the local variable 'radiusM' isn't used • lib/features/student/screens/student_track_screen.dart:460:13 • unused_local_variable
+   info • Unnecessary use of string interpolation • lib/features/student/screens/student_track_screen.dart:651:35 • unnecessary_string_interpolations
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/student/screens/student_track_screen.dart:706:57 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/student/widgets/action_card_row.dart:65:28 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/student/widgets/bus_search_result_tile.dart:87:42 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/student/widgets/drop_off_list.dart:46:38 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/student/widgets/drop_off_list.dart:61:39 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/student/widgets/drop_off_list.dart:84:43 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/student/widgets/drop_off_list.dart:164:53 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/student/widgets/drop_off_list.dart:166:52 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/student/widgets/drop_off_list.dart:168:55 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/student/widgets/drop_off_list.dart:172:137 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/student/widgets/live_tracker_card.dart:37:44 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/student/widgets/live_tracker_card.dart:56:46 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/student/widgets/live_tracker_card.dart:84:42 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/student/widgets/live_tracker_card.dart:85:45 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/student/widgets/live_tracker_card.dart:89:44 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/student/widgets/live_tracker_card.dart:90:47 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/student/widgets/route_timeline.dart:134:68 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/student/widgets/route_timeline.dart:144:51 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/student/widgets/route_timeline.dart:182:76 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/student/widgets/route_timeline.dart:182:119 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/student/widgets/route_timeline.dart:217:64 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/student/widgets/route_timeline.dart:230:49 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/student/widgets/route_timeline.dart:232:53 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/student/widgets/track_bottom_sheet.dart:43:74 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/student/widgets/track_bottom_sheet.dart:103:37 • deprecated_member_use
+
