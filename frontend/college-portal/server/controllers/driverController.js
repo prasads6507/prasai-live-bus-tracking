@@ -567,28 +567,28 @@ const historyUpload = async (req, res) => {
 
         const serverTimestamp = admin.firestore.FieldValue.serverTimestamp();
         const busNumber = tripData.busNumber || tripData.busId;
+        const direction = tripData.direction || 'pickup';
+        const isPickup = direction === 'pickup';
 
-        // Batch Attendance Processing
+        // ── A. Write "present" attendance records ──────────────────────────────
+        const studentIds = [];
         if (attendance && Array.isArray(attendance) && attendance.length > 0) {
-            const direction = tripData.direction || 'pickup';
-            const isPickup = direction === 'pickup';
-            
-            const studentIds = [...new Set(attendance)]; // Unique IDs
+            const uniqueIds = [...new Set(attendance)];
             const studentDocs = await Promise.all(
-                studentIds.map(id => db.collection('students').doc(id).get())
+                uniqueIds.map(id => db.collection('students').doc(id).get())
             );
 
             const batch = db.batch();
-            const boardedTokens = []; // For FCM
+            const boardedTokens = [];
             const boardedNames = [];
 
-            for (let i = 0; i < studentIds.length; i++) {
-                const studentId = studentIds[i];
+            for (let i = 0; i < uniqueIds.length; i++) {
+                const studentId = uniqueIds[i];
+                studentIds.push(studentId);
                 const studentDoc = studentDocs[i];
                 const studentData = studentDoc.exists ? studentDoc.data() : {};
                 const studentName = studentData.name || 'Unknown Student';
-                
-                // Collect FCM tokens for boarded students
+
                 if (studentData.fcmToken && typeof studentData.fcmToken === 'string' && studentData.fcmToken.length > 10) {
                     boardedTokens.push(studentData.fcmToken);
                     boardedNames.push(studentName);
@@ -596,21 +596,19 @@ const historyUpload = async (req, res) => {
 
                 const attendanceId = `${tripId}__${studentId}`;
                 const attendanceRef = db.collection('attendance').doc(attendanceId);
-
                 const attendanceData = {
                     tripId,
                     studentId,
                     busId: tripData.busId,
-                    busNumber: busNumber,
+                    busNumber,
                     collegeId: req.collegeId,
                     driverId: req.user.id,
                     studentName,
-                    direction: direction,
+                    direction,
                     status: isPickup ? 'picked_up' : 'dropped_off',
                     createdAt: serverTimestamp,
                     updatedAt: serverTimestamp
                 };
-
                 if (isPickup) {
                     attendanceData.pickedUpAt = serverTimestamp;
                     attendanceData.droppedOffAt = null;
@@ -618,11 +616,9 @@ const historyUpload = async (req, res) => {
                     attendanceData.droppedOffAt = serverTimestamp;
                     attendanceData.pickedUpAt = null;
                 }
-
                 batch.set(attendanceRef, attendanceData, { merge: true });
             }
 
-            // Update trip doc with full lists
             if (isPickup) {
                 updateData.pickedUpStudents = admin.firestore.FieldValue.arrayUnion(...studentIds);
             } else {
@@ -630,9 +626,9 @@ const historyUpload = async (req, res) => {
             }
 
             await batch.commit();
-            console.log(`[historyUpload] Processed attendance for ${studentIds.length} students (${direction})`);
+            console.log(`[historyUpload] Written ${studentIds.length} present records (${direction})`);
 
-            // --- FCM: Notify boarded students ---
+            // FCM: notify boarded/dropped-off students
             if (messaging && boardedTokens.length > 0) {
                 const label = isPickup ? 'Has Boarded' : 'Has Dropped Off';
                 for (let t = 0; t < boardedTokens.length; t += 500) {
@@ -653,80 +649,81 @@ const historyUpload = async (req, res) => {
                     }
                 }
             }
+        }
 
-            // --- FCM: Notify pending (not boarded) students ---
-            try {
-                const allBusStudents = await db.collection('students')
-                    .where('collegeId', '==', req.collegeId)
-                    .where('assignedBusId', '==', tripData.busId)
-                    .get();
+        // ── B. NOT_BOARDED: always run regardless of whether attendance was empty ──
+        // FIX: moved out of the `if (attendance.length > 0)` block so it always fires.
+        try {
+            const allBusStudents = await db.collection('students')
+                .where('collegeId', '==', req.collegeId)
+                .where('assignedBusId', '==', tripData.busId)
+                .get();
 
-                const pendingTokens = [];
-                allBusStudents.forEach(doc => {
+            const pendingTokens = [];
+            const pendingStudentDocs = [];
+
+            allBusStudents.forEach(doc => {
+                if (!studentIds.includes(doc.id)) {
+                    pendingStudentDocs.push(doc);
                     const sd = doc.data();
-                    if (!studentIds.includes(doc.id) && sd.fcmToken && typeof sd.fcmToken === 'string' && sd.fcmToken.length > 10) {
+                    if (sd.fcmToken && typeof sd.fcmToken === 'string' && sd.fcmToken.length > 10) {
                         pendingTokens.push(sd.fcmToken);
                     }
-                });
-
-                if (messaging && pendingTokens.length > 0) {
-                    const pendingLabel = isPickup ? 'Not Boarded the Bus Today' : 'Not Dropped Off Today';
-                    for (let t = 0; t < pendingTokens.length; t += 500) {
-                        const tokenBatch = pendingTokens.slice(t, t + 500);
-                        try {
-                            await messaging.sendEachForMulticast({
-                                notification: {
-                                    title: '⚠️ Attendance Alert',
-                                    body: `${pendingLabel} — Bus ${busNumber}`
-                                },
-                                data: { tripId: tripId || '', busId: tripData.busId || '', type: 'STUDENT_NOT_BOARDED' },
-                                android: { notification: { channelId: 'bus_events', priority: 'high', sound: 'default' } },
-                                apns: { payload: { aps: { sound: 'default', badge: 1 } } },
-                                tokens: tokenBatch
-                            });
-                        } catch (fcmErr) {
-                            console.error('[historyUpload] FCM pending error:', fcmErr.message);
-                        }
-                    }
-                    console.log(`[historyUpload] Sent pending notification to ${pendingTokens.length} students`);
                 }
+            });
 
-                // --- RECORD NOT BOARDED STATUS ---
-                const nbBatch = db.batch();
-                let nbCount = 0;
-                allBusStudents.forEach(doc => {
-                    if (!studentIds.includes(doc.id)) {
-                        const studentId = doc.id;
-                        const studentData = doc.data();
-                        const attendanceId = `${tripId}__${studentId}`;
-                        const attendanceRef = db.collection('attendance').doc(attendanceId);
-                        
-                        // Only create if it doesn't exist (to avoid overwriting if somehow they were marked differently)
-                        nbBatch.set(attendanceRef, {
-                            tripId,
-                            studentId,
-                            busId: tripData.busId,
-                            busNumber: busNumber,
-                            collegeId: req.collegeId,
-                            driverId: req.user.id,
-                            studentName: studentData.name || 'Unknown Student',
-                            direction: direction,
-                            status: isPickup ? 'not_boarded' : 'not_dropped',
-                            createdAt: serverTimestamp,
-                            updatedAt: serverTimestamp,
-                            pickedUpAt: null,
-                            droppedOffAt: null
-                        }, { merge: true });
-                        nbCount++;
+            // FCM: notify students who did NOT board / were not dropped off
+            if (messaging && pendingTokens.length > 0) {
+                const pendingLabel = isPickup ? 'Not Boarded the Bus Today' : 'Not Dropped Off Today';
+                for (let t = 0; t < pendingTokens.length; t += 500) {
+                    const tokenBatch = pendingTokens.slice(t, t + 500);
+                    try {
+                        await messaging.sendEachForMulticast({
+                            notification: {
+                                title: '⚠️ Attendance Alert',
+                                body: `${pendingLabel} — Bus ${busNumber}`
+                            },
+                            data: { tripId: tripId || '', busId: tripData.busId || '', type: 'STUDENT_NOT_BOARDED' },
+                            android: { notification: { channelId: 'bus_events', priority: 'high', sound: 'default' } },
+                            apns: { payload: { aps: { sound: 'default', badge: 1 } } },
+                            tokens: tokenBatch
+                        });
+                    } catch (fcmErr) {
+                        console.error('[historyUpload] FCM pending error:', fcmErr.message);
                     }
-                });
-                if (nbCount > 0) {
-                    await nbBatch.commit();
-                    console.log(`[historyUpload] Recorded ${nbCount} students as not_boarded/not_dropped`);
                 }
-            } catch (pendingErr) {
-                console.error('[historyUpload] Pending students FCM error:', pendingErr.message);
+                console.log(`[historyUpload] Sent absent notification to ${pendingStudentDocs.length} students`);
             }
+
+            // Write not_boarded / not_dropped records for absent students
+            const nbBatch = db.batch();
+            pendingStudentDocs.forEach(doc => {
+                const studentId = doc.id;
+                const studentData = doc.data();
+                const attendanceId = `${tripId}__${studentId}`;
+                const attendanceRef = db.collection('attendance').doc(attendanceId);
+                nbBatch.set(attendanceRef, {
+                    tripId,
+                    studentId,
+                    busId: tripData.busId,
+                    busNumber,
+                    collegeId: req.collegeId,
+                    driverId: req.user.id,
+                    studentName: studentData.name || 'Unknown Student',
+                    direction,
+                    status: isPickup ? 'not_boarded' : 'not_dropped',
+                    createdAt: serverTimestamp,
+                    updatedAt: serverTimestamp,
+                    pickedUpAt: null,
+                    droppedOffAt: null
+                }, { merge: true });
+            });
+            if (pendingStudentDocs.length > 0) {
+                await nbBatch.commit();
+                console.log(`[historyUpload] Recorded ${pendingStudentDocs.length} absent students`);
+            }
+        } catch (pendingErr) {
+            console.error('[historyUpload] Pending students processing error:', pendingErr.message);
         }
 
         await tripRef.update(updateData);
@@ -870,15 +867,18 @@ const markDropoff = async (req, res) => {
         const tripDoc = await tripRef.get();
 
         if (!tripDoc.exists) return res.status(404).json({ success: false, message: 'Trip not found' });
-        
+
         const tripData = tripDoc.data();
         if (tripData.driverId !== req.user.id) {
             return res.status(403).json({ success: false, message: 'Unauthorized trip access' });
         }
 
+        // FIX: Fetch student name (was missing in original markDropoff)
+        const studentDoc = await db.collection('students').doc(studentId).get();
+        const studentName = studentDoc.exists ? studentDoc.data().name : 'Unknown Student';
+
         const attendanceId = `${tripId}__${studentId}`;
         const attendanceRef = db.collection('attendance').doc(attendanceId);
-
         const serverTimestamp = admin.firestore.FieldValue.serverTimestamp();
 
         await db.runTransaction(async (transaction) => {
@@ -887,10 +887,10 @@ const markDropoff = async (req, res) => {
                 status: 'dropped_off',
                 direction: tripData.direction || 'dropoff',
                 updatedAt: serverTimestamp,
-                // Ensure createdAt is set if record is new (e.g. dropoff without pickup in PM)
                 createdAt: serverTimestamp,
                 tripId,
                 studentId,
+                studentName,                             // FIX: now included
                 busId: tripData.busId,
                 busNumber: tripData.busNumber || tripData.busId,
                 collegeId: req.collegeId,
@@ -904,7 +904,7 @@ const markDropoff = async (req, res) => {
 
         res.status(200).json({ success: true, message: 'Student dropped off' });
 
-        // Immediate notification
+        // Immediate FCM notification to the student
         sendStudentAttendanceNotification({
             studentId,
             busId: tripData.busId,

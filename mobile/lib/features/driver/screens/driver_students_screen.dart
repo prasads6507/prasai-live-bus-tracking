@@ -23,8 +23,10 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
   bool _isSearchMode = false;
   String _searchQuery = '';
   
-  // Local state for batch attendance
+  // Local state for batch attendance (optimistic UI)
   Set<String> _localAttendedIds = {};
+  // Track students currently being submitted to show loading state
+  Set<String> _pendingIds = {};
   bool _isLoadingPrefs = true;
 
   @override
@@ -50,10 +52,7 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
     }
   }
 
-  Future<void> _saveLocalAttendance() async {
-    final activeTripId = ref.read(activeTripIdProvider).value;
-    if (activeTripId == null) return;
-
+  Future<void> _saveLocalAttendance(String activeTripId) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList('shared_attendance_$activeTripId', _localAttendedIds.toList());
   }
@@ -66,13 +65,32 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
 
   void _makePhoneCall(String? phoneNumber) async {
     if (phoneNumber == null || phoneNumber.isEmpty) return;
-    final Uri launchUri = Uri(
-      scheme: 'tel',
-      path: phoneNumber,
-    );
+    final Uri launchUri = Uri(scheme: 'tel', path: phoneNumber);
     if (await canLaunchUrl(launchUri)) {
       await launchUrl(launchUri);
     }
+  }
+
+  Future<ApiDataSource> _buildApiDataSource() async {
+    final dio = Dio();
+    // Try Firebase token first, fall back to stored JWT
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final token = await user.getIdToken();
+        if (token != null) {
+          dio.options.headers['Authorization'] = 'Bearer $token';
+          return ApiDataSource(dio, FirebaseFirestore.instance);
+        }
+      }
+    } catch (_) {}
+
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('auth_token');
+    if (token != null) {
+      dio.options.headers['Authorization'] = 'Bearer $token';
+    }
+    return ApiDataSource(dio, FirebaseFirestore.instance);
   }
 
   @override
@@ -87,9 +105,7 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
     return profileAsync.when(
       data: (userProfile) {
         if (userProfile == null) {
-          return const AppScaffold(
-            body: Center(child: Text('User profile not found')),
-          );
+          return const AppScaffold(body: Center(child: Text('User profile not found')));
         }
 
         final collegeId = userProfile.collegeId;
@@ -98,13 +114,14 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
         return assignedBusAsync.when(
           data: (assignedBus) {
             final driverBusId = assignedBus?.id ?? userProfile.assignedBusId;
-            final tripAsync = activeTripId != null ? ref.watch(tripProvider(activeTripId)) : const AsyncValue<Map<String, dynamic>?>.data(null);
+            final tripAsync = activeTripId != null
+                ? ref.watch(tripProvider(activeTripId))
+                : const AsyncValue<Map<String, dynamic>?>.data(null);
 
-            // Fetch students for THIS bus
-            final busStudentsAsync = driverBusId != null 
-                ? ref.watch(busStudentsProvider(driverBusId)) 
+            final busStudentsAsync = driverBusId != null
+                ? ref.watch(busStudentsProvider(driverBusId))
                 : const AsyncValue<List<UserProfile>>.data([]);
-            
+
             final allStudentsAsync = ref.watch(studentsProvider(collegeId));
             final busesAsync = ref.watch(busesProvider(collegeId));
 
@@ -127,7 +144,7 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
                   ),
                   body: Column(
                     children: [
-                      // Search Header
+                      // Search
                       Padding(
                         padding: const EdgeInsets.all(16),
                         child: TextField(
@@ -165,51 +182,66 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
 
                       if (!_isSearchMode && activeTripId != null)
                         busStudentsAsync.maybeWhen(
-                          data: (assignedStudents) => _buildAttendanceSummary(assignedStudents, direction),
+                          data: (assignedStudents) =>
+                              _buildAttendanceSummary(assignedStudents, direction),
                           orElse: () => const SizedBox.shrink(),
                         ),
 
                       Expanded(
-                        child: _isSearchMode 
-                          ? allStudentsAsync.when(
-                              data: (allStudents) {
-                                final q = _searchQuery.toLowerCase();
-                                final displayList = allStudents.where((s) {
-                                  final nameMatch = (s.name ?? '').toLowerCase().contains(q);
-                                  final emailMatch = (s.email ?? '').toLowerCase().contains(q);
-                                  return nameMatch || emailMatch;
-                                }).toList();
-                                return _buildStudentList(displayList, activeTripId, direction, busIdToNumber);
-                              },
-                              loading: () => const Center(child: CircularProgressIndicator()),
-                              error: (err, stack) => Center(child: Text('Error: $err')),
-                            )
-                          : busStudentsAsync.when(
-                              data: (assignedStudents) {
-                                return _buildStudentList(assignedStudents, activeTripId, direction, busIdToNumber);
-                              },
-                              loading: () => const Center(child: CircularProgressIndicator()),
-                              error: (err, stack) => Center(child: Text('Error: $err')),
-                            ),
+                        child: _isSearchMode
+                            ? allStudentsAsync.when(
+                                data: (allStudents) {
+                                  final q = _searchQuery.toLowerCase();
+                                  final displayList = allStudents.where((s) {
+                                    final nameMatch =
+                                        (s.name ?? '').toLowerCase().contains(q);
+                                    final emailMatch =
+                                        (s.email ?? '').toLowerCase().contains(q);
+                                    return nameMatch || emailMatch;
+                                  }).toList();
+                                  return _buildStudentList(displayList, activeTripId,
+                                      direction, busIdToNumber);
+                                },
+                                loading: () =>
+                                    const Center(child: CircularProgressIndicator()),
+                                error: (err, stack) =>
+                                    Center(child: Text('Error: $err')),
+                              )
+                            : busStudentsAsync.when(
+                                data: (assignedStudents) => _buildStudentList(
+                                    assignedStudents, activeTripId, direction,
+                                    busIdToNumber),
+                                loading: () =>
+                                    const Center(child: CircularProgressIndicator()),
+                                error: (err, stack) =>
+                                    Center(child: Text('Error: $err')),
+                              ),
                       ),
                     ],
                   ),
                 );
               },
-              loading: () => const AppScaffold(body: Center(child: CircularProgressIndicator())),
-              error: (err, stack) => AppScaffold(body: Center(child: Text('Error loading trip: $err'))),
+              loading: () =>
+                  const AppScaffold(body: Center(child: CircularProgressIndicator())),
+              error: (err, stack) =>
+                  AppScaffold(body: Center(child: Text('Error loading trip: $err'))),
             );
           },
-          loading: () => const AppScaffold(body: Center(child: CircularProgressIndicator())),
-          error: (err, stack) => AppScaffold(body: Center(child: Text('Error loading bus: $err'))),
+          loading: () =>
+              const AppScaffold(body: Center(child: CircularProgressIndicator())),
+          error: (err, stack) =>
+              AppScaffold(body: Center(child: Text('Error loading bus: $err'))),
         );
       },
-      loading: () => const AppScaffold(body: Center(child: CircularProgressIndicator())),
-      error: (err, stack) => AppScaffold(body: Center(child: Text('Error loading profile: $err'))),
+      loading: () =>
+          const AppScaffold(body: Center(child: CircularProgressIndicator())),
+      error: (err, stack) =>
+          AppScaffold(body: Center(child: Text('Error loading profile: $err'))),
     );
   }
 
-  Widget _buildStudentList(List<UserProfile> displayList, String? activeTripId, String direction, Map<String, String> busIdToNumber) {
+  Widget _buildStudentList(List<UserProfile> displayList, String? activeTripId,
+      String direction, Map<String, String> busIdToNumber) {
     if (displayList.isEmpty) {
       return Center(
         child: Column(
@@ -218,7 +250,9 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
             Icon(Icons.people_outline, size: 64, color: Colors.grey[400]),
             const SizedBox(height: 16),
             Text(
-              _isSearchMode ? 'No students found matching "$_searchQuery"' : 'No students assigned to your bus',
+              _isSearchMode
+                  ? 'No students found matching "$_searchQuery"'
+                  : 'No students assigned to your bus',
               style: TextStyle(color: Colors.grey[600]),
               textAlign: TextAlign.center,
             ),
@@ -234,8 +268,10 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
         final student = displayList[index];
         final assignedBus = ref.watch(assignedBusProvider).value;
         final driverBusId = assignedBus?.id;
-        final isOnOtherBus = student.assignedBusId != null && student.assignedBusId != driverBusId;
+        final isOnOtherBus =
+            student.assignedBusId != null && student.assignedBusId != driverBusId;
         final isAttended = _localAttendedIds.contains(student.id);
+        final isPending = _pendingIds.contains(student.id);
 
         return Card(
           margin: const EdgeInsets.only(bottom: 12),
@@ -246,7 +282,8 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
               backgroundColor: AppColors.primary.withOpacity(0.1),
               child: Text(
                 (student.name ?? 'S')[0].toUpperCase(),
-                style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                    color: AppColors.primary, fontWeight: FontWeight.bold),
               ),
             ),
             title: Column(
@@ -258,31 +295,14 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
                 ),
                 const SizedBox(height: 4),
                 if (isOnOtherBus)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.orange[50],
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.orange[200]!),
-                    ),
-                    child: Text(
+                  _buildBusTag(
                       _getBusLabel(student.assignedBusId, busIdToNumber),
-                      style: const TextStyle(color: Colors.orange, fontSize: 10, fontWeight: FontWeight.bold),
-                    ),
-                  )
+                      Colors.orange[50]!,
+                      Colors.orange[200]!,
+                      Colors.orange)
                 else if (student.assignedBusId == driverBusId && driverBusId != null)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.green[50],
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.green[200]!),
-                    ),
-                    child: const Text(
-                      'My Bus',
-                      style: TextStyle(color: Colors.green, fontSize: 10, fontWeight: FontWeight.bold),
-                    ),
-                  ),
+                  _buildBusTag(
+                      'My Bus', Colors.green[50]!, Colors.green[200]!, Colors.green),
               ],
             ),
             subtitle: Column(
@@ -299,20 +319,45 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
                   ),
               ],
             ),
-            trailing: activeTripId != null 
-                ? Checkbox(
-                    value: isAttended,
-                    activeColor: direction == 'pickup' ? Colors.green : Colors.blue,
-                    onChanged: (val) => _onAttendanceChanged(student, val ?? false, direction),
-                  )
+            trailing: activeTripId != null
+                ? isPending
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Checkbox(
+                        value: isAttended,
+                        activeColor:
+                            direction == 'pickup' ? Colors.green : Colors.blue,
+                        onChanged: (val) =>
+                            _onAttendanceChanged(student, val ?? false, direction,
+                                activeTripId),
+                      )
                 : IconButton(
                     icon: const Icon(Icons.call, color: AppColors.primary),
                     onPressed: () => _showCallDialog(student),
                   ),
-            onTap: () => _showStudentDetails(student, busIdToNumber, activeTripId, direction, isAttended),
+            onTap: () => _showStudentDetails(student, busIdToNumber, activeTripId,
+                direction, isAttended),
           ),
         );
       },
+    );
+  }
+
+  Widget _buildBusTag(String label, Color bg, Color border, Color textColor) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: border),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(color: textColor, fontSize: 10, fontWeight: FontWeight.bold),
+      ),
     );
   }
 
@@ -334,7 +379,8 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           _buildSummaryItem('Total', total, Colors.black87),
-          _buildSummaryItem(label, marked, direction == 'pickup' ? Colors.green : Colors.blue),
+          _buildSummaryItem(
+              label, marked, direction == 'pickup' ? Colors.green : Colors.blue),
           _buildSummaryItem('Pending', pending, Colors.orange),
         ],
       ),
@@ -346,7 +392,8 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
       children: [
         Text(
           count.toString(),
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color),
+          style: TextStyle(
+              fontSize: 20, fontWeight: FontWeight.bold, color: color),
         ),
         Text(
           label,
@@ -356,9 +403,12 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
     );
   }
 
-  void _onAttendanceChanged(UserProfile student, bool checked, String direction) async {
+  /// Called when driver taps a student checkbox.
+  /// Immediately writes to Firestore attendance DB AND sends FCM notification to the student.
+  void _onAttendanceChanged(
+      UserProfile student, bool checked, String direction, String activeTripId) async {
+    // If unchecking, show confirmation dialog
     if (!checked) {
-      // Show confirmation alert for unchecking
       final label = direction == 'pickup' ? 'not picked up' : 'not dropped off';
       final confirmed = await showDialog<bool>(
         context: context,
@@ -366,55 +416,73 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
           title: const Text('Confirm Action'),
           content: Text('Do you want to mark ${student.name} as $label?'),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('No, keep it')),
+            TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('No, keep it')),
             TextButton(
               onPressed: () => Navigator.pop(context, true),
-              child: Text('Yes, mark as $label', style: const TextStyle(color: Colors.red)),
+              child: Text('Yes, mark as $label',
+                  style: const TextStyle(color: Colors.red)),
             ),
           ],
         ),
       );
-
       if (confirmed != true) return;
     }
 
+    // Optimistic UI update
     setState(() {
       if (checked) {
         _localAttendedIds.add(student.id);
       } else {
         _localAttendedIds.remove(student.id);
       }
+      _pendingIds.add(student.id);
     });
-    _saveLocalAttendance();
+
+    // Persist locally (for trip end upload safety net)
+    await _saveLocalAttendance(activeTripId);
 
     try {
-      final bus = ref.read(assignedBusProvider).value;
-      final activeTripId = bus?.activeTripId;
-      if (activeTripId != null && bus != null) {
-        final prefs = await SharedPreferences.getInstance();
-        final token = prefs.getString('auth_token');
-        final dio = Dio();
-        if (token != null) {
-          dio.options.headers['Authorization'] = 'Bearer $token';
+      final apiDS = await _buildApiDataSource();
+
+      // Use markPickup / markDropoff — these write to DB AND send FCM immediately.
+      // Only call for "checked" state; unchecking is local-only (records remain in DB
+      // to avoid confusion, driver can re-check if needed).
+      if (checked) {
+        if (direction == 'pickup') {
+          await apiDS.markStudentPickup(
+            tripId: activeTripId,
+            studentId: student.id,
+          );
+        } else {
+          await apiDS.markStudentDropoff(
+            tripId: activeTripId,
+            studentId: student.id,
+          );
         }
-        final apiDS = ApiDataSource(dio, FirebaseFirestore.instance);
-        
-        // Fire asynchronously, no await blocking the UI
-        apiDS.notifyStudentAttendance(
-          tripId: activeTripId,
-          studentId: student.id,
-          busId: bus.id,
-          direction: direction,
-          isChecked: checked,
-          busNumber: bus.busNumber,
-        );
       }
     } catch (e) {
-      debugPrint('[DriverStudentsScreen] Failed to trigger student notification: $e');
+      debugPrint('[DriverStudentsScreen] Attendance API failed: $e');
+      // Show snack bar but keep optimistic state — historyUpload at trip end is the safety net
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('⚠️ Saved locally. Will sync on trip end.'),
+            backgroundColor: Colors.orange[700],
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _pendingIds.remove(student.id));
+      }
     }
   }
 
-  void _showStudentDetails(UserProfile student, Map<String, String> busIdToNumber, String? activeTripId, String direction, bool isAttended) {
+  void _showStudentDetails(UserProfile student, Map<String, String> busIdToNumber,
+      String? activeTripId, String direction, bool isAttended) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -436,7 +504,10 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
                   backgroundColor: AppColors.primary.withOpacity(0.1),
                   child: Text(
                     (student.name ?? 'S')[0].toUpperCase(),
-                    style: const TextStyle(color: AppColors.primary, fontSize: 24, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                        color: AppColors.primary,
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold),
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -444,19 +515,58 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(student.name ?? 'Unknown Student', style: AppTypography.h3),
+                      Text(student.name ?? 'Unknown Student',
+                          style: AppTypography.h3),
                       Text(student.email, style: AppTypography.bodyMd),
                     ],
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 24),
-            _detailRow(Icons.email, 'Email', student.email),
-            _detailRow(Icons.phone, 'Phone', student.phone ?? 'Not provided'),
-            _detailRow(Icons.bus_alert, 'Assigned Bus', _getBusLabel(student.assignedBusId, busIdToNumber, isFull: true)),
+            const SizedBox(height: 16),
             if (activeTripId != null)
-              _detailRow(Icons.check_circle_outline, 'Status', isAttended ? (direction == 'pickup' ? 'Picked Up' : 'Dropped Off') : 'Pending'),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isAttended
+                      ? (direction == 'pickup' ? Colors.green[50] : Colors.blue[50])
+                      : Colors.grey[100],
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      isAttended ? Icons.check_circle : Icons.pending,
+                      size: 16,
+                      color: isAttended
+                          ? (direction == 'pickup' ? Colors.green : Colors.blue)
+                          : Colors.grey,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      isAttended
+                          ? (direction == 'pickup' ? 'Picked Up ✓' : 'Dropped Off ✓')
+                          : 'Pending',
+                      style: TextStyle(
+                        color: isAttended
+                            ? (direction == 'pickup' ? Colors.green : Colors.blue)
+                            : Colors.grey,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            const SizedBox(height: 24),
+            if (student.phone != null)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.phone, color: AppColors.primary),
+                title: Text(student.phone!),
+                onTap: () => _makePhoneCall(student.phone),
+              ),
+            _detailRow(Icons.bus_alert, 'Assigned Bus', _getBusLabel(student.assignedBusId, busIdToNumber)),
             const SizedBox(height: 32),
             Row(
               children: [
@@ -480,7 +590,7 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
                     child: ElevatedButton.icon(
                       onPressed: () {
                         Navigator.pop(context);
-                        _onAttendanceChanged(student, !isAttended, direction);
+                        _onAttendanceChanged(student, !isAttended, direction, activeTripId);
                       },
                       icon: Icon(isAttended ? Icons.remove_circle_outline : Icons.check_circle_outline),
                       label: Text(isAttended ? 'Remove Marking' : (direction == 'pickup' ? 'Pick Up' : 'Drop Off')),
@@ -503,16 +613,6 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
   }
 
   void _showCallDialog(UserProfile student) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Call Student'),
-        content: Text('Do you want to call ${student.name}?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton.icon(
-            onPressed: () {
-              Navigator.pop(context);
               _makePhoneCall(student.phone);
             },
             icon: const Icon(Icons.call),

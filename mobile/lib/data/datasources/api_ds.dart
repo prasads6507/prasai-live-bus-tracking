@@ -29,7 +29,7 @@ class ApiDataSource {
         'busId': busId,
         'driverId': driverId,
         'routeId': routeId,
-        'tripId': 'trip-$busId-${DateTime.now().millisecondsSinceEpoch}', // Generate a tripId if not provided
+        'tripId': 'trip-$busId-${DateTime.now().millisecondsSinceEpoch}',
       },
     );
   }
@@ -100,7 +100,6 @@ class ApiDataSource {
     if (query.trim().isEmpty) return [];
 
     try {
-      // Query Firestore directly without complex ordering to avoid composite index requirements
       final snapshot = await _firestore
           .collection('colleges')
           .where('status', isEqualTo: 'ACTIVE')
@@ -125,7 +124,6 @@ class ApiDataSource {
       return results;
     } catch (e) {
       debugPrint("Firestore search error: $e");
-      // Fallback to API if Firestore fails
       try {
         final response = await _dio.get(
           '${Env.apiUrl}/api/auth/colleges/search',
@@ -160,7 +158,8 @@ class ApiDataSource {
       'pointsCount': pointsCount,
     };
     if (path != null) data['path'] = path;
-    if (attendance != null) data['attendance'] = attendance;
+    // Always send attendance array (even if empty) so backend can process not_boarded students
+    data['attendance'] = attendance ?? [];
 
     await _dio.post(
       '${Env.apiUrl}/api/driver/trips/$tripId/history-upload',
@@ -168,6 +167,43 @@ class ApiDataSource {
     );
   }
 
+  /// Mark a student as picked up — writes to DB AND sends FCM notification immediately.
+  /// Use this instead of notifyStudentAttendance for pickup direction.
+  Future<void> markStudentPickup({
+    required String tripId,
+    required String studentId,
+  }) async {
+    try {
+      await _dio.post(
+        '${Env.apiUrl}/api/driver/trips/$tripId/attendance/pickup',
+        data: {'studentId': studentId},
+      );
+      debugPrint('[ApiDataSource] markPickup success: $studentId');
+    } catch (e) {
+      debugPrint('[ApiDataSource] markPickup failed: $e');
+      rethrow;
+    }
+  }
+
+  /// Mark a student as dropped off — writes to DB AND sends FCM notification immediately.
+  /// Use this instead of notifyStudentAttendance for dropoff direction.
+  Future<void> markStudentDropoff({
+    required String tripId,
+    required String studentId,
+  }) async {
+    try {
+      await _dio.post(
+        '${Env.apiUrl}/api/driver/trips/$tripId/attendance/dropoff',
+        data: {'studentId': studentId},
+      );
+      debugPrint('[ApiDataSource] markDropoff success: $studentId');
+    } catch (e) {
+      debugPrint('[ApiDataSource] markDropoff failed: $e');
+      rethrow;
+    }
+  }
+
+  /// Legacy: notify only (no DB write). Kept for backward compat but prefer mark* methods.
   Future<void> notifyStudentAttendance({
     required String tripId,
     required String studentId,
