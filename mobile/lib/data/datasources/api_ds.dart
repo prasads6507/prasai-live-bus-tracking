@@ -140,8 +140,14 @@ class ApiDataSource {
     }
   }
 
-  /// Upload trip history (polyline + summary) at trip end.
-    int pointsCount,
+  Future<void> uploadTripHistory(
+    String tripId, {
+    required String polyline,
+    required int distanceMeters,
+    required int durationSeconds,
+    required int maxSpeedMph,
+    required int avgSpeedMph,
+    required int pointsCount,
     List<Map<String, dynamic>>? path,
     List<String>? attendance,
   }) async {

@@ -144,9 +144,6 @@ final assignedBusProvider = StreamProvider<Bus?>((ref) {
   });
 });
 
-  });
-});
-
 final activeTripIdProvider = StreamProvider<String?>((ref) {
   final assignedBus = ref.watch(assignedBusProvider).value;
   if (assignedBus == null) return Stream.value(null);
