@@ -465,6 +465,41 @@ const sendStopEventNotification = async (tripId, busId, collegeId, stopId, stopN
 };
 
 /**
+ * NEW: Notify specific student when driver marks attendance tick
+ */
+const sendStudentAttendanceNotification = async ({ studentId, busId, direction, isChecked, busNumber, tripId }) => {
+    try {
+        const studentDoc = await db.collection('students').doc(studentId).get();
+        if (!studentDoc.exists) return;
+
+        const student = studentDoc.data();
+        if (!student.fcmToken) return;
+
+        const title = direction === 'pickup' ? "Safe Boarding ✅" : "Drop-off Complete ✅";
+        const body = direction === 'pickup'
+            ? `${student.name || 'Your child'} has boarded Bus ${busNumber} safely.`
+            : `${student.name || 'Your child'} has been dropped off from Bus ${busNumber} safely.`;
+
+        const payload = {
+            notification: { title, body },
+            data: { type: 'ATTENDANCE', tripId: tripId || '', studentId, action: 'FLUTTER_NOTIFICATION_CLICK' },
+            android: { priority: 'high', notification: { channelId: 'bus_events', sound: 'default' } },
+            apns: { payload: { aps: { sound: 'default', badge: 1 } } }
+        };
+
+        const result = await messaging.send({
+            token: student.fcmToken,
+            ...payload
+        });
+
+        console.log(`[AttendanceNotify] Sent to ${student.name}`);
+        return result;
+    } catch (error) {
+        console.error('[AttendanceNotify] Error:', error.message);
+    }
+};
+
+/**
  * NEW: Notify all students who favorited this bus that the trip has ended.
  * Called from endTrip controller and auto-end in background service.
  */
@@ -489,17 +524,28 @@ const sendTripEndedNotification = async (tripId, busId, collegeId) => {
 
         // Query by assigned OR favorite (no collegeId to avoid composite index)
         const studentsRef = db.collection('students');
-        const [assignedSnap, favoriteSnap] = await Promise.all([
+        const [assignedSnap, favoriteSnap, tripDoc] = await Promise.all([
             studentsRef.where('assignedBusId', '==', busId).get(),
-            studentsRef.where('favoriteBusIds', 'array-contains', busId).get()
+            studentsRef.where('favoriteBusIds', 'array-contains', busId).get(),
+            db.collection('trips').doc(tripId).get()
         ]);
+
+        const tripData = tripDoc.exists ? tripDoc.data() : {};
+        const attendedStudents = [
+            ...(tripData.pickedUpStudents || []),
+            ...(tripData.droppedOffStudents || [])
+        ];
 
         const studentDocsMap = new Map();
         assignedSnap.forEach(doc => {
-            if (doc.data().collegeId === collegeId) studentDocsMap.set(doc.id, doc);
+            if (doc.data().collegeId === collegeId && !attendedStudents.includes(doc.id)) {
+                studentDocsMap.set(doc.id, doc);
+            }
         });
         favoriteSnap.forEach(doc => {
-            if (doc.data().collegeId === collegeId) studentDocsMap.set(doc.id, doc);
+            if (doc.data().collegeId === collegeId && !attendedStudents.includes(doc.id)) {
+                studentDocsMap.set(doc.id, doc);
+            }
         });
 
         if (studentDocsMap.size === 0) {
@@ -581,5 +627,6 @@ module.exports = {
     checkProximityAndNotify,
     sendStopArrivalNotification,
     sendStopEventNotification,
-    sendTripEndedNotification
+    sendTripEndedNotification,
+    sendStudentAttendanceNotification
 };

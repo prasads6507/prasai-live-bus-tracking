@@ -442,7 +442,18 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
   }
 
   List<DropOffItem> _buildDropOffItems() {
-    if (_tripStopsSnapshot.isEmpty || _currentBus?.location == null) return [];
+    final stopsList = _tripStopsSnapshot.isNotEmpty 
+        ? _tripStopsSnapshot 
+        : (_currentRoute?.stops.map((s) => {
+            'id': s.id, 
+            'stopId': s.id,
+            'name': s.name, 
+            'lat': s.latitude, 
+            'lng': s.longitude, 
+            'radiusM': s.radiusM
+          }).toList() ?? []);
+
+    if (stopsList.isEmpty || _currentBus?.location == null) return [];
 
     final arrivedIds = List<String>.from(_tripStopProgress['arrivedStopIds'] ?? []);
     final skippedIds = List<String>.from(_tripStopProgress['skippedStopIds'] ?? []);
@@ -452,8 +463,8 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
     final busLat = _currentBus!.location!.latitude;
     final busLng = _currentBus!.location!.longitude;
 
-    return List.generate(_tripStopsSnapshot.length, (index) {
-      final stop = _tripStopsSnapshot[index];
+    return List.generate(stopsList.length, (index) {
+      final stop = stopsList[index];
       final stopId = stop['stopId'] as String? ?? stop['id'] as String? ?? '';
       final stopLat = (stop['lat'] as num?)?.toDouble() ?? 0.0;
       final stopLng = (stop['lng'] as num?)?.toDouble() ?? 0.0;

@@ -781,6 +781,35 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
   void initState() {
     super.initState();
     _fetchRoute();
+    _listenToBackgroundService();
+  }
+
+  void _listenToBackgroundService() async {
+    final service = FlutterBackgroundService();
+    if (await service.isRunning()) {
+      _locationUpdateSubscription?.cancel();
+      _locationUpdateSubscription = service.on('update').listen((data) {
+        if (data != null && mounted) {
+          try {
+            setState(() {
+              _currentSpeed = (data['speedMph'] as num? ?? 0.0).toDouble();
+              _lastUpdate = TimeOfDay.now().format(context);
+              _statusText = data['status'] as String? ?? "ON_ROUTE";
+              _lastRecordedPoint = LocationPoint(
+                latitude:  (data['lat'] as num).toDouble(),
+                longitude: (data['lng'] as num).toDouble(),
+                timestamp: DateTime.now(),
+                speed:   (data['speed'] as num?)?.toDouble(),
+                heading: (data['heading'] as num?)?.toDouble(),
+              );
+            });
+            _updateRoadName((data['lat'] as num).toDouble(), (data['lng'] as num).toDouble());
+          } catch (e) {
+            debugPrint("[DriverContent] State update error (non-fatal): $e");
+          }
+        }
+      });
+    }
   }
 
   Future<void> _fetchRoute() async {

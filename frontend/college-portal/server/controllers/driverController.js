@@ -12,8 +12,8 @@ const checkInit = (res) => {
     }
     return true;
 };
-const { checkProximityAndNotify, sendTripEndedNotification } = require('./notificationController');
-
+const { checkInit } = require('../utils/checkInit');
+const { checkProximityAndNotify, sendTripEndedNotification, sendStudentAttendanceNotification } = require('./notificationController');
 // @desc    Get available buses for the driver's college
 // @route   GET /api/driver/buses
 // @access  Private (Driver)
@@ -778,7 +778,7 @@ const markPickup = async (req, res) => {
         const tripDoc = await tripRef.get();
 
         if (!tripDoc.exists) return res.status(404).json({ success: false, message: 'Trip not found' });
-        
+
         const tripData = tripDoc.data();
         if (tripData.driverId !== req.user.id) {
             return res.status(403).json({ success: false, message: 'Unauthorized trip access' });
@@ -939,7 +939,7 @@ const getBusStudents = async (req, res) => {
         if (!busDoc.exists) {
             return res.status(404).json({ success: false, message: 'Bus not found' });
         }
-        
+
         const busData = busDoc.data();
         if (busData.collegeId !== collegeId) {
             return res.status(403).json({ success: false, message: 'Access denied: College mismatch' });
