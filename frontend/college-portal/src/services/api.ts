@@ -229,7 +229,7 @@ export const getTripPath = async (tripId: string) => {
     return response.data;
 };
 
-export const getAttendance = async (params: { busId?: string, date?: string, tripId?: string }) => {
+export const getAttendance = async (params: { busId?: string, date?: string, tripId?: string, direction?: string }) => {
     const response = await api.get('/admin/attendance', { params });
     return response.data;
 };

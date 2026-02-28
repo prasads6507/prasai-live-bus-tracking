@@ -954,6 +954,23 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
       await prefs.setString('track_bus_id', widget.busId);
       await prefs.setString('track_trip_id', tripId);
       await prefs.setString('api_base_url', Env.apiUrl);
+
+      // S-1 FIX: Pre-initialize first stop so UI doesn't flicker/miss SKIP button on start
+      if (_currentRoute != null && _currentRoute!.stops.isNotEmpty) {
+        var stops = List<RouteStop>.from(_currentRoute!.stops);
+        if (widget.direction == 'dropoff') {
+          stops = stops.reversed.toList();
+        }
+        final firstStop = stops.first;
+        await prefs.setDouble('next_stop_lat', firstStop.latitude);
+        await prefs.setDouble('next_stop_lng', firstStop.longitude);
+        await prefs.setString('next_stop_id', firstStop.id);
+        await prefs.setString('next_stop_name', firstStop.stopName);
+        await prefs.setDouble('next_stop_radius', firstStop.radiusM.toDouble());
+        await prefs.setBool('has_arrived_current', false);
+        debugPrint("[DriverContent] Pre-initialized first stop: ${firstStop.stopName}");
+      }
+
       debugPrint("[DriverContent] Tracking keys saved: college=${widget.collegeId}, bus=${widget.busId}, trip=$tripId");
     } catch (e) {
       debugPrint("[DriverContent] Failed to save tracking keys (CRITICAL): $e");

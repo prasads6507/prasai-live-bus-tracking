@@ -17,6 +17,7 @@ import {
     ChevronRight,
     Trash2,
     AlertTriangle,
+    Download,
 } from 'lucide-react';
 import Layout from '../components/Layout';
 import { api, getAttendance, getBuses, validateSlug, bulkDeleteAttendance } from '../services/api';
@@ -98,7 +99,11 @@ const BusAttendance = () => {
         setLoading(true);
         try {
             const [attendanceRes, busesData] = await Promise.all([
-                getAttendance({ busId: filters.busId, date: filters.date }),
+                getAttendance({
+                    busId: filters.busId,
+                    date: filters.date,
+                    direction: filters.direction
+                }),
                 getBuses(),
             ]);
             setAttendance(attendanceRes.data || []);
@@ -131,10 +136,10 @@ const BusAttendance = () => {
         initializeAndFetch();
     }, [orgSlug]);
 
-    // Re-fetch when date or busId filter changes (not direction — that filters client-side)
+    // Re-fetch when date, busId, or direction filter changes
     useEffect(() => {
         fetchData();
-    }, [filters.date, filters.busId]);
+    }, [filters.date, filters.busId, filters.direction]);
 
     // ── Computed groups ────────────────────────────────────────────────────────
 
@@ -144,7 +149,8 @@ const BusAttendance = () => {
     };
 
     const groups = useMemo<AttendanceGroup[]>(() => {
-        // Apply direction filter client-side
+        // Server-side filtering is now implemented, but we keep this as a safety 
+        // fallback in case of state desync or local updates
         const filtered = filters.direction
             ? attendance.filter((a) => a.direction === filters.direction)
             : attendance;
@@ -238,17 +244,49 @@ const BusAttendance = () => {
             // Reset selection
             setSelectedIds([]);
             setShowDeleteConfirm(false);
-            // If in detail view, we need to update the selectedGroup too
-            if (view === 'detail' && selectedGroup) {
-                // Relies on fetchData updating 'attendance' state, 
-                // but selectedGroup is a separate state. Let's fix that.
-            }
         } catch (error) {
             console.error('Bulk delete failed:', error);
             alert('Failed to delete some records. Please try again.');
         } finally {
             setIsDeleting(false);
         }
+    };
+
+    const downloadCSV = () => {
+        if (attendance.length === 0) return;
+
+        // Header
+        const headers = ['Date', 'Bus Number', 'Direction', 'Student Name', 'Status', 'Time'];
+
+        // Data rows
+        const rows = attendance.map(record => [
+            format(parseISO(record.createdAt || new Date().toISOString()), 'yyyy-MM-dd'),
+            record.busNumber,
+            directionLabel(record.direction),
+            record.studentName,
+            record.status.replace('_', ' ').toUpperCase(),
+            formatTime(record.direction === 'pickup' ? record.pickedUpAt : record.droppedOffAt)
+        ]);
+
+        // Merge headers and rows
+        const csvContent = [
+            headers.join(','),
+            ...rows.map(row => row.map(cell => `"${cell || ''}"`).join(','))
+        ].join('\n');
+
+        // Create blob and download
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+
+        const fileName = `attendance_${filters.date}_${filters.direction || 'all'}.csv`;
+
+        link.setAttribute('href', url);
+        link.setAttribute('download', fileName);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     };
 
     // Fix: Update selectedGroup when attendance state changes if in detail view
@@ -307,6 +345,14 @@ const BusAttendance = () => {
                                 <span>Delete ({selectedIds.length})</span>
                             </button>
                         )}
+                        <button
+                            onClick={downloadCSV}
+                            disabled={attendance.length === 0}
+                            className="flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium shadow-lg shadow-emerald-200"
+                        >
+                            <Download size={18} />
+                            <span>Download CSV</span>
+                        </button>
                         <button
                             onClick={fetchData}
                             className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all font-medium shadow-lg shadow-blue-200"

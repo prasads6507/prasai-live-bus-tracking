@@ -1426,7 +1426,7 @@ const assignStudentsToBusRoute = async (req, res) => {
 // @access  Private (College Admin)
 const getAttendance = async (req, res) => {
     try {
-        const { busId, date, tripId } = req.query;
+        const { busId, date, tripId, direction } = req.query;
         let query = db.collection('attendance')
             .where('collegeId', '==', req.collegeId);
 
@@ -1436,6 +1436,10 @@ const getAttendance = async (req, res) => {
 
         if (tripId) {
             query = query.where('tripId', '==', tripId);
+        }
+
+        if (direction) {
+            query = query.where('direction', '==', direction);
         }
 
         // Remove date-based query filters from Firestore entirely to prevent composite index crashes
