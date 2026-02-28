@@ -151,6 +151,7 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
         }
 
         final collegeId = userProfile.collegeId;
+        final activeTripId = ref.watch(activeTripIdProvider).value;
         
         // Listen for trip changes to trigger re-sync (crucial for trip restart persistence)
         ref.listen(activeTripIdProvider, (previous, next) {
@@ -169,8 +170,6 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
             }
           });
         }
-
-        final activeTripId = ref.watch(activeTripIdProvider).value;
 
         return assignedBusAsync.when(
           data: (assignedBus) {
