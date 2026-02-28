@@ -807,20 +807,21 @@ const markDropoff = async (req, res) => {
         const studentDoc = await db.collection('students').doc(studentId).get();
         const studentName = studentDoc.exists ? studentDoc.data().name : 'Unknown Student';
 
-        const attendanceId = `${tripId}__${studentId}`;
+        const datePrefix = new Date().toISOString().split('T')[0];
+        const attendanceId = `${datePrefix}__${tripData.busId}__dropoff__${studentId}`;
         const attendanceRef = db.collection('attendance').doc(attendanceId);
-        const serverTimestamp = admin.firestore.FieldValue.serverTimestamp();
+        const serverTimestamp = admin.firestore.Timestamp.fromDate(new Date());
 
         await db.runTransaction(async (transaction) => {
             transaction.set(attendanceRef, {
                 droppedOffAt: serverTimestamp,
                 status: 'dropped_off',
-                direction: tripData.direction || 'dropoff',
+                direction: 'dropoff',
                 updatedAt: serverTimestamp,
                 createdAt: serverTimestamp,
                 tripId,
                 studentId,
-                studentName,                             // FIX: now included
+                studentName,
                 busId: tripData.busId,
                 busNumber: tripData.busNumber || tripData.busId,
                 collegeId: req.collegeId,
