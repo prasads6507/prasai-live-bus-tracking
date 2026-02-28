@@ -105,7 +105,8 @@ const sendBusStartedNotification = async (tripId, busId, collegeId, busNumber, i
             try {
                 const result = await messaging.sendEachForMulticast(message);
                 console.log(`[BusStarted] Batch result: sent=${result.successCount} failed=${result.failureCount}`);
-                await cleanupStaleTokens(result, batch, db, admin);
+                // Fire and forget the cleanup to not block API response
+                cleanupStaleTokens(result, batch, db, admin).catch(err => console.error('[FCM Cleanup Error]', err.message));
             } catch (fcmErr) {
                 console.error('[BusStarted] FCM transmission error:', fcmErr.message);
             }
@@ -168,13 +169,11 @@ const cleanupStaleTokens = async (result, tokensBatch, db, admin) => {
 
         if (failedTokens.length === 0) return;
 
-        console.log(`[FCM] Removing ${failedTokens.length} stale tokens`);
+        console.log(`[FCM] Removing ${failedTokens.length} stale tokens in parallel...`);
         const batch = db.batch();
 
-        // Search both collections for stale tokens
-        for (const staleToken of failedTokens) {
+        const cleanupPromises = failedTokens.map(async (staleToken) => {
             try {
-                // Check students collection
                 const staleStudentSnap = await db.collection('students')
                     .where('fcmToken', '==', staleToken)
                     .limit(5)
@@ -183,7 +182,6 @@ const cleanupStaleTokens = async (result, tokensBatch, db, admin) => {
                     batch.update(doc.ref, { fcmToken: admin.firestore.FieldValue.delete() });
                 });
 
-                // Check users collection (drivers)
                 const staleUserSnap = await db.collection('users')
                     .where('fcmToken', '==', staleToken)
                     .limit(5)
@@ -192,12 +190,13 @@ const cleanupStaleTokens = async (result, tokensBatch, db, admin) => {
                     batch.update(doc.ref, { fcmToken: admin.firestore.FieldValue.delete() });
                 });
             } catch (indexErr) {
-                // Missing index — log and skip. Token will be cleaned up next time.
-                console.warn(`[FCM] Stale token cleanup skipped (index missing?): ${indexErr.message}`);
+                console.warn(`[FCM Cleanup Worker] Skipped token ${staleToken}:`, indexErr.message);
             }
-        }
+        });
 
+        await Promise.all(cleanupPromises);
         await batch.commit();
+        console.log(`[FCM] Stale tokens removed successfully.`);
     } catch (err) {
         // Never let cleanup crash the notification pipeline
         console.error('[FCM] cleanupStaleTokens error (non-fatal):', err.message);
@@ -436,7 +435,8 @@ const sendStopEventNotification = async (tripId, busId, collegeId, stopId, stopN
                     };
                     const result = await messaging.sendEachForMulticast(msg);
                     console.log(`[StopEvent] Batch result: sent=${result.successCount} failed=${result.failureCount}`);
-                    await cleanupStaleTokens(result, batch, db, admin);
+                    // Fire and forget cleanup
+                    cleanupStaleTokens(result, batch, db, admin).catch(err => console.error('[FCM Cleanup]', err.message));
                 } catch (fcmErr) {
                     console.error('[StopEvent] FCM transmission error:', fcmErr.message);
                 }
@@ -555,7 +555,8 @@ const sendTripEndedNotification = async (tripId, busId, collegeId) => {
                 };
                 const result = await messaging.sendEachForMulticast(msg);
                 console.log(`[TripEnded] FCM batch sent=${result.successCount} failed=${result.failureCount}`);
-                await cleanupStaleTokens(result, batch, db, admin);
+                // Fire and forget cleanup
+                cleanupStaleTokens(result, batch, db, admin).catch(err => console.error('[FCM Cleanup]', err.message));
             } catch (fcmErr) {
                 console.error('[TripEnded] FCM batch error:', fcmErr.message);
             }

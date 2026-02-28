@@ -55,8 +55,8 @@ router.post('/trip-started-notify', async (req, res) => {
 
         const { sendBusStartedNotification } = require('../controllers/notificationController');
 
-        // Fire and forget
-        sendBusStartedNotification(
+        // Await the promise to prevent serverless container from suspending before FCM is dispatched
+        await sendBusStartedNotification(
             tripId,
             busId,
             collegeId,
@@ -65,7 +65,7 @@ router.post('/trip-started-notify', async (req, res) => {
             originalBusId || null
         ).catch(err => console.error('[TripStartedRoute] Error:', err.message));
 
-        res.status(202).json({ success: true, message: 'Trip started notification queued' });
+        res.status(200).json({ success: true, message: 'Trip started notification sent' });
     } catch (err) {
         res.status(500).json({ success: false, message: 'Server error' });
     }
@@ -83,11 +83,11 @@ router.post('/stop-event', async (req, res) => {
             return res.status(400).json({ success: false, message: 'Invalid type' });
         }
 
-        // Fire and forget — respond immediately, process in background
-        sendStopEventNotification(tripId, busId, collegeId, stopId, stopName || '', stopAddress || '', type, arrivalDocId || null)
+        // Await the promise — do not respond until FCM processes to avoid container suspension
+        await sendStopEventNotification(tripId, busId, collegeId, stopId, stopName || '', stopAddress || '', type, arrivalDocId || null)
             .catch(err => console.error('[StopEvent Route] Async error:', err.message));
 
-        res.status(202).json({ success: true, message: 'Stop event accepted' });
+        res.status(200).json({ success: true, message: 'Stop event processed' });
     } catch (err) {
         res.status(500).json({ success: false, message: 'Server error' });
     }
@@ -102,11 +102,11 @@ router.post('/trip-ended-notify', async (req, res) => {
             return res.status(400).json({ success: false, message: 'Missing required fields' });
         }
 
-        // Fire and forget
-        sendTripEndedNotification(tripId, busId, collegeId)
+        // Await the promise to ensure Vercel doesn't freeze the container
+        await sendTripEndedNotification(tripId, busId, collegeId)
             .catch(err => console.error('[TripEndedRoute] Error:', err.message));
 
-        res.status(202).json({ success: true, message: 'Trip ended notification queued' });
+        res.status(200).json({ success: true, message: 'Trip ended notification sent' });
     } catch (err) {
         res.status(500).json({ success: false, message: 'Server error' });
     }

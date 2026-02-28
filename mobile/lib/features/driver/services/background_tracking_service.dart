@@ -22,12 +22,20 @@ const int _NEAR_UPDATE_SEC = 5;               // Write interval in NEAR_STOP mod
 
 @pragma('vm:entry-point')
 void onStart(ServiceInstance service) async {
+  // 1. Core Binding & Notification (CRITICAL: Must happen FAST on Android 14+ to avoid ForegroundServiceStartNotAllowedException)
+  WidgetsFlutterBinding.ensureInitialized();
+  DartPluginRegistrant.ensureInitialized();
+
+  if (service is AndroidServiceInstance) {
+    service.setForegroundNotificationInfo(
+      title: "Tracking Active",
+      content: "Ready to track trip",
+    );
+  }
+
   // Top-level try/catch: ANY crash in background isolate kills the app process.
-  // This ensures we stop gracefully instead of crashing.
   try {
-    DartPluginRegistrant.ensureInitialized();
-    
-    // 1. Initialize Firebase and SharedPreferences
+    // 2. Initialize Firebase and SharedPreferences
     if (Firebase.apps.isEmpty) {
       await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
     }
@@ -57,16 +65,12 @@ void onStart(ServiceInstance service) async {
 
     debugPrint("[Background] Tracking STARTED for Bus $busId, Trip $tripId");
 
-    // 4. Update Notification (wrapped in try/catch for channel creation issues)
-    try {
-      if (service is AndroidServiceInstance) {
-        service.setForegroundNotificationInfo(
-          title: "Tracking Active",
-          content: "Bus $busId is on route",
-        );
-      }
-    } catch (e) {
-      debugPrint("[Background] Notification update failed (non-fatal): $e");
+    // 4. Update Notification with specific bus ID if possible
+    if (service is AndroidServiceInstance && busId != null) {
+      service.setForegroundNotificationInfo(
+        title: "Tracking Active",
+        content: "Bus $busId is on route",
+      );
     }
 
     // 5. Adaptive State & Speed Estimation
@@ -236,6 +240,7 @@ class BackgroundTrackingService {
           notificationChannelId: 'bus_tracking',
           initialNotificationTitle: 'Tracking Active',
           initialNotificationContent: 'Ready to track trip',
+          foregroundServiceTypes: [AndroidForegroundType.location],
         ),
         iosConfiguration: IosConfiguration(
           autoStart: false,
