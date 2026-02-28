@@ -12,7 +12,7 @@ const checkInit = (res) => {
     }
     return true;
 };
-const { checkInit } = require('../utils/checkInit');
+
 const { checkProximityAndNotify, sendTripEndedNotification, sendStudentAttendanceNotification } = require('./notificationController');
 // @desc    Get available buses for the driver's college
 // @route   GET /api/driver/buses
