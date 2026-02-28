@@ -466,9 +466,13 @@ class BackgroundTrackingService {
           });
 
           // 4. Trigger Server FCM
+          final stopData = stops[currentIndex] as Map<String, dynamic>;
+          final targetStudentIds = (stopData['studentIds'] as List<dynamic>?)?.cast<String>();
+
           _notifyServer(tripId, busId, collegeId, stopId, "SKIPPED", 
             stopName: stops[currentIndex]['name'],
             arrivalDocId: notifRef.id,
+            targetStudentIds: targetStudentIds,
             prefs: prefs
           );
 
@@ -706,6 +710,7 @@ class BackgroundTrackingService {
     String type, {
     String? stopName,
     String? arrivalDocId,
+    List<String>? targetStudentIds,
     SharedPreferences? prefs,
   }) async {
     try {
@@ -749,6 +754,8 @@ class BackgroundTrackingService {
             'stopName': stopName ?? 'Stop',
             'type': type,
             if (arrivalDocId != null) 'arrivalDocId': arrivalDocId,
+            if (targetStudentIds != null && targetStudentIds.isNotEmpty) 
+              'targetStudentIds': targetStudentIds,
           },
         );
         debugPrint('[NotifyServer] $type success: ${response.statusCode} - ${response.data}');

@@ -783,7 +783,18 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
   void initState() {
     super.initState();
     _fetchRoute();
+    _loadCachedNextStop();
     _listenToBackgroundService();
+  }
+
+  void _loadCachedNextStop() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _nextStopId = prefs.getString('next_stop_id');
+        _nextStopName = prefs.getString('next_stop_name');
+      });
+    }
   }
 
   void _listenToBackgroundService() async {

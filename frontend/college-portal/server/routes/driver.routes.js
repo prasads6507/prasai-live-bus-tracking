@@ -76,7 +76,7 @@ router.post('/trip-started-notify', async (req, res) => {
 // POST /api/driver/stop-event (Step 5E)
 router.post('/stop-event', async (req, res) => {
     try {
-        const { tripId, busId, collegeId, stopId, stopName, stopAddress, type, arrivalDocId } = req.body;
+        const { tripId, busId, collegeId, stopId, stopName, stopAddress, type, arrivalDocId, targetStudentIds } = req.body;
 
         if (!tripId || !busId || !collegeId || !stopId || !type) {
             return res.status(400).json({ success: false, message: 'Missing required fields' });
@@ -86,7 +86,7 @@ router.post('/stop-event', async (req, res) => {
         }
 
         // Await the promise — do not respond until FCM processes to avoid container suspension
-        await sendStopEventNotification(tripId, busId, collegeId, stopId, stopName || '', stopAddress || '', type, arrivalDocId || null)
+        await sendStopEventNotification(tripId, busId, collegeId, stopId, stopName || '', stopAddress || '', type, arrivalDocId || null, targetStudentIds || null)
             .catch(err => console.error('[StopEvent Route] Async error:', err.message));
 
         res.status(200).json({ success: true, message: 'Stop event processed' });

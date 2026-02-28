@@ -326,6 +326,22 @@ const startTrip = async (req, res) => {
         const userDoc = await db.collection('users').doc(req.user.id).get();
         const driverName = userDoc.exists ? userDoc.data().name : 'Unknown Driver';
 
+        // Fetch students assigned to this bus to map to stops for targeted skip notifications
+        const studentsSnapshot = await db.collection('students')
+            .where('collegeId', '==', req.collegeId)
+            .where('assignedBusId', '==', busId)
+            .get();
+
+        const stopToStudentMap = {};
+        studentsSnapshot.docs.forEach(doc => {
+            const data = doc.data();
+            const stopId = data.assignedStopId;
+            if (stopId) {
+                if (!stopToStudentMap[stopId]) stopToStudentMap[stopId] = [];
+                stopToStudentMap[stopId].push(doc.id);
+            }
+        });
+
         // Load route stops (ordered)
         const effectiveRouteId = routeId || busData.assignedRouteId || null;
         let stopsSnapshot = [];
@@ -356,7 +372,8 @@ const startTrip = async (req, res) => {
                 plannedTime: tripDirection === 'dropoff'
                     ? (stop.dropoffPlannedTime || '')
                     : (stop.pickupPlannedTime || ''),
-                enabled: stop.enabled !== false
+                enabled: stop.enabled !== false,
+                studentIds: stopToStudentMap[stop.stopId] || []
             }));
         }
 
