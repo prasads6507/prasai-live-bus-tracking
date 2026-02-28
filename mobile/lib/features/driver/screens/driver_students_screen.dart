@@ -36,7 +36,7 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
     _loadLocalAttendance();
   }
 
-  Future<void> _loadLocalAttendance() async {
+  Future<void> _loadLocalAttendance({String? forcedDirection}) async {
     final activeTripId = ref.read(activeTripIdProvider).value;
     final assignedBus = ref.read(assignedBusProvider).value;
     final profile = ref.read(userProfileProvider).value;
@@ -62,10 +62,19 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
     if (driverBusId != null) {
       try {
         final apiDS = await _buildApiDataSource();
-        final tripData = ref.read(tripProvider(activeTripId)).value;
-        final direction = tripData?['direction'] ?? 'pickup';
         
-        final remoteList = await apiDS.getTodayAttendance(driverBusId, direction);
+        // If forcedDirection is null, try to get from tripProvider
+        String? direction = forcedDirection;
+        if (direction == null) {
+          final tripData = ref.read(tripProvider(activeTripId)).value;
+          direction = tripData?['direction'];
+        }
+
+        // If we still don't have direction, we might need to wait for tripProvider
+        // But we'll fallback to 'pickup' for now, and the listener will re-trigger when tripData arrives.
+        final effectiveDirection = direction ?? 'pickup';
+        
+        final remoteList = await apiDS.getTodayAttendance(driverBusId, effectiveDirection);
         
         if (mounted && remoteList.isNotEmpty) {
           setState(() {
@@ -149,6 +158,17 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
             _loadLocalAttendance();
           }
         });
+
+        // Also listen for trip data (especially direction) to trigger re-sync if it arrived late
+        if (activeTripId != null) {
+          ref.listen(tripProvider(activeTripId), (previous, next) {
+            final prevDirection = previous?.value?['direction'];
+            final nextDirection = next.value?['direction'];
+            if (nextDirection != null && nextDirection != prevDirection) {
+              _loadLocalAttendance(forcedDirection: nextDirection);
+            }
+          });
+        }
 
         final activeTripId = ref.watch(activeTripIdProvider).value;
 
