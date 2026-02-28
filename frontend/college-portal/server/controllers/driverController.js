@@ -559,7 +559,8 @@ const historyUpload = async (req, res) => {
                     boardedNames.push(studentName);
                 }
 
-                const attendanceId = `${tripId}__${studentId}`;
+                const datePrefix = new Date().toISOString().split('T')[0];
+                const attendanceId = `${datePrefix}__${tripData.busId}__${direction}__${studentId}`;
                 const attendanceRef = db.collection('attendance').doc(attendanceId);
                 const attendanceData = {
                     tripId,
@@ -623,8 +624,13 @@ const historyUpload = async (req, res) => {
             pendingStudentDocs.forEach(doc => {
                 const studentId = doc.id;
                 const studentData = doc.data();
-                const attendanceId = `${tripId}__${studentId}`;
+                const datePrefix = new Date().toISOString().split('T')[0];
+                const attendanceId = `${datePrefix}__${tripData.busId}__${direction}__${studentId}`;
                 const attendanceRef = db.collection('attendance').doc(attendanceId);
+
+                // Only create if it doesn't exist or overwrite with not_boarded?
+                // Actually, if we are ending the trip, these are the students who DID NOT show up.
+                // We should record them as not_boarded if no record exists for them today yet.
                 nbBatch.set(attendanceRef, {
                     tripId,
                     studentId,
@@ -730,7 +736,8 @@ const markPickup = async (req, res) => {
         const studentDoc = await db.collection('students').doc(studentId).get();
         const studentName = studentDoc.exists ? studentDoc.data().name : 'Unknown Student';
 
-        const attendanceId = `${tripId}__${studentId}`;
+        const datePrefix = new Date().toISOString().split('T')[0];
+        const attendanceId = `${datePrefix}__${tripData.busId}__pickup__${studentId}`;
         const attendanceRef = db.collection('attendance').doc(attendanceId);
 
         const serverTimestamp = admin.firestore.FieldValue.serverTimestamp();
@@ -743,7 +750,7 @@ const markPickup = async (req, res) => {
             collegeId: req.collegeId,
             driverId: req.user.id,
             studentName,
-            direction: tripData.direction || 'pickup',
+            direction: 'pickup',
             pickedUpAt: serverTimestamp,
             status: 'picked_up',
             droppedOffAt: null,
