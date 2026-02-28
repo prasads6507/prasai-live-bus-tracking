@@ -55,11 +55,11 @@ const createStudent = async (req, res) => {
         const studentData = {
             studentId,
             collegeId,
-            name: String(name || ''),
-            registerNumber: String(registerNumber || ''),
-            rollNumber: String(rollNumber || ''),
-            email: String(email || ''),
-            phone: String(phone || ''),
+            name: String(name || '').trim(),
+            registerNumber: String(registerNumber || '').trim(),
+            rollNumber: String(rollNumber || '').trim(),
+            email: String(email || '').toLowerCase().trim(),
+            phone: String(phone || '').trim(),
             passwordHash: null, // Will be set on first login
             isFirstLogin: true,
             createdAt: new Date().toISOString()
@@ -130,11 +130,11 @@ const updateStudent = async (req, res) => {
         }
 
         const updates = {};
-        if (name) updates.name = String(name);
-        if (registerNumber) updates.registerNumber = String(registerNumber);
-        if (rollNumber !== undefined) updates.rollNumber = String(rollNumber);
-        if (email) updates.email = String(email);
-        if (phone !== undefined) updates.phone = String(phone);
+        if (name) updates.name = String(name).trim();
+        if (registerNumber) updates.registerNumber = String(registerNumber).trim();
+        if (rollNumber !== undefined) updates.rollNumber = String(rollNumber).trim();
+        if (email) updates.email = String(email).toLowerCase().trim();
+        if (phone !== undefined) updates.phone = String(phone).trim();
 
         await studentRef.update(updates);
 
@@ -222,11 +222,11 @@ const createBulkStudents = async (req, res) => {
                 const studentData = {
                     studentId,
                     collegeId,
-                    name: String(name || ''),
-                    registerNumber: String(registerNumber || ''),
-                    rollNumber: String(rollNumber || ''),
-                    email: String(email || ''),
-                    phone: String(phone || ''),
+                    name: String(name || '').trim(),
+                    registerNumber: String(registerNumber || '').trim(),
+                    rollNumber: String(rollNumber || '').trim(),
+                    email: String(email || '').toLowerCase().trim(),
+                    phone: String(phone || '').trim(),
                     passwordHash: null,
                     isFirstLogin: true,
                     createdAt: new Date().toISOString()

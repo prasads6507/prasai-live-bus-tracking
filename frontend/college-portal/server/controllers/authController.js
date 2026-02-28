@@ -79,8 +79,8 @@ const loginUser = async (req, res) => {
         // -------------------------
         // 2. Try Students Collection
         // -------------------------
-        // We need collegeId to scope student search if possible, or search globally if unique email
-        let studentsQuery = db.collection('students').where('email', '==', email);
+        const normalizedEmail = String(email || '').toLowerCase().trim();
+        let studentsQuery = db.collection('students').where('email', '==', normalizedEmail);
 
         // Optimization: prevent cross-college login if orgSlug is known
         if (orgSlug) {
@@ -115,8 +115,8 @@ const loginUser = async (req, res) => {
             let isFirstLogin = student.isFirstLogin || false;
 
             if (isFirstLogin || !student.passwordHash) {
-                // First login: password should match registerNumber
-                if (password === student.registerNumber) {
+                // First login: password should match registerNumber (harden with String/trim)
+                if (String(password).trim() === String(student.registerNumber || '').trim()) {
                     isValid = true;
                 }
             } else {
@@ -428,10 +428,11 @@ const studentLogin = async (req, res) => {
         }
 
         // 2. Find student by email and collegeId
+        const normalizedEmail = String(email || '').toLowerCase().trim();
         const studentsRef = db.collection('students');
         const snapshot = await studentsRef
             .where('collegeId', '==', collegeId)
-            .where('email', '==', email)
+            .where('email', '==', normalizedEmail)
             .limit(1)
             .get();
 
@@ -444,8 +445,8 @@ const studentLogin = async (req, res) => {
 
         // 3. Check password
         if (student.isFirstLogin || !student.passwordHash) {
-            // First login: password should match registerNumber
-            if (password !== student.registerNumber) {
+            // First login: password should match registerNumber (harden with String/trim)
+            if (String(password).trim() !== String(student.registerNumber || '').trim()) {
                 return res.status(401).json({ message: 'Invalid credentials. Use your Register Number as your initial password.' });
             }
             // Return token + flag for first login
