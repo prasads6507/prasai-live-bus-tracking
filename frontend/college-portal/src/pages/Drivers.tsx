@@ -191,8 +191,8 @@ const Drivers = () => {
     };
 
     const filteredDrivers = drivers.filter(driver =>
-        (driver.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (driver.email || '').toLowerCase().includes(searchQuery.toLowerCase())
+        String(driver.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        String(driver.email || '').toLowerCase().includes(searchQuery.toLowerCase())
     );
 
     return (

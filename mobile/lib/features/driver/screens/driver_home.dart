@@ -1196,7 +1196,7 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
                             const SizedBox(height: 4),
                             Text(
                               _nextStopName!,
-                              style: AppTypography.titleMedium?.copyWith(
+                              style: AppTypography.h2.copyWith(
                                 fontWeight: FontWeight.bold,
                                 color: AppColors.textPrimary,
                               ),

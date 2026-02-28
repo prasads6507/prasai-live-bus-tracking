@@ -171,11 +171,11 @@ const Students = () => {
             const jsonData = XLSX.utils.sheet_to_json(sheet);
 
             const mappedData = jsonData.map((row: any) => ({
-                name: row['Name'] || row['name'] || '',
-                registerNumber: row['Register Number'] || row['registerNumber'] || '',
-                rollNumber: row['Roll Number'] || row['rollNumber'] || '',
-                email: row['Email'] || row['email'] || '',
-                phone: row['Phone'] || row['phone'] || ''
+                name: String(row['Name'] || row['name'] || ''),
+                registerNumber: String(row['Register Number'] || row['registerNumber'] || ''),
+                rollNumber: String(row['Roll Number'] || row['rollNumber'] || ''),
+                email: String(row['Email'] || row['email'] || ''),
+                phone: String(row['Phone'] || row['phone'] || '')
             })).filter(s => s.name && s.registerNumber && s.email);
 
             if (mappedData.length === 0) {
@@ -226,9 +226,9 @@ const Students = () => {
     };
 
     const filteredStudents = students.filter(s =>
-        (s.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (s.email || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (s.registerNumber || '').toLowerCase().includes(searchQuery.toLowerCase())
+        (String(s.name || '')).toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (String(s.email || '')).toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (String(s.registerNumber || '')).toLowerCase().includes(searchQuery.toLowerCase())
     );
 
     return (

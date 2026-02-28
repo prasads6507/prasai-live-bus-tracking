@@ -160,8 +160,8 @@ const Buses = () => {
     };
 
     const filteredBuses = buses.filter(bus =>
-        bus.busNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        bus.plateNumber?.toLowerCase().includes(searchQuery.toLowerCase())
+        String(bus.busNumber || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        String(bus.plateNumber || '').toLowerCase().includes(searchQuery.toLowerCase())
     );
 
     if (loading) {

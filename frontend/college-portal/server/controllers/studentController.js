@@ -55,11 +55,11 @@ const createStudent = async (req, res) => {
         const studentData = {
             studentId,
             collegeId,
-            name,
-            registerNumber,
-            rollNumber: rollNumber || '',
-            email,
-            phone: phone || '',
+            name: String(name || ''),
+            registerNumber: String(registerNumber || ''),
+            rollNumber: String(rollNumber || ''),
+            email: String(email || ''),
+            phone: String(phone || ''),
             passwordHash: null, // Will be set on first login
             isFirstLogin: true,
             createdAt: new Date().toISOString()
@@ -130,11 +130,11 @@ const updateStudent = async (req, res) => {
         }
 
         const updates = {};
-        if (name) updates.name = name;
-        if (registerNumber) updates.registerNumber = registerNumber;
-        if (rollNumber !== undefined) updates.rollNumber = rollNumber;
-        if (email) updates.email = email;
-        if (phone !== undefined) updates.phone = phone;
+        if (name) updates.name = String(name);
+        if (registerNumber) updates.registerNumber = String(registerNumber);
+        if (rollNumber !== undefined) updates.rollNumber = String(rollNumber);
+        if (email) updates.email = String(email);
+        if (phone !== undefined) updates.phone = String(phone);
 
         await studentRef.update(updates);
 
@@ -222,11 +222,11 @@ const createBulkStudents = async (req, res) => {
                 const studentData = {
                     studentId,
                     collegeId,
-                    name,
-                    registerNumber,
-                    rollNumber: rollNumber || '',
-                    email,
-                    phone: phone || '',
+                    name: String(name || ''),
+                    registerNumber: String(registerNumber || ''),
+                    rollNumber: String(rollNumber || ''),
+                    email: String(email || ''),
+                    phone: String(phone || ''),
                     passwordHash: null,
                     isFirstLogin: true,
                     createdAt: new Date().toISOString()

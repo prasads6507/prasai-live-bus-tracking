@@ -359,7 +359,7 @@ const Routes = () => {
     };
 
     const filteredRoutes = routes.filter(route =>
-        route.routeName?.toLowerCase().includes(searchQuery.toLowerCase())
+        String(route.routeName || '').toLowerCase().includes(searchQuery.toLowerCase())
     );
 
     if (loading) {

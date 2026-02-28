@@ -49,8 +49,8 @@ export default function StudentAssignment() {
     };
 
     const filtered = students.filter(s =>
-        s.name?.toLowerCase().includes(search.toLowerCase()) ||
-        s.studentId?.toLowerCase().includes(search.toLowerCase())
+        String(s.name || '').toLowerCase().includes(search.toLowerCase()) ||
+        String(s.studentId || '').toLowerCase().includes(search.toLowerCase())
     );
 
     const toggleStudent = (id: string) => {

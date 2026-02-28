@@ -262,9 +262,9 @@ const StudentDashboard = () => {
         if (!searchQuery.trim()) return buses;
         const q = searchQuery.toLowerCase();
         return buses.filter(bus =>
-            bus.busNumber?.toLowerCase().includes(q) ||
-            bus.numberPlate?.toLowerCase().includes(q) ||
-            bus.driverName?.toLowerCase().includes(q)
+            String(bus.busNumber || '').toLowerCase().includes(q) ||
+            String(bus.numberPlate || '').toLowerCase().includes(q) ||
+            String(bus.driverName || '').toLowerCase().includes(q)
         );
     }, [buses, searchQuery]);
 

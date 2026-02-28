@@ -98,9 +98,9 @@ const BusStudents = () => {
                 !alreadyStagedIds.has(s._id) &&
                 !alreadyAssignedIds.has(s._id) &&
                 (
-                    (s.name || '').toLowerCase().includes(q) ||
-                    (s.email || '').toLowerCase().includes(q) ||
-                    (s.registerNumber || '').toLowerCase().includes(q)
+                    (String(s.name || '')).toLowerCase().includes(q) ||
+                    (String(s.email || '')).toLowerCase().includes(q) ||
+                    (String(s.registerNumber || '')).toLowerCase().includes(q)
                 )
             )
             .slice(0, 8);
