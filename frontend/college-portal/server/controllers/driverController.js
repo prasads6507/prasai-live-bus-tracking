@@ -880,33 +880,54 @@ const getTripAttendance = async (req, res) => {
 const getTodayAttendance = async (req, res) => {
     try {
         const { busId } = req.params;
-        const { direction } = req.query;
+        const { direction } = req.query; // pickup or dropoff
 
         if (!busId || !direction) {
             return res.status(400).json({ success: false, message: 'busId and direction are required' });
         }
 
-        // Calculate start and end of today in local time
-        const todayStart = new Date();
-        todayStart.setHours(0, 0, 0, 0);
-        const todayEnd = new Date();
-        todayEnd.setHours(23, 59, 59, 999);
+        const todayPrefix = new Date().toISOString().split('T')[0];
 
-        const startTimestamp = admin.firestore.Timestamp.fromDate(todayStart);
-        const endTimestamp = admin.firestore.Timestamp.fromDate(todayEnd);
-
-        // Note: Firestore doesn't support inequality filters on different fields,
-        // but since collegeId is equality and direction is equality, we can filter by date on createdAt.
+        // Fetch records for this bus. We filter in-memory to catch legacy docs 
+        // that might miss 'createdAt' or 'direction' fields but are from today.
         const attendanceSnapshot = await db.collection('attendance')
             .where('collegeId', '==', req.collegeId)
             .where('busId', '==', busId)
-            .where('direction', '==', direction)
-            .where('status', 'in', ['picked_up', 'dropped_off'])
-            .where('createdAt', '>=', startTimestamp)
-            .where('createdAt', '<=', endTimestamp)
             .get();
 
-        const studentIds = attendanceSnapshot.docs.map(doc => doc.data().studentId);
+        const studentIds = attendanceSnapshot.docs
+            .filter(doc => {
+                const data = doc.data();
+
+                // 1. Determine Date
+                const dateFromField = (
+                    data.pickedUpAt ||
+                    data.droppedOffAt ||
+                    data.createdAt ||
+                    data.updatedAt
+                );
+                let recordDate = '';
+                if (dateFromField) {
+                    const d = dateFromField.toDate ? dateFromField.toDate() : new Date(dateFromField);
+                    recordDate = d.toISOString().split('T')[0];
+                }
+
+                if (recordDate !== todayPrefix) return false;
+
+                // 2. Determine Direction
+                let recordDirection = data.direction;
+                if (!recordDirection) {
+                    // Infer from status if missing
+                    if (data.status === 'picked_up' || data.status === 'not_boarded') recordDirection = 'pickup';
+                    if (data.status === 'dropped_off' || data.status === 'not_dropped') recordDirection = 'dropoff';
+                }
+
+                if (recordDirection !== direction) return false;
+
+                // 3. Status Check
+                return ['picked_up', 'dropped_off'].includes(data.status);
+            })
+            .map(doc => doc.data().studentId);
 
         res.status(200).json({
             success: true,

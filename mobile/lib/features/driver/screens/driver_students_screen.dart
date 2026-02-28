@@ -26,6 +26,8 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
   
   // Local state for batch attendance (optimistic UI)
   Set<String> _localAttendedIds = {};
+  // IDs verified by backend for "today" - these will be locked/disabled
+  final Set<String> _lockedIds = {};
   // Track students currently being submitted to show loading state
   Set<String> _pendingIds = {};
   bool _isLoadingPrefs = true;
@@ -80,6 +82,8 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
           setState(() {
             // Merge remote with local to ensure we don't lose anything
             _localAttendedIds.addAll(remoteList);
+            // These are officially verified for today and should be locked
+            _lockedIds.addAll(remoteList);
           });
           // Update local cache too
           await _saveLocalAttendance(activeTripId);
@@ -330,6 +334,7 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
         final driverBusId = assignedBus?.id;
         final isOnOtherBus = student.assignedBusId != null && student.assignedBusId != driverBusId;
         final isAttended = _localAttendedIds.contains(student.id);
+        final isLocked = _lockedIds.contains(student.id);
         final isPending = _pendingIds.contains(student.id);
 
         return StudentItem(
@@ -337,12 +342,13 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
           isOnOtherBus: isOnOtherBus,
           busLabel: _getBusLabel(student.assignedBusId, busIdToNumber),
           isAttended: isAttended,
+          isLocked: isLocked,
           isPending: isPending,
           activeTripId: activeTripId,
           direction: direction,
           onAttendanceChanged: (val) => _onAttendanceChanged(student, val, direction, activeTripId!),
           onCall: () => _showCallDialog(student),
-          onTap: () => _showStudentDetails(student, busIdToNumber, activeTripId, direction, isAttended),
+          onTap: () => _showStudentDetails(student, busIdToNumber, activeTripId, direction, isAttended, isLocked),
           isMyBus: student.assignedBusId == driverBusId && driverBusId != null,
         );
       },
@@ -485,14 +491,12 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
   }
 
   void _showStudentDetails(UserProfile student, Map<String, String> busIdToNumber,
-      String? activeTripId, String direction, bool isAttended) {
+      String? activeTripId, String direction, bool isAttended, bool isLocked) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
-        // Use a local builder to ensure variables are captured correctly if needed, 
-        // though Dart closures usually handle this fine.
         return Container(
           padding: const EdgeInsets.all(24),
           decoration: const BoxDecoration(
@@ -543,7 +547,7 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        isAttended ? Icons.check_circle : Icons.pending,
+                        isLocked ? Icons.lock : (isAttended ? Icons.check_circle : Icons.pending),
                         size: 16,
                         color: isAttended
                             ? (direction == 'pickup' ? Colors.green : Colors.blue)
@@ -551,9 +555,11 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        isAttended
-                            ? (direction == 'pickup' ? 'Picked Up ✓' : 'Dropped Off ✓')
-                            : 'Pending',
+                        isLocked 
+                            ? 'Verified'
+                            : (isAttended
+                                ? (direction == 'pickup' ? 'Picked Up ✓' : 'Dropped Off ✓')
+                                : 'Pending'),
                         style: TextStyle(
                           color: isAttended
                               ? (direction == 'pickup' ? Colors.green : Colors.blue)
@@ -573,6 +579,14 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
                   onTap: () => _makePhoneCall(student.phone),
                 ),
               _detailRow(Icons.bus_alert, 'Assigned Bus', _getBusLabel(student.assignedBusId, busIdToNumber)),
+              if (isLocked)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    'This record is verified and locked for today.',
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600], fontStyle: FontStyle.italic),
+                  ),
+                ),
               const SizedBox(height: 32),
               Row(
                 children: [
@@ -594,15 +608,15 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: ElevatedButton.icon(
-                        onPressed: () {
+                        onPressed: isLocked ? null : () {
                           Navigator.pop(context);
                           _onAttendanceChanged(student, !isAttended, direction, activeTripId);
                         },
                         icon: Icon(isAttended ? Icons.remove_circle_outline : Icons.check_circle_outline),
                         label: Text(isAttended ? 'Remove Marking' : (direction == 'pickup' ? 'Pick Up' : 'Drop Off')),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: isAttended ? Colors.red[50] : (direction == 'pickup' ? Colors.green : Colors.blue),
-                          foregroundColor: isAttended ? Colors.red : Colors.white,
+                          backgroundColor: isLocked ? Colors.grey[300] : (isAttended ? Colors.red[50] : (direction == 'pickup' ? Colors.green : Colors.blue)),
+                          foregroundColor: isLocked ? Colors.grey[600] : (isAttended ? Colors.red : Colors.white),
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
@@ -676,6 +690,7 @@ class StudentItem extends StatelessWidget {
   final bool isMyBus;
   final String busLabel;
   final bool isAttended;
+  final bool isLocked;
   final bool isPending;
   final String? activeTripId;
   final String direction;
@@ -690,6 +705,7 @@ class StudentItem extends StatelessWidget {
     required this.isMyBus,
     required this.busLabel,
     required this.isAttended,
+    required this.isLocked,
     required this.isPending,
     this.activeTripId,
     required this.direction,
@@ -715,9 +731,17 @@ class StudentItem extends StatelessWidget {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              student.name ?? 'Unknown Student',
-              style: const TextStyle(fontWeight: FontWeight.bold),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    student.name ?? 'Unknown Student',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                if (isLocked)
+                  const Icon(Icons.lock_outline, size: 14, color: Colors.grey),
+              ],
             ),
             const SizedBox(height: 4),
             if (isOnOtherBus)
@@ -750,8 +774,8 @@ class StudentItem extends StatelessWidget {
                     width: 48, height: 48,
                     child: Checkbox(
                       value: isAttended,
-                      activeColor: direction == 'pickup' ? Colors.green : Colors.blue,
-                      onChanged: (val) => onAttendanceChanged(val ?? false),
+                      activeColor: isLocked ? Colors.grey : (direction == 'pickup' ? Colors.green : Colors.blue),
+                      onChanged: isLocked ? null : (val) => onAttendanceChanged(val ?? false),
                     ),
                   ))
             : SizedBox(
