@@ -809,6 +809,8 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
           }
         }
       });
+      // Request immediate state replay from background isolate
+      service.invoke('request_update');
     }
   }
 

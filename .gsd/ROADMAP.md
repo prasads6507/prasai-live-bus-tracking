@@ -1,0 +1,30 @@
+# Roadmap: Bannu Bus Application
+
+## Phase 1: Stabilization & Bug Extraction (Completed)
+- **Goal**: Resolve all high-priority UX gaps and notification latencies.
+- **Tasks**:
+  - [x] Fix 20s notification delay.
+  - [x] Fix Android 16 background service crashes.
+  - [x] **Fix Driver Dashboard metrics reset**.
+  - [x] **Implement Instant Boarding Notifications for parents**.
+  - [x] Optimize Student Tracking screen stops list.
+
+## Phase 1.1: Notification Refinement (Completed)
+- **Goal**: Consolidate alerts and ensure instant boarding notifications.
+- **Tasks**:
+  - [x] Consolidate trip-end alerts in `sendTripEndedNotification`.
+  - [x] Remove redundant alerts from `historyUpload`.
+  - [x] Ensure backend reliability on Vercel (Await FCM).
+
+## Phase 2: Analytics & Reporting
+- **Goal**: Provide admins with actionable data from the tracks and attendance.
+- **Tasks**:
+  - [ ] Implement Backend Trip Report generation.
+  - [ ] Create Frontend Dashboard visualizations.
+  - [ ] Export student attendance logs to Excel.
+
+## Phase 3: UI Polishing & Optimization
+- **Goal**: Full transition to the "Deep Midnight Glassmorphism" theme.
+- **Tasks**:
+  - [ ] Update remaining mobile widgets to the new theme.
+  - [ ] Optimize map rendering for low-end devices.

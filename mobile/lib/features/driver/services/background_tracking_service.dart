@@ -43,6 +43,14 @@ void onStart(ServiceInstance service) async {
     
     // 2. Setup service commands
     StreamSubscription<Position>? posSubscription;
+    Map<String, dynamic>? lastUpdateData;
+
+    service.on('request_update').listen((event) async {
+      debugPrint("[Background] request_update received. Replaying state...");
+      if (lastUpdateData != null) {
+        service.invoke('update', lastUpdateData);
+      }
+    });
 
     service.on('stopService').listen((event) async {
       debugPrint("[Background] stopService received. Cleaning up...");
@@ -197,7 +205,8 @@ void onStart(ServiceInstance service) async {
         
         // G. Send to Main Isolate for UI feedback (if running)
         debugPrint("[Background] Invoking update event: lat=${position.latitude}, lng=${position.longitude}, status=$newStatus");
-        service.invoke('update', {
+        
+        lastUpdateData = {
           "lat": position.latitude,
           "lng": position.longitude,
           "speed": smoothedSpeedMph / 2.23694, // Send m/s back to UI for consistency
@@ -205,7 +214,9 @@ void onStart(ServiceInstance service) async {
           "heading": position.heading,
           "status": newStatus,
           "mode": newMode,
-        });
+        };
+        
+        service.invoke('update', lastUpdateData);
       } catch (e) {
         debugPrint("[Background] Position callback error (non-fatal): $e");
       }

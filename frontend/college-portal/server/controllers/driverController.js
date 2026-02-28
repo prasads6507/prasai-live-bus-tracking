@@ -274,8 +274,8 @@ const endTrip = async (req, res) => {
         await batch.commit();
 
 
-        // Notify students whose favorite bus this was
-        sendTripEndedNotification(tripId, busId, tripData.collegeId || req.collegeId)
+        // Notify students whose favorite bus this was (Awaited for Vercel reliability)
+        await sendTripEndedNotification(tripId, busId, tripData.collegeId || req.collegeId)
             .catch(err => console.error('[endTrip] Trip ended notification failed:', err));
 
         res.status(200).json({ success: true, message: 'Trip ended successfully' });
@@ -615,28 +615,8 @@ const historyUpload = async (req, res) => {
                 }
             });
 
-            // FCM: notify students who did NOT board / were not dropped off
-            if (messaging && pendingTokens.length > 0) {
-                const pendingLabel = isPickup ? 'Not Boarded the Bus Today' : 'Not Dropped Off Today';
-                for (let t = 0; t < pendingTokens.length; t += 500) {
-                    const tokenBatch = pendingTokens.slice(t, t + 500);
-                    try {
-                        await messaging.sendEachForMulticast({
-                            notification: {
-                                title: '⚠️ Attendance Alert',
-                                body: `${pendingLabel} — Bus ${busNumber}`
-                            },
-                            data: { tripId: tripId || '', busId: tripData.busId || '', type: 'STUDENT_NOT_BOARDED' },
-                            android: { notification: { channelId: 'bus_events', priority: 'high', sound: 'default' } },
-                            apns: { payload: { aps: { sound: 'default', badge: 1 } } },
-                            tokens: tokenBatch
-                        });
-                    } catch (fcmErr) {
-                        console.error('[historyUpload] FCM pending error:', fcmErr.message);
-                    }
-                }
-                console.log(`[historyUpload] Sent absent notification to ${pendingStudentDocs.length} students`);
-            }
+            // FCM logic removed — consolidated into sendTripEndedNotification
+            console.log(`[historyUpload] Processing records for ${pendingStudentDocs.length} absent students (Notification deferred to endTrip)`);
 
             // Write not_boarded / not_dropped records for absent students
             const nbBatch = db.batch();
@@ -781,8 +761,8 @@ const markPickup = async (req, res) => {
 
         res.status(200).json({ success: true, attendance: attendanceData });
 
-        // Immediate notification
-        sendStudentAttendanceNotification({
+        // Immediate notification (Awaited for Vercel reliability)
+        await sendStudentAttendanceNotification({
             studentId,
             busId: tripData.busId,
             direction: 'pickup',
@@ -847,8 +827,8 @@ const markDropoff = async (req, res) => {
 
         res.status(200).json({ success: true, message: 'Student dropped off' });
 
-        // Immediate FCM notification to the student
-        sendStudentAttendanceNotification({
+        // Immediate FCM notification to the student (Awaited for Vercel reliability)
+        await sendStudentAttendanceNotification({
             studentId,
             busId: tripData.busId,
             direction: 'dropoff',

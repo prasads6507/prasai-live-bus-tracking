@@ -553,13 +553,30 @@ const sendTripEndedNotification = async (tripId, busId, collegeId) => {
             return;
         }
 
-        const tokens = [];
-        const studentUpdates = [];
+        const title = 'Trip Completed 🏁';
+        const body = `Bus ${busNumber} has completed its trip for today.`;
+        const absenteeTitle = '⚠️ Attendance Alert';
+        const absenteeBody = tripData.direction === 'pickup'
+            ? `Not Boarded the Bus Today — Bus ${busNumber}`
+            : `Not Dropped Off Today — Bus ${busNumber}`;
+
+        const tokensNormal = [];
+        const tokensAbsentee = [];
 
         studentDocsMap.forEach((doc, studentId) => {
             const data = doc.data();
             const token = data.fcmToken;
-            if (token && typeof token === 'string' && token.length > 10) tokens.push(token);
+            if (!token || typeof token !== 'string' || token.length <= 10) return;
+
+            // ABSENTEE: Assigned students who were NOT in the attended list
+            const isAssigned = data.assignedBusId === busId;
+            const isAbsent = !attendedStudents.includes(studentId);
+
+            if (isAssigned && isAbsent) {
+                tokensAbsentee.push(token);
+            } else {
+                tokensNormal.push(token);
+            }
 
             // SILENT UPDATE: Clear student's active bus info when the trip ends
             studentUpdates.push({
@@ -581,32 +598,31 @@ const sendTripEndedNotification = async (tripId, busId, collegeId) => {
             await updateBatch.commit();
         }
 
-        if (tokens.length === 0) {
-            console.log(`[TripEnded] No valid FCM tokens for bus ${busId}`);
-            return;
-        }
-
-        const title = 'Trip Completed 🏁';
-        const body = `Bus ${busNumber} has completed its trip for today.`;
-
-        for (let i = 0; i < tokens.length; i += 500) {
-            const batch = tokens.slice(i, i + 500);
-            try {
-                const msg = {
-                    notification: { title, body },
-                    data: { tripId: tripId || '', busId: busId || '', type: 'TRIP_ENDED' },
-                    android: { priority: 'high', notification: { channelId: 'bus_events', sound: 'default' } },
-                    apns: { payload: { aps: { sound: 'default', badge: 1 } } },
-                    tokens: batch,
-                };
-                const result = await messaging.sendEachForMulticast(msg);
-                console.log(`[TripEnded] FCM batch sent=${result.successCount} failed=${result.failureCount}`);
-                // Fire and forget cleanup
-                cleanupStaleTokens(result, batch, db, admin).catch(err => console.error('[FCM Cleanup]', err.message));
-            } catch (fcmErr) {
-                console.error('[TripEnded] FCM batch error:', fcmErr.message);
+        const sendBatch = async (tokens, t, b) => {
+            if (tokens.length === 0) return;
+            for (let i = 0; i < tokens.length; i += 500) {
+                const batch = tokens.slice(i, i + 500);
+                try {
+                    const msg = {
+                        notification: { title: t, body: b },
+                        data: { tripId: tripId || '', busId: busId || '', type: 'TRIP_ENDED' },
+                        android: { priority: 'high', notification: { channelId: 'bus_events', sound: 'default' } },
+                        apns: { payload: { aps: { sound: 'default', badge: 1 } } },
+                        tokens: batch,
+                    };
+                    const result = await messaging.sendEachForMulticast(msg);
+                    console.log(`[TripEnded] FCM batch (${t}) sent=${result.successCount} failed=${result.failureCount}`);
+                    cleanupStaleTokens(result, batch, db, admin).catch(err => console.error('[FCM Cleanup]', err.message));
+                } catch (fcmErr) {
+                    console.error('[TripEnded] FCM batch error:', fcmErr.message);
+                }
             }
-        }
+        };
+
+        await Promise.all([
+            sendBatch(tokensAbsentee, absenteeTitle, absenteeBody),
+            sendBatch(tokensNormal, title, body)
+        ]);
 
         // Log to notifications collection
         await db.collection('notifications').add({
