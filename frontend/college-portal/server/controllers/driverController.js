@@ -483,45 +483,7 @@ const saveTripHistory = async (req, res) => {
     }
 };
 
-// Helper to send student attendance notification
-const sendStudentAttendanceNotification = async ({ studentId, busId, direction, isChecked, busNumber, tripId }) => {
-    if (!messaging) return;
 
-    try {
-        const studentDoc = await db.collection('students').doc(studentId).get();
-        if (!studentDoc.exists) return;
-
-        const studentData = studentDoc.data();
-        if (!studentData.fcmToken || typeof studentData.fcmToken !== 'string' || studentData.fcmToken.length < 10) {
-            return;
-        }
-
-        const isPickup = direction !== 'dropoff';
-        let title = '';
-        let body = '';
-        const name = studentData.name || 'Student';
-        const busStr = busNumber || busId;
-
-        if (isChecked) {
-            title = isPickup ? `✅ ${name} Boarded` : `✅ ${name} Dropped Off`;
-            body = isPickup ? `Verified: ${name} safely boarded Bus ${busStr}.` : `Verified: ${name} safely dropped off from Bus ${busStr}.`;
-        } else {
-            title = isPickup ? `⚠️ Boarding Cancelled` : `⚠️ Drop Off Cancelled`;
-            body = isPickup ? `Boarding mark for ${name} on Bus ${busStr} was canceled.` : `Drop off mark for ${name} on Bus ${busStr} was canceled.`;
-        }
-
-        await messaging.send({
-            notification: { title, body },
-            data: { tripId: tripId || '', busId, type: isChecked ? (isPickup ? 'STUDENT_BOARDED' : 'STUDENT_DROPPED') : 'STUDENT_UNCHECKED' },
-            android: { priority: 'high', notification: { channelId: 'bus_events', sound: 'default' } },
-            apns: { payload: { aps: { sound: 'default', badge: 1 } } },
-            token: studentData.fcmToken
-        });
-        console.log(`[sendStudentAttendanceNotification] Sent real-time FCM for ${name} (${title})`);
-    } catch (error) {
-        console.error('Error in sendStudentAttendanceNotification:', error);
-    }
-};
 
 // @desc    Upload complete trip history at trip end (replaces per-second writes)
 // @route   POST /api/driver/trips/:tripId/history-upload
