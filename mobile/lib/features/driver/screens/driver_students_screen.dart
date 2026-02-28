@@ -38,18 +38,50 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
 
   Future<void> _loadLocalAttendance() async {
     final activeTripId = ref.read(activeTripIdProvider).value;
+    final assignedBus = ref.read(assignedBusProvider).value;
+    final profile = ref.read(userProfileProvider).value;
+    
     if (activeTripId == null) {
       if (mounted) setState(() => _isLoadingPrefs = false);
       return;
     }
 
+    final driverBusId = assignedBus?.id ?? profile?.assignedBusId;
+
+    // 1. Load from SharedPreferences (local cache/offline safety)
     final prefs = await SharedPreferences.getInstance();
-    final list = prefs.getStringList('shared_attendance_$activeTripId') ?? [];
+    final localList = prefs.getStringList('shared_attendance_$activeTripId') ?? [];
+    
     if (mounted) {
       setState(() {
-        _localAttendedIds = list.toSet();
-        _isLoadingPrefs = false;
+        _localAttendedIds = localList.toSet();
       });
+    }
+
+    // 2. Load from Backend (source of truth for persistence across trip restarts)
+    if (driverBusId != null) {
+      try {
+        final apiDS = await _buildApiDataSource();
+        final tripData = ref.read(tripProvider(activeTripId)).value;
+        final direction = tripData?['direction'] ?? 'pickup';
+        
+        final remoteList = await apiDS.getTodayAttendance(driverBusId, direction);
+        
+        if (mounted && remoteList.isNotEmpty) {
+          setState(() {
+            // Merge remote with local to ensure we don't lose anything
+            _localAttendedIds.addAll(remoteList);
+          });
+          // Update local cache too
+          await _saveLocalAttendance(activeTripId);
+        }
+      } catch (e) {
+        debugPrint('[DriverStudentsScreen] Remote sync failed: $e');
+      }
+    }
+
+    if (mounted) {
+      setState(() => _isLoadingPrefs = false);
     }
   }
 

@@ -227,5 +227,22 @@ class ApiDataSource {
       debugPrint('[ApiDataSource] Failed to notify student: $e');
     }
   }
+
+  /// Fetch student IDs that have already been marked for today for a specific bus and direction
+  Future<List<String>> getTodayAttendance(String busId, String direction) async {
+    try {
+      final response = await _dio.get(
+        '${Env.apiUrl}/api/driver/buses/$busId/attendance/today',
+        queryParameters: {'direction': direction},
+      );
+      if (response.data != null && response.data['data'] != null) {
+        return List<String>.from(response.data['data']);
+      }
+      return [];
+    } catch (e) {
+      debugPrint('[ApiDataSource] getTodayAttendance failed: $e');
+      return [];
+    }
+  }
 }
 

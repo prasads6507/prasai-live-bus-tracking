@@ -866,6 +866,47 @@ const getTripAttendance = async (req, res) => {
     }
 };
 
+// @desc    Get today's total attendance for a bus and direction
+// @route   GET /api/driver/buses/:busId/attendance/today
+// @access  Private (Driver)
+const getTodayAttendance = async (req, res) => {
+    try {
+        const { busId } = req.params;
+        const { direction } = req.query;
+
+        if (!busId || !direction) {
+            return res.status(400).json({ success: false, message: 'busId and direction are required' });
+        }
+
+        // Calculate start and end of today in local time (server is usually UTC, but we want college local)
+        // For simplicity, we use the server's current date range.
+        const now = new Date();
+        const startOfToday = new Date(now.setHours(0, 0, 0, 0)).toISOString();
+        const endOfToday = new Date(now.setHours(23, 59, 59, 999)).toISOString();
+
+        // Note: Firestore doesn't support inequality filters on different fields,
+        // but since collegeId is equality and direction is equality, we can filter by date on createdAt.
+        const attendanceSnapshot = await db.collection('attendance')
+            .where('collegeId', '==', req.collegeId)
+            .where('busId', '==', busId)
+            .where('direction', '==', direction)
+            .where('status', 'in', ['picked_up', 'dropped_off'])
+            .where('createdAt', '>=', startOfToday)
+            .where('createdAt', '<=', endOfToday)
+            .get();
+
+        const studentIds = attendanceSnapshot.docs.map(doc => doc.data().studentId);
+
+        res.status(200).json({
+            success: true,
+            data: studentIds
+        });
+    } catch (error) {
+        console.error('Error fetching today attendance:', error);
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+    }
+};
+
 // @desc    Get students assigned to a specific bus (for drivers)
 // @route   GET /api/driver/buses/:busId/students
 // @access  Private (Driver)
@@ -929,6 +970,7 @@ module.exports = {
     markDropoff,
     getTripAttendance,
     getBusStudents,
+    getTodayAttendance,
     notifyStudentAttendance
 };
 
