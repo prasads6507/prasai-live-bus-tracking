@@ -16,6 +16,14 @@
   - [x] Remove redundant alerts from `historyUpload`.
   - [x] Ensure backend reliability on Vercel (Await FCM).
 
+## Phase 1.2: Manual Skip Stop (Completed)
+- **Goal**: Transition from automatic to manual driver-controlled stop skipping.
+- **Tasks**:
+  - [x] Disable automatic skip logic in background service.
+  - [x] Implement manual 'skip_stop' isolate event.
+  - [x] Add "Next Stop" UI card with manual Skip button.
+  - [x] Implement confirmation dialog for skipping.
+
 ## Phase 2: Analytics & Reporting
 - **Goal**: Provide admins with actionable data from the tracks and attendance.
 - **Tasks**:

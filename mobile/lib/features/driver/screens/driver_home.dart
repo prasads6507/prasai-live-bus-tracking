@@ -776,6 +776,8 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
   BusRoute? _currentRoute; 
   LocationPoint? _lastRecordedPoint;
   String _lastUpdate = "--:--:--";
+  String? _nextStopId;
+  String? _nextStopName;
   
   @override
   void initState() {
@@ -795,6 +797,8 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
               _currentSpeed = (data['speedMph'] as num? ?? 0.0).toDouble();
               _lastUpdate = TimeOfDay.now().format(context);
               _statusText = data['status'] as String? ?? "ON_ROUTE";
+              _nextStopId = data['nextStopId'] as String?;
+              _nextStopName = data['nextStopName'] as String?;
               _lastRecordedPoint = LocationPoint(
                 latitude:  (data['lat'] as num).toDouble(),
                 longitude: (data['lng'] as num).toDouble(),
@@ -1015,6 +1019,42 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
    }
   } // end _startTracking
 
+  void _handleSkipStop() async {
+    if (_nextStopId == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Skip Stop?"),
+        content: Text("Are you sure you want to skip \"${_nextStopName ?? 'this stop'}\"? You don't do it automatically, notifications will be sent to students that the stop has been skipped."),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("CANCEL"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("SKIP STOP", style: TextStyle(color: AppColors.error)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      final service = FlutterBackgroundService();
+      service.invoke('skip_stop', {'stopId': _nextStopId});
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Skipped: ${_nextStopName ?? 'Stop'}"),
+            backgroundColor: AppColors.accent,
+          ),
+        );
+      }
+    }
+  }
+
   void _stopTracking() async {
     await TrackingLifecycleManager.stopTrackingAndClearContext();
     
@@ -1118,6 +1158,73 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
                 licensePlate: bus.plateNumber,
                 routeName: routeName,
               ),
+              const SizedBox(height: 16),
+              
+              // NEXT STOP UI (Phase 1.2)
+              if (isTripActive && _nextStopName != null) ...[
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.divider.withOpacity(0.5)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: AppColors.accent.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.location_on_rounded, color: AppColors.accent, size: 24),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'NEXT STOP',
+                              style: AppTypography.caption.copyWith(
+                                color: AppColors.textTertiary,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.0,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              _nextStopName!,
+                              style: AppTypography.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: _handleSkipStop,
+                        icon: const Icon(Icons.fast_forward_rounded, color: AppColors.error, size: 20),
+                        label: Text(
+                          'SKIP',
+                          style: TextStyle(
+                            color: AppColors.error,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        style: TextButton.styleFrom(
+                          backgroundColor: AppColors.error.withOpacity(0.08),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 32),
+              ],
               if (!isTripActive) ...[
                 const SizedBox(height: 8),
                 TextButton.icon(

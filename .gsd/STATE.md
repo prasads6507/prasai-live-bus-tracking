@@ -3,7 +3,7 @@
 ## Position
 ## Position
 - **Current Phase**: Phase 2 (Analytics & Reporting)
-- **Status**: Ready. Phase 1 & 1.1 complete. Notifications consolidated and redundant alerts removed. Background state replay verified.
+- **Status**: Ready. Phase 1, 1.1 & 1.2 complete. Manual Skip Stop implemented. Notifications consolidated. Background state replay verified.
 
 ## Decisions
 - **FCM Strategy**: Use `sendEachForMulticast` with decoupled token cleanup for maximum speed.

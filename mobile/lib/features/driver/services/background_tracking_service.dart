@@ -214,6 +214,7 @@ void onStart(ServiceInstance service) async {
           "heading": position.heading,
           "status": newStatus,
           "mode": newMode,
+          'nextStopName': nextStopName, // Added for UI (Phase 1.2)
         };
         
         service.invoke('update', lastUpdateData);
@@ -222,6 +223,11 @@ void onStart(ServiceInstance service) async {
       }
     }, onError: (e) {
       debugPrint("[Background] Stream error: $e");
+    });
+
+    // 7. Event Listeners for UI commands
+    service.on('skip_stop').listen((event) {
+      BackgroundTrackingService._handleManualSkip(service, event);
     });
   } catch (e) {
     debugPrint("[Background] CRITICAL onStart error: $e");
@@ -380,64 +386,118 @@ class BackgroundTrackingService {
           (followingStop['lng'] as num).toDouble()
         );
 
-        // Robust Skip: If we are closer to the FOLLOWING stop and have significantly left the CURRENT stop area
+        // Robust Skip: DISABLED AUTO-SKIP (User Request Phase 1.2)
         if (distToFollowingM < distToCurrentM && distToCurrentM > 500) {
-          final batch = db.batch();
-          
-          final skippedIds = List<String>.from(progress['skippedStopIds'] ?? []);
-          if (!skippedIds.contains(currentStopId)) {
-            skippedIds.add(currentStopId);
-            
-            final newIndex = currentIndex + 1;
-            
-            // 1. Update Trip Progress
-            batch.update(tripRef, {
-              'stopProgress.currentIndex': newIndex,
-              'stopProgress.skippedStopIds': skippedIds,
-            });
-
-            // 2. Trigger Skip Event for Notifications (Firestore fallback)
-            final notifRef = db.collection('stopArrivals').doc();
-            batch.set(notifRef, {
-              'tripId': tripId,
-              'busId': busId,
-              'collegeId': collegeId,
-              'stopId': currentStopId,
-              'stopName': stops[currentIndex]['name'] ?? 'Stop',
-              'type': 'SKIPPED',
-              'timestamp': DateTime.now().toIso8601String(),
-              'processed': true, // Mark true because we will also call Node API
-            });
-
-            // 3. Update Bus Status
-            batch.update(db.collection('buses').doc(busId), {
-              'nextStopId': stops[newIndex]['stopId'],
-              'currentStatus': 'ON_ROUTE',
-              'trackingMode': 'FAR',
-            });
-
-            // 4. Trigger Server FCM (Step 5F) UNCONDITIONALLY BEFORE BATCH COMMIT
-            _notifyServer(tripId, busId, collegeId, currentStopId, "SKIPPED", 
-              stopName: stops[currentIndex]['name'],
-              arrivalDocId: notifRef.id,
-              prefs: prefs
-            );
-
-            await batch.commit();
-
-            // Cache NEXT-NEXT stop
-            final nextStop = stops[newIndex] as Map<String, dynamic>;
-            await prefs.setDouble('next_stop_lat', (nextStop['lat'] as num).toDouble());
-            await prefs.setDouble('next_stop_lng', (nextStop['lng'] as num).toDouble());
-            await prefs.setDouble('next_stop_radius', (nextStop['radiusM'] as num?)?.toDouble() ?? 100.0);
-            await prefs.setString('next_stop_id', nextStop['stopId'] as String);
-            await prefs.setString('next_stop_name', (nextStop['name'] as String?) ?? 'Stop');
-            await prefs.setBool('has_arrived_current', false);
-          }
+           debugPrint("[Background] AUTO-SKIP DETECTED for $currentStopId but MANUAL SKIP REQUIRED.");
+           // We do nothing here now — waiting for manual driver trigger via UI
         }
       }
     } catch (e) {
       debugPrint("[Background] CheckForSkip error: $e");
+    }
+  }
+
+  // MANUAL SKIP IMPLEMENTATION (Phase 1.2)
+  static Future<void> _handleManualSkip(ServiceInstance service, Map<String, dynamic>? params) async {
+    if (params == null) return;
+    
+    final stopId = params['stopId'] as String?;
+    if (stopId == null) return;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final collegeId = prefs.getString('track_college_id');
+      final busId = prefs.getString('track_bus_id');
+      final tripId = prefs.getString('track_trip_id');
+
+      if (collegeId == null || busId == null || tripId == null) {
+        debugPrint("[Background] Skip failed: missing context");
+        return;
+      }
+
+      final db = FirebaseFirestore.instance;
+      final tripRef = db.collection('trips').doc(tripId);
+      final tripDoc = await tripRef.get();
+      if (!tripDoc.exists) return;
+
+      final data = tripDoc.data()!;
+      final progress = data['stopProgress'] as Map<String, dynamic>? ?? {};
+      final currentIndex = (progress['currentIndex'] as num?)?.toInt() ?? 0;
+      final stops = (data['stopsSnapshot'] as List<dynamic>?) ?? [];
+
+      // Verify the stopId matches the CURRENT stop in progress
+      if (stops[currentIndex]['stopId'] != stopId) {
+        debugPrint("[Background] Skip mismatch: targeted $stopId, currently at ${stops[currentIndex]['stopId']}");
+        return;
+      }
+
+      if (currentIndex + 1 < stops.length) {
+        final batch = db.batch();
+        final skippedIds = List<String>.from(progress['skippedStopIds'] ?? []);
+        
+        if (!skippedIds.contains(stopId)) {
+          skippedIds.add(stopId);
+          final newIndex = currentIndex + 1;
+          final nextStop = stops[newIndex] as Map<String, dynamic>;
+
+          // 1. Update Trip Progress
+          batch.update(tripRef, {
+            'stopProgress.currentIndex': newIndex,
+            'stopProgress.skippedStopIds': skippedIds,
+          });
+
+          // 2. Trigger Skip Event for Notifications
+          final notifRef = db.collection('stopArrivals').doc();
+          batch.set(notifRef, {
+            'tripId': tripId,
+            'busId': busId,
+            'collegeId': collegeId,
+            'stopId': stopId,
+            'stopName': stops[currentIndex]['name'] ?? 'Stop',
+            'type': 'SKIPPED',
+            'timestamp': DateTime.now().toIso8601String(),
+            'processed': true,
+          });
+
+          // 3. Update Bus Status
+          batch.update(db.collection('buses').doc(busId), {
+            'nextStopId': nextStop['stopId'],
+            'currentStatus': 'ON_ROUTE',
+          });
+
+          // 4. Trigger Server FCM
+          _notifyServer(tripId, busId, collegeId, stopId, "SKIPPED", 
+            stopName: stops[currentIndex]['name'],
+            arrivalDocId: notifRef.id,
+            prefs: prefs
+          );
+
+          await batch.commit();
+
+          // 5. Update Local Cache for Isolate
+          await prefs.setDouble('next_stop_lat', (nextStop['lat'] as num).toDouble());
+          await prefs.setDouble('next_stop_lng', (nextStop['lng'] as num).toDouble());
+          await prefs.setDouble('next_stop_radius', (nextStop['radiusM'] as num?)?.toDouble() ?? 100.0);
+          await prefs.setString('next_stop_id', nextStop['stopId'] as String);
+          await prefs.setString('next_stop_name', (nextStop['name'] as String?) ?? 'Stop');
+          await prefs.setBool('has_arrived_current', false);
+
+          debugPrint("[Background] MANUAL SKIP SUCCESS: $stopId -> ${nextStop['stopId']}");
+          
+          // Force a UI update immediately
+          service.invoke('update', {
+            'status': 'ON_ROUTE',
+            'lat': prefs.getDouble('last_lat'),
+            'lng': prefs.getDouble('last_lng'),
+            'nextStopId': nextStop['stopId'],
+            'nextStopName': nextStop['name'],
+          });
+        }
+      } else {
+        debugPrint("[Background] Cannot skip last stop.");
+      }
+    } catch (e) {
+      debugPrint("[Background] Manual skip error: $e");
     }
   }
 
