@@ -78,15 +78,23 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
         
         final remoteList = await apiDS.getTodayAttendance(driverBusId, effectiveDirection);
         
-        if (mounted && remoteList.isNotEmpty) {
+        if (mounted) {
           setState(() {
-            // Merge remote with local to ensure we don't lose anything
-            _localAttendedIds.addAll(remoteList);
-            // These are officially verified for today and should be locked
-            _lockedIds.addAll(remoteList);
+            // CRITICAL FIX: Clear previously locked IDs for other directions 
+            // before populating with verified IDs for the current direction.
+            _lockedIds.clear();
+            
+            if (remoteList.isNotEmpty) {
+              // Merge remote with local to ensure we don't lose anything
+              _localAttendedIds.addAll(remoteList);
+              // These are officially verified for the CURRENT direction and should be locked
+              _lockedIds.addAll(remoteList);
+            }
           });
           // Update local cache too
-          await _saveLocalAttendance(activeTripId);
+          if (remoteList.isNotEmpty) {
+            await _saveLocalAttendance(activeTripId);
+          }
         }
       } catch (e) {
         debugPrint('[DriverStudentsScreen] Remote sync failed: $e');
