@@ -30,6 +30,7 @@
   - [ ] Implement Backend Trip Report generation.
   - [ ] Create Frontend Dashboard visualizations.
   - [ ] Export student attendance logs to Excel.
+  - [ ] Implement Bulk Delete for Attendance Records in Admin Portal.
 
 ## Phase 3: UI Polishing & Optimization
 - **Goal**: Full transition to the "Deep Midnight Glassmorphism" theme.

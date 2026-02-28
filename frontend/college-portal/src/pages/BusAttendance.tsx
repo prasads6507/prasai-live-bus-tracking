@@ -15,9 +15,11 @@ import {
     UserX,
     Clock,
     ChevronRight,
+    Trash2,
+    AlertTriangle,
 } from 'lucide-react';
 import Layout from '../components/Layout';
-import { api, getAttendance, getBuses, validateSlug } from '../services/api';
+import { api, getAttendance, getBuses, validateSlug, bulkDeleteAttendance } from '../services/api';
 import { format, parseISO } from 'date-fns';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -84,6 +86,11 @@ const BusAttendance = () => {
     // View state: 'list' = grouped summary, 'detail' = drill-down
     const [view, setView] = useState<'list' | 'detail'>('list');
     const [selectedGroup, setSelectedGroup] = useState<AttendanceGroup | null>(null);
+
+    // Selection state for bulk actions
+    const [selectedIds, setSelectedIds] = useState<string[]>([]);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
     // ── Data fetching ──────────────────────────────────────────────────────────
 
@@ -201,7 +208,61 @@ const BusAttendance = () => {
     const backToList = () => {
         setView('list');
         setSelectedGroup(null);
+        setSelectedIds([]);
     };
+
+    // ── Bulk Actions ───────────────────────────────────────────────────────────
+
+    const toggleSelectAll = () => {
+        if (!selectedGroup) return;
+        if (selectedIds.length === selectedGroup.records.length) {
+            setSelectedIds([]);
+        } else {
+            setSelectedIds(selectedGroup.records.map((r) => r.id));
+        }
+    };
+
+    const toggleSelect = (id: string) => {
+        setSelectedIds((prev) =>
+            prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+        );
+    };
+
+    const handleBulkDelete = async () => {
+        if (selectedIds.length === 0) return;
+        setIsDeleting(true);
+        try {
+            await bulkDeleteAttendance(selectedIds);
+            // Refresh data
+            await fetchData();
+            // Reset selection
+            setSelectedIds([]);
+            setShowDeleteConfirm(false);
+            // If in detail view, we need to update the selectedGroup too
+            if (view === 'detail' && selectedGroup) {
+                // Relies on fetchData updating 'attendance' state, 
+                // but selectedGroup is a separate state. Let's fix that.
+            }
+        } catch (error) {
+            console.error('Bulk delete failed:', error);
+            alert('Failed to delete some records. Please try again.');
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+
+    // Fix: Update selectedGroup when attendance state changes if in detail view
+    useEffect(() => {
+        if (view === 'detail' && selectedGroup) {
+            const updatedGroup = groups.find(g => g.key === selectedGroup.key);
+            if (updatedGroup) {
+                setSelectedGroup(updatedGroup);
+            } else {
+                // Group is gone (e.g. all records deleted)
+                backToList();
+            }
+        }
+    }, [attendance, groups]);
 
     // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -236,13 +297,24 @@ const BusAttendance = () => {
                             )}
                         </div>
                     </div>
-                    <button
-                        onClick={fetchData}
-                        className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all font-medium shadow-lg shadow-blue-200"
-                    >
-                        <RefreshCcw size={18} />
-                        <span>Refresh</span>
-                    </button>
+                    <div className="flex items-center gap-3">
+                        {view === 'detail' && selectedIds.length > 0 && (
+                            <button
+                                onClick={() => setShowDeleteConfirm(true)}
+                                className="flex items-center justify-center gap-2 px-4 py-2 bg-rose-50 text-rose-600 border border-rose-200 rounded-xl hover:bg-rose-100 transition-all font-medium shadow-sm"
+                            >
+                                <Trash2 size={18} />
+                                <span>Delete ({selectedIds.length})</span>
+                            </button>
+                        )}
+                        <button
+                            onClick={fetchData}
+                            className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all font-medium shadow-lg shadow-blue-200"
+                        >
+                            <RefreshCcw size={18} />
+                            <span>Refresh</span>
+                        </button>
+                    </div>
                 </div>
 
                 <AnimatePresence mode="wait">
@@ -395,6 +467,14 @@ const BusAttendance = () => {
                                     <table className="w-full text-left">
                                         <thead className="bg-slate-50 border-b border-slate-200">
                                             <tr>
+                                                <th className="px-6 py-4 w-10">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedGroup.records.length > 0 && selectedIds.length === selectedGroup.records.length}
+                                                        onChange={toggleSelectAll}
+                                                        className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                    />
+                                                </th>
                                                 <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase">Student</th>
                                                 <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase">Status</th>
                                                 <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase">
@@ -424,8 +504,18 @@ const BusAttendance = () => {
                                                             initial={{ opacity: 0, y: 8 }}
                                                             animate={{ opacity: 1, y: 0 }}
                                                             transition={{ delay: i * 0.03 }}
-                                                            className="hover:bg-slate-50 transition-colors"
+                                                            className={`hover:bg-slate-50 transition-colors ${selectedIds.includes(record.id) ? 'bg-blue-50/50' : ''}`}
                                                         >
+                                                            {/* Checkbox */}
+                                                            <td className="px-6 py-4">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={selectedIds.includes(record.id)}
+                                                                    onChange={() => toggleSelect(record.id)}
+                                                                    className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                                />
+                                                            </td>
+
                                                             {/* Student */}
                                                             <td className="px-6 py-4">
                                                                 <div className="flex items-center gap-3">
@@ -473,6 +563,55 @@ const BusAttendance = () => {
                         </motion.div>
                     )}
 
+                </AnimatePresence>
+
+                {/* ── Delete Confirmation Modal ── */}
+                <AnimatePresence>
+                    {showDeleteConfirm && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.95 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.95 }}
+                                className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden"
+                            >
+                                <div className="p-6 text-center space-y-4">
+                                    <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mx-auto">
+                                        <AlertTriangle size={32} className="text-rose-500" />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <h3 className="text-xl font-bold text-slate-900">Delete Records?</h3>
+                                        <p className="text-slate-500">
+                                            You are about to delete <span className="font-bold text-rose-600">{selectedIds.length}</span> attendance records. This action cannot be undone.
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="p-4 bg-slate-50 border-t border-slate-100 flex gap-3">
+                                    <button
+                                        onClick={() => setShowDeleteConfirm(false)}
+                                        disabled={isDeleting}
+                                        className="flex-1 px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-600 hover:bg-slate-50 transition-all disabled:opacity-50"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={handleBulkDelete}
+                                        disabled={isDeleting}
+                                        className="flex-1 px-4 py-3 bg-rose-600 text-white rounded-xl font-bold hover:bg-rose-700 transition-all shadow-lg shadow-rose-200 disabled:opacity-50 flex items-center justify-center gap-2"
+                                    >
+                                        {isDeleting ? (
+                                            <>
+                                                <RefreshCcw size={18} className="animate-spin" />
+                                                Deleting...
+                                            </>
+                                        ) : (
+                                            'Confirm Delete'
+                                        )}
+                                    </button>
+                                </div>
+                            </motion.div>
+                        </div>
+                    )}
                 </AnimatePresence>
             </div>
         </Layout>

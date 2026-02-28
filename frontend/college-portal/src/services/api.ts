@@ -234,6 +234,11 @@ export const getAttendance = async (params: { busId?: string, date?: string, tri
     return response.data;
 };
 
+export const bulkDeleteAttendance = async (attendanceIds: string[]) => {
+    const response = await api.delete('/admin/attendance', { data: { attendanceIds } });
+    return response.data;
+};
+
 export const uploadRoutesFile = async (file: File) => {
     const formData = new FormData();
     formData.append('file', file);

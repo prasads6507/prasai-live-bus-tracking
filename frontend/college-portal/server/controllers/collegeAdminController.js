@@ -1485,6 +1485,55 @@ const getAttendance = async (req, res) => {
     }
 };
 
+// @desc    Bulk delete attendance records
+// @route   DELETE /api/admin/attendance
+// @access  Private (College Admin)
+const bulkDeleteAttendance = async (req, res) => {
+    try {
+        const { attendanceIds } = req.body;
+        if (!Array.isArray(attendanceIds) || attendanceIds.length === 0) {
+            return res.status(400).json({ success: false, message: 'No attendance IDs provided' });
+        }
+
+        console.log('--- BULK DELETE ATTENDANCE ---', attendanceIds.length);
+
+        const batch = db.batch();
+        const attendanceRef = db.collection('attendance');
+        let processedCount = 0;
+
+        // Fetch each to verify collegeId (Tenant Isolation)
+        // Note: For very large batches (>500), this should be Chunked. 
+        // But for attendance selection, it's usually small.
+        const snapshots = await Promise.all(
+            attendanceIds.map(id => attendanceRef.doc(id).get())
+        );
+
+        snapshots.forEach(doc => {
+            if (doc.exists) {
+                const data = doc.data();
+                // ONLY delete if it belongs to the admin's college
+                if (data.collegeId === req.collegeId) {
+                    batch.delete(doc.ref);
+                    processedCount++;
+                }
+            }
+        });
+
+        if (processedCount > 0) {
+            await batch.commit();
+        }
+
+        res.status(200).json({
+            success: true,
+            message: `Successfully deleted ${processedCount} attendance records.`,
+            count: processedCount
+        });
+    } catch (error) {
+        console.error('Error bulk deleting attendance:', error);
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+    }
+};
+
 module.exports = {
     createBus,
     getBuses,
@@ -1515,5 +1564,6 @@ module.exports = {
     getStudentAssignments,
     getBusStudents,
     assignStudentsToBusRoute,
-    getAttendance
+    getAttendance,
+    bulkDeleteAttendance
 };
