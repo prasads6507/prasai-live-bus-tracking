@@ -447,7 +447,7 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
         : (_currentRoute?.stops.map((s) => {
             'id': s.id, 
             'stopId': s.id,
-            'name': s.name, 
+            'name': s.stopName, 
             'lat': s.latitude, 
             'lng': s.longitude, 
             'radiusM': s.radiusM
