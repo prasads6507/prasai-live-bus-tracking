@@ -1474,6 +1474,18 @@ const getAttendance = async (req, res) => {
             return tB - tA; // descending
         });
 
+        // Deduplicate: Keep only the latest record per student per direction per day
+        // This solves the issue of trip restarts creating duplicate records.
+        const seen = new Set();
+        attendanceObjects = attendanceObjects.filter(item => {
+            const datePrefix = item.createdAt ? item.createdAt.split('T')[0] : 'nodate';
+            const key = `${item.studentId}__${item.direction}__${item.busId}__${datePrefix}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+
+
         res.status(200).json({
             success: true,
             count: attendanceObjects.length,

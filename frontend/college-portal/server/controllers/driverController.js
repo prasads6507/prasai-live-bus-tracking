@@ -878,11 +878,14 @@ const getTodayAttendance = async (req, res) => {
             return res.status(400).json({ success: false, message: 'busId and direction are required' });
         }
 
-        // Calculate start and end of today in local time (server is usually UTC, but we want college local)
-        // For simplicity, we use the server's current date range.
-        const now = new Date();
-        const startOfToday = new Date(now.setHours(0, 0, 0, 0)).toISOString();
-        const endOfToday = new Date(now.setHours(23, 59, 59, 999)).toISOString();
+        // Calculate start and end of today in local time
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const todayEnd = new Date();
+        todayEnd.setHours(23, 59, 59, 999);
+
+        const startTimestamp = admin.firestore.Timestamp.fromDate(todayStart);
+        const endTimestamp = admin.firestore.Timestamp.fromDate(todayEnd);
 
         // Note: Firestore doesn't support inequality filters on different fields,
         // but since collegeId is equality and direction is equality, we can filter by date on createdAt.
@@ -891,8 +894,8 @@ const getTodayAttendance = async (req, res) => {
             .where('busId', '==', busId)
             .where('direction', '==', direction)
             .where('status', 'in', ['picked_up', 'dropped_off'])
-            .where('createdAt', '>=', startOfToday)
-            .where('createdAt', '<=', endOfToday)
+            .where('createdAt', '>=', startTimestamp)
+            .where('createdAt', '<=', endTimestamp)
             .get();
 
         const studentIds = attendanceSnapshot.docs.map(doc => doc.data().studentId);
