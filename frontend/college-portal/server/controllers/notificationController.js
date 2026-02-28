@@ -538,14 +538,10 @@ const sendTripEndedNotification = async (tripId, busId, collegeId) => {
 
         const studentDocsMap = new Map();
         assignedSnap.forEach(doc => {
-            if (doc.data().collegeId === collegeId && !attendedStudents.includes(doc.id)) {
-                studentDocsMap.set(doc.id, doc);
-            }
+            if (doc.data().collegeId === collegeId) studentDocsMap.set(doc.id, doc);
         });
         favoriteSnap.forEach(doc => {
-            if (doc.data().collegeId === collegeId && !attendedStudents.includes(doc.id)) {
-                studentDocsMap.set(doc.id, doc);
-            }
+            if (doc.data().collegeId === collegeId) studentDocsMap.set(doc.id, doc);
         });
 
         if (studentDocsMap.size === 0) {
@@ -553,32 +549,46 @@ const sendTripEndedNotification = async (tripId, busId, collegeId) => {
             return;
         }
 
-        const title = 'Trip Completed 🏁';
-        const body = `Bus ${busNumber} has completed its trip for today.`;
+        const dateKey = new Date().toISOString().split('T')[0];
         const absenteeTitle = '⚠️ Attendance Alert';
         const absenteeBody = tripData.direction === 'pickup'
             ? `Not Boarded the Bus Today — Bus ${busNumber}`
             : `Not Dropped Off Today — Bus ${busNumber}`;
 
-        const tokensNormal = [];
         const tokensAbsentee = [];
+        const studentUpdates = [];
+        const attendanceUpdates = [];
 
+        // Identify absent students and check if already notified
+        const absenteeChecks = [];
         studentDocsMap.forEach((doc, studentId) => {
             const data = doc.data();
-            const token = data.fcmToken;
-            if (!token || typeof token !== 'string' || token.length <= 10) return;
-
-            // ABSENTEE: Assigned students who were NOT in the attended list
             const isAssigned = data.assignedBusId === busId;
             const isAbsent = !attendedStudents.includes(studentId);
 
             if (isAssigned && isAbsent) {
-                tokensAbsentee.push(token);
-            } else {
-                tokensNormal.push(token);
+                const attendanceId = `${dateKey}__${busId}__${tripData.direction || 'pickup'}__${studentId}`;
+                absenteeChecks.push((async () => {
+                    try {
+                        const attDoc = await db.collection('attendance').doc(attendanceId).get();
+                        if (attDoc.exists && attDoc.data().absentNotifiedAt) {
+                            return; // Already notified
+                        }
+                        const token = data.fcmToken;
+                        if (token && typeof token === 'string' && token.length > 10) {
+                            tokensAbsentee.push(token);
+                            attendanceUpdates.push({
+                                ref: db.collection('attendance').doc(attendanceId),
+                                data: { absentNotifiedAt: admin.firestore.FieldValue.serverTimestamp() }
+                            });
+                        }
+                    } catch (e) {
+                        console.error(`[AbsenteeCheck] Error for ${studentId}:`, e.message);
+                    }
+                })());
             }
 
-            // SILENT UPDATE: Clear student's active bus info when the trip ends
+            // SILENT UPDATE: Clear student's active bus info for ALL (assigned & favored)
             studentUpdates.push({
                 ref: doc.ref,
                 data: {
@@ -590,12 +600,16 @@ const sendTripEndedNotification = async (tripId, busId, collegeId) => {
             });
         });
 
-        // Execute student updates in batches
-        if (studentUpdates.length > 0) {
-            console.log(`[TripEnded] Clearing active bus info for ${studentUpdates.length} students...`);
-            const updateBatch = db.batch();
-            studentUpdates.forEach(update => updateBatch.update(update.ref, update.data));
-            await updateBatch.commit();
+        await Promise.all(absenteeChecks);
+
+        // Execute student and attendance updates in batches
+        const finalBatch = db.batch();
+        studentUpdates.forEach(u => finalBatch.update(u.ref, u.data));
+        attendanceUpdates.forEach(u => finalBatch.set(u.ref, u.data, { merge: true }));
+
+        if (studentUpdates.length > 0 || attendanceUpdates.length > 0) {
+            console.log(`[TripEnded] committing ${studentUpdates.length} student updates and ${attendanceUpdates.length} attendance updates...`);
+            await finalBatch.commit();
         }
 
         const sendBatch = async (tokens, t, b) => {
@@ -619,10 +633,9 @@ const sendTripEndedNotification = async (tripId, busId, collegeId) => {
             }
         };
 
-        await Promise.all([
-            sendBatch(tokensAbsentee, absenteeTitle, absenteeBody),
-            sendBatch(tokensNormal, title, body)
-        ]);
+        if (tokensAbsentee.length > 0) {
+            await sendBatch(tokensAbsentee, absenteeTitle, absenteeBody);
+        }
 
         // Log to notifications collection
         await db.collection('notifications').add({

@@ -758,7 +758,14 @@ const markPickup = async (req, res) => {
             updatedAt: serverTimestamp
         };
 
+        let handledPreviously = false;
         await db.runTransaction(async (transaction) => {
+            const doc = await transaction.get(attendanceRef);
+            if (doc.exists && doc.data().status === 'picked_up') {
+                handledPreviously = true;
+                return;
+            }
+
             transaction.set(attendanceRef, attendanceData, { merge: true });
             transaction.update(tripRef, {
                 pickedUpStudents: admin.firestore.FieldValue.arrayUnion(studentId),
@@ -766,17 +773,19 @@ const markPickup = async (req, res) => {
             });
         });
 
-        res.status(200).json({ success: true, attendance: attendanceData });
+        res.status(200).json({ success: true, attendance: attendanceData, alreadyMarked: handledPreviously });
 
-        // Immediate notification (Awaited for Vercel reliability)
-        await sendStudentAttendanceNotification({
-            studentId,
-            busId: tripData.busId,
-            direction: 'pickup',
-            isChecked: true,
-            busNumber: tripData.busNumber,
-            tripId
-        }).catch(err => console.error('[markPickupNotify] error:', err));
+        // Immediate notification only if not already marked today
+        if (!handledPreviously) {
+            await sendStudentAttendanceNotification({
+                studentId,
+                busId: tripData.busId,
+                direction: 'pickup',
+                isChecked: true,
+                busNumber: tripData.busNumber,
+                tripId
+            }).catch(err => console.error('[markPickupNotify] error:', err));
+        }
     } catch (error) {
         console.error('Error marking pickup:', error);
         res.status(500).json({ success: false, message: 'Server Error', error: error.message });
@@ -812,7 +821,14 @@ const markDropoff = async (req, res) => {
         const attendanceRef = db.collection('attendance').doc(attendanceId);
         const serverTimestamp = admin.firestore.Timestamp.fromDate(new Date());
 
+        let handledPreviously = false;
         await db.runTransaction(async (transaction) => {
+            const doc = await transaction.get(attendanceRef);
+            if (doc.exists && doc.data().status === 'dropped_off') {
+                handledPreviously = true;
+                return;
+            }
+
             transaction.set(attendanceRef, {
                 droppedOffAt: serverTimestamp,
                 status: 'dropped_off',
@@ -833,17 +849,19 @@ const markDropoff = async (req, res) => {
             });
         });
 
-        res.status(200).json({ success: true, message: 'Student dropped off' });
+        res.status(200).json({ success: true, message: 'Student dropped off', alreadyMarked: handledPreviously });
 
-        // Immediate FCM notification to the student (Awaited for Vercel reliability)
-        await sendStudentAttendanceNotification({
-            studentId,
-            busId: tripData.busId,
-            direction: 'dropoff',
-            isChecked: true,
-            busNumber: tripData.busNumber,
-            tripId
-        }).catch(err => console.error('[markDropoffNotify] error:', err));
+        // Immediate notification only if not already marked today
+        if (!handledPreviously) {
+            await sendStudentAttendanceNotification({
+                studentId,
+                busId: tripData.busId,
+                direction: 'dropoff',
+                isChecked: true,
+                busNumber: tripData.busNumber,
+                tripId
+            }).catch(err => console.error('[markDropoffNotify] error:', err));
+        }
     } catch (error) {
         console.error('Error marking dropoff:', error);
         res.status(500).json({ success: false, message: 'Server Error', error: error.message });
