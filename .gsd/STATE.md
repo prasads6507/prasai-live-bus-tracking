@@ -2,8 +2,8 @@
 
 ## Position
 ## Position
-- **Current Phase**: Phase 2 (Analytics & Reporting)
-- **Status**: Phase 2 Bulk Delete Attendance implemented. Ready. Phase 1, 1.1 & 1.2 complete. Manual Skip Stop implemented. Notifications consolidated. Background state replay verified.
+- **Current Phase**: Phase 4 (Skip & Attendance Reliability)
+- **Status**: Starting Phase 4 to resolve skip stop UX issues, attendance data separation, and instant notifications. Phase 1-3 are considered stable or in progress.
 
 ## Decisions
 - **FCM Strategy**: Use `sendEachForMulticast` with decoupled token cleanup for maximum speed.

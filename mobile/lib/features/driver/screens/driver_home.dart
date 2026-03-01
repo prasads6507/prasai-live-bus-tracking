@@ -1020,17 +1020,19 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
         if (data != null && mounted) {
           try {
               setState(() {
-              _currentSpeed = (data['speedMph'] as num? ?? 0.0).toDouble();
-              _lastUpdate = TimeOfDay.now().format(context);
-              _statusText = data['status'] as String? ?? "ON_ROUTE";
-              _lastRecordedPoint = LocationPoint(
-                latitude:  (data['lat'] as num).toDouble(),
-                longitude: (data['lng'] as num).toDouble(),
-                timestamp: DateTime.now(),
-                speed:   (data['speed'] as num?)?.toDouble(),
-                heading: (data['heading'] as num?)?.toDouble(),
-              );
-            });
+                _currentSpeed = (data['speedMph'] as num? ?? 0.0).toDouble();
+                _lastUpdate = TimeOfDay.now().format(context);
+                _statusText = data['status'] as String? ?? "ON_ROUTE";
+                _nextStopId = data['nextStopId'] as String?;
+                _nextStopName = data['nextStopName'] as String?;
+                _lastRecordedPoint = LocationPoint(
+                  latitude:  (data['lat'] as num).toDouble(),
+                  longitude: (data['lng'] as num).toDouble(),
+                  timestamp: DateTime.now(),
+                  speed:   (data['speed'] as num?)?.toDouble(),
+                  heading: (data['heading'] as num?)?.toDouble(),
+                );
+              });
             _updateRoadName((data['lat'] as num).toDouble(), (data['lng'] as num).toDouble());
           } catch (e) {
             debugPrint("[DriverContent] State update error (non-fatal): $e");
@@ -1048,36 +1050,68 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
   } // end _startTracking
 
   void _handleSkipStop() async {
-    if (_nextStopId == null) return;
+    try {
+      // 1. Fetch latest trip state from DB (Source of Truth)
+      final prefs = await SharedPreferences.getInstance();
+      final tripId = prefs.getString('track_trip_id');
+      if (tripId == null) return;
 
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Skip Stop?"),
-        content: Text("Are you sure you want to skip \"${_nextStopName ?? 'this stop'}\"? You don't do it automatically, notifications will be sent to students that the stop has been skipped."),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text("CANCEL"),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text("SKIP STOP", style: TextStyle(color: AppColors.error)),
-          ),
-        ],
-      ),
-    );
+      final tripDoc = await FirebaseFirestore.instance.collection('trips').doc(tripId).get();
+      if (!tripDoc.exists) return;
 
-    if (confirmed == true) {
-      final service = FlutterBackgroundService();
-      service.invoke('skip_stop', {'stopId': _nextStopId});
-      
+      final data = tripDoc.data()!;
+      final progress = data['stopProgress'] as Map<String, dynamic>? ?? {};
+      final currentIndex = (progress['currentIndex'] as num?)?.toInt() ?? 0;
+      final stops = (data['stopsSnapshot'] as List<dynamic>?) ?? [];
+
+      if (currentIndex >= stops.length) return;
+
+      final currentStop = stops[currentIndex] as Map<String, dynamic>;
+      final currentStopId = currentStop['stopId'] as String;
+      final currentStopName = currentStop['name'] as String? ?? 'Stop';
+
+      // 2. Show confirmation dialog with DB stop name
+      if (!mounted) return;
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text("Skip Stop?"),
+          content: Text("Are you sure you want to skip \"$currentStopName\"? Students at this stop will be notified that it was skipped."),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text("CANCEL"),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text("SKIP STOP", style: TextStyle(color: AppColors.error)),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmed == true) {
+        final service = FlutterBackgroundService();
+        // Use the ID from Firestore, not the potentially stale UI state
+        service.invoke('skip_stop', {'stopId': currentStopId});
+        
+        // Force immediate background update request to sync UI
+        service.invoke('request_update');
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("Skipped: $currentStopName"),
+              backgroundColor: AppColors.accent,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint("[DriverHome] Skip handler error: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Skipped: ${_nextStopName ?? 'Stop'}"),
-            backgroundColor: AppColors.accent,
-          ),
+          SnackBar(content: Text("Failed to skip stop: $e")),
         );
       }
     }

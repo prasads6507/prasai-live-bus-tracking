@@ -33,8 +33,11 @@
   - [x] Implement Bulk Delete for Attendance Records in Admin Portal.
   - [x] Implement Attendance Persistence for Drivers (Trip Restart Logic).
 
-## Phase 3: UI Polishing & Optimization
-- **Goal**: Full transition to the "Deep Midnight Glassmorphism" theme.
+## Phase 4: Skip & Attendance Reliability
+- **Goal**: Fix skip stop UX and ensure independent attendance for pickup/drop-off.
 - **Tasks**:
-  - [ ] Update remaining mobile widgets to the new theme.
-  - [ ] Optimize map rendering for low-end devices.
+  - [ ] Fix immediate Skip UI after Start Trip.
+  - [ ] Ensure reliable skip using database truth.
+  - [ ] Separate pickup and drop-off attendance records.
+  - [ ] Implement instant parent notifications for attendance.
+  - [ ] Build release APK and push code.

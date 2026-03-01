@@ -214,7 +214,8 @@ void onStart(ServiceInstance service) async {
           "heading": position.heading,
           "status": newStatus,
           "mode": newMode,
-          'nextStopName': nextStopName, // Added for UI (Phase 1.2)
+          "nextStopId": nextStopId,      // CRITICAL: Ensure ID is sent for skip logic
+          "nextStopName": nextStopName, // Added for UI (Phase 1.2)
         };
         
         service.invoke('update', lastUpdateData);

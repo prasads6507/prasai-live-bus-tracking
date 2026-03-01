@@ -44,15 +44,40 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
     final profile = ref.read(userProfileProvider).value;
     
     if (activeTripId == null) {
-      if (mounted) setState(() => _isLoadingPrefs = false);
+      if (mounted) {
+        setState(() {
+          _lockedIds.clear();
+          _localAttendedIds.clear();
+          _pendingIds.clear();
+          _isLoadingPrefs = false;
+        });
+      }
       return;
+    }
+
+    // 1. Determine direction first to build the correct cache key
+    String? direction = forcedDirection;
+    if (direction == null) {
+      final tripData = ref.read(tripProvider(activeTripId)).value;
+      direction = tripData?['direction'];
+    }
+    final effectiveDirection = direction ?? 'pickup';
+
+    // 2. Clear state when switching direction or trip
+    if (mounted) {
+      setState(() {
+        _lockedIds.clear();
+        _localAttendedIds.clear();
+        _pendingIds.clear();
+      });
     }
 
     final driverBusId = assignedBus?.id ?? profile?.assignedBusId;
 
-    // 1. Load from SharedPreferences (local cache/offline safety)
+    // 3. Load from SharedPreferences (local cache/offline safety) using direction-aware key
     final prefs = await SharedPreferences.getInstance();
-    final localList = prefs.getStringList('shared_attendance_$activeTripId') ?? [];
+    final cacheKey = 'shared_attendance_${activeTripId}_$effectiveDirection';
+    final localList = prefs.getStringList(cacheKey) ?? [];
     
     if (mounted) {
       setState(() {
@@ -60,40 +85,23 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
       });
     }
 
-    // 2. Load from Backend (source of truth for persistence across trip restarts)
+    // 4. Load from Backend (source of truth)
     if (driverBusId != null) {
       try {
         final apiDS = await _buildApiDataSource();
-        
-        // If forcedDirection is null, try to get from tripProvider
-        String? direction = forcedDirection;
-        if (direction == null) {
-          final tripData = ref.read(tripProvider(activeTripId)).value;
-          direction = tripData?['direction'];
-        }
-
-        // If we still don't have direction, we might need to wait for tripProvider
-        // But we'll fallback to 'pickup' for now, and the listener will re-trigger when tripData arrives.
-        final effectiveDirection = direction ?? 'pickup';
-        
         final remoteList = await apiDS.getTodayAttendance(driverBusId, effectiveDirection);
         
         if (mounted) {
           setState(() {
-            // CRITICAL FIX: Clear previously locked IDs for other directions 
-            // before populating with verified IDs for the current direction.
-            _lockedIds.clear();
-            
+            _lockedIds.clear(); // Safety clear
             if (remoteList.isNotEmpty) {
-              // Merge remote with local to ensure we don't lose anything
               _localAttendedIds.addAll(remoteList);
-              // These are officially verified for the CURRENT direction and should be locked
               _lockedIds.addAll(remoteList);
             }
           });
           // Update local cache too
           if (remoteList.isNotEmpty) {
-            await _saveLocalAttendance(activeTripId);
+            await _saveLocalAttendance(activeTripId, effectiveDirection);
           }
         }
       } catch (e) {
@@ -106,9 +114,10 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
     }
   }
 
-  Future<void> _saveLocalAttendance(String activeTripId) async {
+  Future<void> _saveLocalAttendance(String activeTripId, String direction) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList('shared_attendance_$activeTripId', _localAttendedIds.toList());
+    final cacheKey = 'shared_attendance_${activeTripId}_$direction';
+    await prefs.setStringList(cacheKey, _localAttendedIds.toList());
   }
 
   @override
@@ -458,7 +467,7 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
     });
 
     // Persist locally (for trip end upload safety net)
-    await _saveLocalAttendance(activeTripId);
+    await _saveLocalAttendance(activeTripId, direction);
 
     try {
       final apiDS = await _buildApiDataSource();
