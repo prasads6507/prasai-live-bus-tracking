@@ -1427,8 +1427,15 @@ const assignStudentsToBusRoute = async (req, res) => {
 const getAttendance = async (req, res) => {
     try {
         const { busId, date, tripId, direction } = req.query;
+        // Fallback to req.user.collegeId if req.collegeId is not set (e.g. for some admin contexts)
+        const collegeId = req.collegeId || req.user?.collegeId;
+
+        if (!collegeId) {
+            return res.status(400).json({ success: false, message: 'Organization ID is required' });
+        }
+
         let query = db.collection('attendance')
-            .where('collegeId', '==', req.collegeId);
+            .where('collegeId', '==', collegeId);
 
         if (busId) {
             query = query.where('busId', '==', busId);
@@ -1442,15 +1449,13 @@ const getAttendance = async (req, res) => {
             query = query.where('direction', '==', direction);
         }
 
-        // Remove date-based query filters from Firestore entirely to prevent composite index crashes
-        // Fetch raw data using ONLY equality on collegeId/busId to avoid index errors
+        // Fetch snapshot (in-memory filtering avoids complex composite indexes)
         const snapshot = await query.get();
         let attendanceObjects = snapshot.docs.map(doc => {
             const data = doc.data();
             return {
                 id: doc.id,
                 ...data,
-                // Handle different date formats seamlessly
                 pickedUpAt: data.pickedUpAt?.toDate?.()?.toISOString() || data.pickedUpAt || null,
                 droppedOffAt: data.droppedOffAt?.toDate?.()?.toISOString() || data.droppedOffAt || null,
                 createdAt: data.createdAt?.toDate?.()?.toISOString() || data.createdAt || null
@@ -1459,15 +1464,32 @@ const getAttendance = async (req, res) => {
 
         // In-memory Date filter on createdAt
         if (date) {
-            // date from frontend is yyyy-MM-dd
-            // We just check if the ISO string starts with that, or string match
-            // Users timezone differences are generally fine when comparing prefix,
-            // but if rigorous comparison is needed, we match the prefix.
+            // date from frontend is yyyy-MM-dd (Local date)
+            // attendance objects have createdAt in UTC ISO string.
+            // If it's night in India/USA, UTC day might be +1 or -1.
             const targetPrefix = date.split('T')[0];
+
+            // Calculate "Next Day" to inclusion for nighttime sessions crossing UTC midnight
+            const nextDay = new Date(targetPrefix);
+            nextDay.setDate(nextDay.getDate() + 1);
+            const nextDayPrefix = nextDay.toISOString().split('T')[0];
+
             attendanceObjects = attendanceObjects.filter(item => {
                 if (!item.createdAt) return false;
-                // Since we parsed everything to ISO strings above, we just check string include
-                return item.createdAt.includes(targetPrefix);
+
+                // 1. Direct match (UTC day == Local selected day)
+                if (item.createdAt.includes(targetPrefix)) return true;
+
+                // 2. Next Day UTC match (UTC day == Local day + 1)
+                // We only include this if it's early morning UTC (e.g. 0-9 AM) 
+                // to avoid showing the next day's actual morning trips.
+                // This captures late evening trips from the user's perspective.
+                if (item.createdAt.includes(nextDayPrefix)) {
+                    const utcHour = new Date(item.createdAt).getUTCHours();
+                    return utcHour < 10; // Capture 00:00 to 10:00 UTC
+                }
+
+                return false;
             });
         }
 
