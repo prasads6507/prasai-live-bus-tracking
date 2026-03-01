@@ -93,8 +93,9 @@ class DriverLocationService {
           final String polyline = PolylineEncoder.encode(coords);
 
           // 3. Batch Attendance Retrieval
-          final attendanceList = prefs.getStringList('shared_attendance_$tripId') ?? [];
-          debugPrint("[History] Found ${attendanceList.length} attended students to upload");
+          final direction = prefs.getString('track_direction') ?? 'pickup';
+          final attendanceList = prefs.getStringList('shared_attendance_${tripId}_$direction') ?? [];
+          debugPrint("[History] Found ${attendanceList.length} attended students to upload using key: shared_attendance_${tripId}_$direction");
 
           // 4. Upload to API
           final dio = Dio();
@@ -122,7 +123,7 @@ class DriverLocationService {
           debugPrint("Successfully uploaded trip history for $tripId (${compressed.length} compressed points)");
 
           // Clear attendance after success
-          await prefs.remove('shared_attendance_$tripId');
+          await prefs.remove('shared_attendance_${tripId}_$direction');
         } else {
           // Empty buffer, consider it "done"
           uploaded = true;

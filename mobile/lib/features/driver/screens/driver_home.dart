@@ -964,6 +964,7 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
       await prefs.setString('track_college_id', widget.collegeId);
       await prefs.setString('track_bus_id', widget.busId);
       await prefs.setString('track_trip_id', tripId);
+      await prefs.setString('track_direction', widget.direction);
       await prefs.setString('api_base_url', Env.apiUrl);
 
       // S-1 FIX: Pre-initialize first stop so UI doesn't flicker/miss SKIP button on start
@@ -1414,7 +1415,8 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
           int attendedCount = 0;
           if (activeTripId != null) {
             final prefs = await SharedPreferences.getInstance();
-            final attendanceList = prefs.getStringList('shared_attendance_$activeTripId') ?? [];
+            final direction = prefs.getString('track_direction') ?? widget.direction;
+            final attendanceList = prefs.getStringList('shared_attendance_${activeTripId}_$direction') ?? [];
             attendedCount = attendanceList.length;
           }
 

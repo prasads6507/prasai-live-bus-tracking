@@ -790,8 +790,6 @@ const markPickup = async (req, res) => {
             });
         });
 
-        res.status(200).json({ success: true, attendance: attendanceData, alreadyMarked: handledPreviously });
-
         // Immediate notification only if not already marked today
         if (!handledPreviously) {
             await sendStudentAttendanceNotification({
@@ -803,6 +801,8 @@ const markPickup = async (req, res) => {
                 tripId
             }).catch(err => console.error('[markPickupNotify] error:', err));
         }
+
+        res.status(200).json({ success: true, attendance: attendanceData, alreadyMarked: handledPreviously });
     } catch (error) {
         console.error('Error marking pickup:', error);
         res.status(500).json({ success: false, message: 'Server Error', error: error.message });
@@ -866,8 +866,6 @@ const markDropoff = async (req, res) => {
             });
         });
 
-        res.status(200).json({ success: true, message: 'Student dropped off', alreadyMarked: handledPreviously });
-
         // Immediate notification only if not already marked today
         if (!handledPreviously) {
             await sendStudentAttendanceNotification({
@@ -879,6 +877,8 @@ const markDropoff = async (req, res) => {
                 tripId
             }).catch(err => console.error('[markDropoffNotify] error:', err));
         }
+
+        res.status(200).json({ success: true, message: 'Student dropped off', alreadyMarked: handledPreviously });
     } catch (error) {
         console.error('Error marking dropoff:', error);
         res.status(500).json({ success: false, message: 'Server Error', error: error.message });

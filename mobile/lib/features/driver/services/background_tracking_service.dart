@@ -48,6 +48,9 @@ void onStart(ServiceInstance service) async {
     service.on('request_update').listen((event) async {
       debugPrint("[Background] request_update received. Replaying state...");
       if (lastUpdateData != null) {
+        // Enforce latest stop info from prefs to fix "Skip Loopback" bug
+        lastUpdateData!['nextStopId'] = prefs.getString('next_stop_id');
+        lastUpdateData!['nextStopName'] = prefs.getString('next_stop_name');
         service.invoke('update', lastUpdateData);
       }
     });
@@ -489,11 +492,11 @@ class BackgroundTrackingService {
 
           debugPrint("[Background] MANUAL SKIP SUCCESS: $stopId -> ${nextStop['stopId']}");
           
-          // Force a UI update immediately
-          service.invoke('update', {
+          // Force a UI update immediately (Safe invoke from static context)
+          FlutterBackgroundService().invoke('update', {
             'status': 'ON_ROUTE',
-            'lat': prefs.getDouble('last_lat'),
-            'lng': prefs.getDouble('last_lng'),
+            'lat': prefs.getDouble('last_lat') ?? 0.0,
+            'lng': prefs.getDouble('last_lng') ?? 0.0,
             'nextStopId': nextStop['stopId'],
             'nextStopName': nextStop['name'],
           });
@@ -569,6 +572,12 @@ class BackgroundTrackingService {
         );
 
         await batch.commit();
+
+        // 5. Update UI immediately
+        FlutterBackgroundService().invoke('update', {
+          'status': 'ARRIVED',
+          'nextStopId': stopId,
+        });
       }
     } catch (e) {
       debugPrint("[Background] HandleArrivalEntry error: $e");
@@ -626,6 +635,13 @@ class BackgroundTrackingService {
 
         batch.update(db.collection('buses').doc(busId), busUpdate);
         await batch.commit();
+
+        // 5. Update UI immediately
+        FlutterBackgroundService().invoke('update', {
+          'status': 'MOVING',
+          'nextStopId': nextStop['stopId'],
+          'nextStopName': nextStop['name'],
+        });
       } else {
         // AUTO-END
         debugPrint("[Background] AUTO-ENDING TRIP at final stop");
