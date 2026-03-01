@@ -32,6 +32,10 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
   Set<String> _pendingIds = {};
   bool _isLoadingPrefs = true;
 
+  // EMERGENCY FIX: Race condition guard
+  // Tracks the direction of the LATEST sync request to discard stale results.
+  String? _currentSyncDirection;
+
   @override
   void initState() {
     super.initState();
@@ -88,9 +92,16 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
     // 4. Load from Backend (source of truth)
     if (driverBusId != null) {
       try {
+        _currentSyncDirection = effectiveDirection; // Set latest target
         final apiDS = await _buildApiDataSource();
         final remoteList = await apiDS.getTodayAttendance(driverBusId, effectiveDirection);
         
+        // GUARD: If the direction changed while we were waiting for the network, DISCARD.
+        if (_currentSyncDirection != effectiveDirection) {
+           debugPrint('[DriverStudentsScreen] Discarding stale sync for $effectiveDirection (Now: $_currentSyncDirection)');
+           return;
+        }
+
         if (mounted) {
           setState(() {
             _lockedIds.clear(); 

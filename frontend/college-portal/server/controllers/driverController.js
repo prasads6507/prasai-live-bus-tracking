@@ -928,6 +928,7 @@ const getTodayAttendance = async (req, res) => {
         const attendanceSnapshot = await db.collection('attendance')
             .where('collegeId', '==', req.collegeId)
             .where('busId', '==', busId)
+            .where('direction', '==', direction) // Hardened: DB-level filter
             .get();
 
         const studentIds = attendanceSnapshot.docs

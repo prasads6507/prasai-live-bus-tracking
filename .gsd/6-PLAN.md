@@ -18,6 +18,14 @@
     - Backend: Remove `updatedAt` from the date-checking logic in `getTodayAttendance` to prevent old retried records from appearing as today's.
     - Mobile: Explicitly clear local set state in `DriverStudentsScreen` before re-sync to prevent merging old data.
   </action>
-  <verify>Mark a student in pickup, end trip, start dropoff, and check if the student list is fresh.</verify>
-  <done>Attendance remains strictly isolated by session direction.</done>
+<task type="auto">
+  <name>EMERGENCY: Fix Attendance Carry-over Race Condition</name>
+  <files>frontend/college-portal/server/controllers/driverController.js, mobile/lib/features/driver/screens/driver_students_screen.dart</files>
+  <action>
+    - Backend: Force `.where('direction', '==', direction)` in `getTodayAttendance` Firestore query.
+    - Mobile: Track `_currentSyncDirection` in `DriverStudentsScreen` and discard results from mismatched direction calls (fixes race condition).
+    - Mobile: Explicitly clear local state when a new `activeTripId` is detected.
+  </action>
+  <verify>Mark student in pickup, start dropoff, and verify list is empty immediately.</verify>
+  <done>Carry-over resolved even under high latency/fast navigation.</done>
 </task>
