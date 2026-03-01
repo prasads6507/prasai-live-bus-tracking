@@ -2,8 +2,8 @@
 
 ## Position
 ## Position
-- **Current Phase**: Phase 4 (Skip & Attendance Reliability)
-- **Status**: Starting Phase 4 to resolve skip stop UX issues, attendance data separation, and instant notifications. Phase 1-3 are considered stable or in progress.
+- **Current Phase**: Phase 5 (Attendance Isolation)
+- **Status**: Completed Phase 5 to resolve attendance carry-over issues by clearing the SharedPreferences cache at the start of each trip session. Phase 1-4 are stable.
 
 ## Decisions
 - **FCM Strategy**: Use `sendEachForMulticast` with decoupled token cleanup for maximum speed.

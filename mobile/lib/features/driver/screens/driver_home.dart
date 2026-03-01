@@ -967,6 +967,15 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
       await prefs.setString('track_direction', widget.direction);
       await prefs.setString('api_base_url', Env.apiUrl);
 
+      // ✅ Attendance isolation fix (DO NOT touch notifications):
+      // Always start with a fresh attendance list for this trip + direction.
+      final attendanceKey = 'shared_attendance_${tripId}_${widget.direction}';
+      await prefs.remove(attendanceKey);
+
+      // Optional backward-compat cleanup (safe):
+      // If older builds ever stored without direction, clear that too.
+      await prefs.remove('shared_attendance_$tripId');
+
       // S-1 FIX: Pre-initialize first stop so UI doesn't flicker/miss SKIP button on start
       if (_currentRoute != null && _currentRoute!.stops.isNotEmpty) {
         var stops = List<RouteStop>.from(_currentRoute!.stops);
