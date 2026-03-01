@@ -1464,32 +1464,30 @@ const getAttendance = async (req, res) => {
 
         // In-memory Date filter on createdAt
         if (date) {
-            // date from frontend is yyyy-MM-dd (Local date)
-            // attendance objects have createdAt in UTC ISO string.
-            // If it's night in India/USA, UTC day might be +1 or -1.
+            // date from frontend is yyyy-MM-dd (e.g., '2026-02-28')
+            // timezone from frontend (e.g., 'America/New_York')
+            const tz = req.query.timezone || 'UTC';
             const targetPrefix = date.split('T')[0];
-
-            // Calculate "Next Day" to inclusion for nighttime sessions crossing UTC midnight
-            const nextDay = new Date(targetPrefix);
-            nextDay.setDate(nextDay.getDate() + 1);
-            const nextDayPrefix = nextDay.toISOString().split('T')[0];
 
             attendanceObjects = attendanceObjects.filter(item => {
                 if (!item.createdAt) return false;
 
-                // 1. Direct match (UTC day == Local selected day)
-                if (item.createdAt.includes(targetPrefix)) return true;
+                try {
+                    // Convert UTC timestamp to the requested local date string
+                    const localDate = new Intl.DateTimeFormat('en-CA', {
+                        timeZone: tz,
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit'
+                    }).format(new Date(item.createdAt));
 
-                // 2. Next Day UTC match (UTC day == Local day + 1)
-                // We only include this if it's early morning UTC (e.g. 0-9 AM) 
-                // to avoid showing the next day's actual morning trips.
-                // This captures late evening trips from the user's perspective.
-                if (item.createdAt.includes(nextDayPrefix)) {
-                    const utcHour = new Date(item.createdAt).getUTCHours();
-                    return utcHour < 10; // Capture 00:00 to 10:00 UTC
+                    // en-CA format is YYYY-MM-DD
+                    return localDate === targetPrefix;
+                } catch (e) {
+                    console.error(`Timezone error for ${tz}:`, e.message);
+                    // Fallback to UTC prefix match if timezone is invalid
+                    return item.createdAt.includes(targetPrefix);
                 }
-
-                return false;
             });
         }
 
@@ -1500,12 +1498,25 @@ const getAttendance = async (req, res) => {
             return tB - tA; // descending
         });
 
-        // Deduplicate: Keep only the latest record per student per direction per day
-        // This solves the issue of trip restarts creating duplicate records.
+        // Deduplicate: Keep only the latest record per student per direction per local day
         const seen = new Set();
+        const tz = req.query.timezone || 'UTC';
+
         attendanceObjects = attendanceObjects.filter(item => {
-            const datePrefix = item.createdAt ? item.createdAt.split('T')[0] : 'nodate';
-            const key = `${item.studentId}__${item.direction}__${item.busId}__${datePrefix}`;
+            let localDatePrefix = 'nodate';
+            if (item.createdAt) {
+                try {
+                    localDatePrefix = new Intl.DateTimeFormat('en-CA', {
+                        timeZone: tz,
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit'
+                    }).format(new Date(item.createdAt));
+                } catch (e) {
+                    localDatePrefix = item.createdAt.split('T')[0];
+                }
+            }
+            const key = `${item.studentId}__${item.direction}__${item.busId}__${localDatePrefix}`;
             if (seen.has(key)) return false;
             seen.add(key);
             return true;

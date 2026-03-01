@@ -102,7 +102,8 @@ const BusAttendance = () => {
                 getAttendance({
                     busId: filters.busId,
                     date: filters.date,
-                    direction: filters.direction
+                    direction: filters.direction,
+                    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
                 }),
                 getBuses(),
             ]);
