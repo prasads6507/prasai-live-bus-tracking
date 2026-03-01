@@ -934,12 +934,11 @@ const getTodayAttendance = async (req, res) => {
             .filter(doc => {
                 const data = doc.data();
 
-                // 1. Determine Date
+                // 1. Determine Date (Exclude updatedAt to avoid carry-over from background retries)
                 const dateFromField = (
                     data.pickedUpAt ||
                     data.droppedOffAt ||
-                    data.createdAt ||
-                    data.updatedAt
+                    data.createdAt
                 );
                 let recordDate = '';
                 if (dateFromField) {

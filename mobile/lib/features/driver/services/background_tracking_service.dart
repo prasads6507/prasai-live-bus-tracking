@@ -482,7 +482,7 @@ class BackgroundTrackingService {
 
           await batch.commit();
 
-          // 5. Update Local Cache for Isolate
+          // 5. Update Local Cache for Isolate (Crucial for restarts)
           await prefs.setDouble('next_stop_lat', (nextStop['lat'] as num).toDouble());
           await prefs.setDouble('next_stop_lng', (nextStop['lng'] as num).toDouble());
           await prefs.setDouble('next_stop_radius', (nextStop['radiusM'] as num?)?.toDouble() ?? 100.0);
@@ -492,11 +492,12 @@ class BackgroundTrackingService {
 
           debugPrint("[Background] MANUAL SKIP SUCCESS: $stopId -> ${nextStop['stopId']}");
           
-          // Force a UI update immediately (Safe invoke from static context)
-          FlutterBackgroundService().invoke('update', {
+          // 6. Update UI immediately (Safe invoke using the active service instance)
+          service.invoke('update', {
             'status': 'ON_ROUTE',
-            'lat': prefs.getDouble('last_lat') ?? 0.0,
-            'lng': prefs.getDouble('last_lng') ?? 0.0,
+            'lat': p.latitude,
+            'lng': p.longitude,
+            'speedMph': params['speedMph'] ?? 0,
             'nextStopId': nextStop['stopId'],
             'nextStopName': nextStop['name'],
           });

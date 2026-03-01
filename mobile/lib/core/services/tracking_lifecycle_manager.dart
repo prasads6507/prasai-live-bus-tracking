@@ -37,6 +37,16 @@ class TrackingLifecycleManager {
       await prefs.remove('next_stop_lng');
       await prefs.remove('next_stop_radius');
       await prefs.remove('next_stop_name');
+      
+      // ✅ Attendance isolation safety: clear today's directional keys on trip end
+      // This prevents "ghost" attendance showing up if the next trip starts too quickly.
+      final direction = prefs.getString('track_direction') ?? 'pickup';
+      final tripId = prefs.getString('track_trip_id');
+      if (tripId != null) {
+        await prefs.remove('shared_attendance_${tripId}_$direction');
+        await prefs.remove('shared_attendance_$tripId');
+      }
+      
       // Note: trip_history_buffer is no longer deleted here. 
       // It is securely deleted only after a successful upload by DriverLocationService.
       

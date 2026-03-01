@@ -93,16 +93,15 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
         
         if (mounted) {
           setState(() {
-            _lockedIds.clear(); // Safety clear
+            _lockedIds.clear(); 
+            _localAttendedIds.clear(); // RESET local state before remote sync
             if (remoteList.isNotEmpty) {
               _localAttendedIds.addAll(remoteList);
               _lockedIds.addAll(remoteList);
             }
           });
           // Update local cache too
-          if (remoteList.isNotEmpty) {
-            await _saveLocalAttendance(activeTripId, effectiveDirection);
-          }
+          await _saveLocalAttendance(activeTripId, effectiveDirection);
         }
       } catch (e) {
         debugPrint('[DriverStudentsScreen] Remote sync failed: $e');
