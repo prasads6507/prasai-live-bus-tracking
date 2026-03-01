@@ -495,8 +495,8 @@ class BackgroundTrackingService {
           // 6. Update UI immediately (Safe invoke using the active service instance)
           service.invoke('update', {
             'status': 'ON_ROUTE',
-            'lat': p.latitude,
-            'lng': p.longitude,
+            'lat': prefs.getDouble('last_lat') ?? 0.0,
+            'lng': prefs.getDouble('last_lng') ?? 0.0,
             'speedMph': params['speedMph'] ?? 0,
             'nextStopId': nextStop['stopId'],
             'nextStopName': nextStop['name'],
