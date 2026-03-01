@@ -787,6 +787,32 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
     _listenToBackgroundService();
   }
 
+  void _handleLocationUpdate(Map<String, dynamic> data) {
+    if (!mounted) return;
+    try {
+      setState(() {
+        _currentSpeed = (data['speedMph'] as num? ?? 0.0).toDouble();
+        _lastUpdate = TimeOfDay.now().format(context);
+        _statusText = data['status'] as String? ?? "ON_ROUTE";
+        _nextStopId = data['nextStopId'] as String?;
+        _nextStopName = data['nextStopName'] as String?;
+        _lastRecordedPoint = LocationPoint(
+          latitude: (data['lat'] as num).toDouble(),
+          longitude: (data['lng'] as num).toDouble(),
+          timestamp: DateTime.now(),
+          speed: (data['speed'] as num?)?.toDouble(),
+          heading: (data['heading'] as num?)?.toDouble(),
+        );
+      });
+      _updateRoadName(
+        (data['lat'] as num).toDouble(),
+        (data['lng'] as num).toDouble(),
+      );
+    } catch (e) {
+      debugPrint("[DriverContent] State update error (non-fatal): $e");
+    }
+  }
+
   void _loadCachedNextStop() async {
     final prefs = await SharedPreferences.getInstance();
     if (mounted) {
@@ -798,35 +824,18 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
   }
 
   void _listenToBackgroundService() async {
-    final service = FlutterBackgroundService();
-    if (await service.isRunning()) {
-      _locationUpdateSubscription?.cancel();
-      _locationUpdateSubscription = service.on('update').listen((data) {
-        if (data != null && mounted) {
-          try {
-            setState(() {
-              _currentSpeed = (data['speedMph'] as num? ?? 0.0).toDouble();
-              _lastUpdate = TimeOfDay.now().format(context);
-              _statusText = data['status'] as String? ?? "ON_ROUTE";
-              _nextStopId = data['nextStopId'] as String?;
-              _nextStopName = data['nextStopName'] as String?;
-              _lastRecordedPoint = LocationPoint(
-                latitude:  (data['lat'] as num).toDouble(),
-                longitude: (data['lng'] as num).toDouble(),
-                timestamp: DateTime.now(),
-                speed:   (data['speed'] as num?)?.toDouble(),
-                heading: (data['heading'] as num?)?.toDouble(),
-              );
-            });
-            _updateRoadName((data['lat'] as num).toDouble(), (data['lng'] as num).toDouble());
-          } catch (e) {
-            debugPrint("[DriverContent] State update error (non-fatal): $e");
-          }
-        }
-      });
-      // Request immediate state replay from background isolate
-      service.invoke('request_update');
+    if (Platform.isAndroid) {
+      // Android: listen to the background service stream
+      final service = FlutterBackgroundService();
+      if (await service.isRunning()) {
+        _locationUpdateSubscription?.cancel();
+        _locationUpdateSubscription = service.on('update').listen((data) {
+          if (data != null) _handleLocationUpdate(data);
+        });
+        service.invoke('request_update');
+      }
     }
+    // iOS: no stream to listen to here — updates come via onIosUpdate callback in start()
   }
 
   Future<void> _fetchRoute() async {
@@ -1005,15 +1014,21 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
 
     if (!mounted) return;
 
-    // ─── STEP 6: Start the background foreground service ─────────────────────
+    // ─── STEP 6: Start tracking (platform-aware) ─────────────────────────────────
     try {
-      await BackgroundTrackingService.start();
-      debugPrint("[DriverContent] Background service started successfully");
+      await BackgroundTrackingService.start(
+        collegeId: widget.collegeId,
+        busId: widget.busId,
+        tripId: tripId,
+        // iOS: updates come directly through this callback (no separate stream)
+        onIosUpdate: _handleLocationUpdate,
+      );
+      debugPrint("[DriverContent] Tracking started successfully");
     } catch (e) {
-      debugPrint("[DriverContent] Failed to start background service: $e");
+      debugPrint("[DriverContent] Failed to start tracking: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Could not start background tracking: $e")),
+          SnackBar(content: Text("Could not start tracking: $e")),
         );
       }
       return;
@@ -1021,36 +1036,17 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
 
     if (!mounted) return;
 
-    // ─── STEP 7: Subscribe to location updates from background isolate ────────
-    try {
-      _locationUpdateSubscription?.cancel();
-      final service = FlutterBackgroundService();
-      _locationUpdateSubscription = service.on('update').listen((data) {
-        debugPrint("[DriverContent] RECEIVED update from background: $data");
-        if (data != null && mounted) {
-          try {
-              setState(() {
-                _currentSpeed = (data['speedMph'] as num? ?? 0.0).toDouble();
-                _lastUpdate = TimeOfDay.now().format(context);
-                _statusText = data['status'] as String? ?? "ON_ROUTE";
-                _nextStopId = data['nextStopId'] as String?;
-                _nextStopName = data['nextStopName'] as String?;
-                _lastRecordedPoint = LocationPoint(
-                  latitude:  (data['lat'] as num).toDouble(),
-                  longitude: (data['lng'] as num).toDouble(),
-                  timestamp: DateTime.now(),
-                  speed:   (data['speed'] as num?)?.toDouble(),
-                  heading: (data['heading'] as num?)?.toDouble(),
-                );
-              });
-            _updateRoadName((data['lat'] as num).toDouble(), (data['lng'] as num).toDouble());
-          } catch (e) {
-            debugPrint("[DriverContent] State update error (non-fatal): $e");
-          }
-        }
-      });
-    } catch (e) {
-      debugPrint("[DriverContent] Failed to subscribe to service updates: $e");
+    // ─── STEP 7: Subscribe to updates (Android only — iOS uses callback above) ─
+    if (Platform.isAndroid) {
+      try {
+        _locationUpdateSubscription?.cancel();
+        final service = FlutterBackgroundService();
+        _locationUpdateSubscription = service.on('update').listen((data) {
+          if (data != null && mounted) _handleLocationUpdate(data);
+        });
+      } catch (e) {
+        debugPrint("[DriverContent] Failed to subscribe to service updates: $e");
+      }
     }
    } catch (e) {
     debugPrint("[DriverContent] _startTracking unexpected error: $e");
@@ -1101,12 +1097,10 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
       );
 
       if (confirmed == true) {
-        final service = FlutterBackgroundService();
-        // Use the ID from Firestore, not the potentially stale UI state
-        service.invoke('skip_stop', {'stopId': currentStopId});
-        
-        // Force immediate background update request to sync UI
-        service.invoke('request_update');
+        BackgroundTrackingService.sendCommand('skip_stop', {'stopId': currentStopId});
+        if (Platform.isAndroid) {
+          BackgroundTrackingService.sendCommand('request_update');
+        }
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
