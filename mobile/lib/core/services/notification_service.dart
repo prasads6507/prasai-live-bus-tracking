@@ -24,17 +24,15 @@ class NotificationService {
 
     // ✅ FIX: requestCriticalPermission ensures iOS shows notifications even
     // in Do Not Disturb mode (important for bus arrival alerts)
-    const DarwinInitializationSettings iosSettings =
+    final DarwinInitializationSettings iosSettings =
         DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
       requestSoundPermission: true,
-      // ✅ FIX: This callback allows foreground notifications to show on iOS
-      // Without this, notifications don't appear when app is in foreground on iOS
-      onDidReceiveLocalNotification: _onDidReceiveLocalNotification,
+      // ✅ FIX: Native foreground notifications on iOS 14+ are handled by DarwinNotificationDetails
     );
 
-    const InitializationSettings settings = InitializationSettings(
+    final InitializationSettings settings = InitializationSettings(
       android: androidSettings,
       iOS: iosSettings,
     );

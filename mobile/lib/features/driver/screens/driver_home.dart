@@ -1097,10 +1097,7 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
       );
 
       if (confirmed == true) {
-        BackgroundTrackingService.sendCommand('skip_stop', {'stopId': currentStopId});
-        if (Platform.isAndroid) {
-          BackgroundTrackingService.sendCommand('request_update');
-        }
+        await BackgroundTrackingService.manualSkip(currentStopId);
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(

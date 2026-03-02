@@ -278,7 +278,7 @@ class IosLocationTracker {
     final Set<String> arrivingNotifiedIds = {};
 
     // ✅ KEY: AppleSettings with allowBackgroundLocationUpdates keeps GPS alive on screen lock
-    const locationSettings = AppleSettings(
+    final locationSettings = AppleSettings(
       accuracy: LocationAccuracy.high,
       activityType: ActivityType.automotiveNavigation,
       distanceFilter: 10,
@@ -671,7 +671,7 @@ class BackgroundTrackingService {
   }
 
   static Future<void> _handleManualSkip(
-      ServiceInstance service, Map<String, dynamic>? params) async {
+      ServiceInstance? service, Map<String, dynamic>? params) async {
     if (params == null) return;
     final stopId = params['stopId'] as String?;
     if (stopId == null) return;
@@ -696,43 +696,72 @@ class BackgroundTrackingService {
           (progress['currentIndex'] as num?)?.toInt() ?? 0;
       final stops = data['stopsSnapshot'] as List<dynamic>? ?? [];
 
-      if (currentIndex + 1 >= stops.length) {
-        debugPrint("[Tracker] Skip: already at last stop");
+      if (currentIndex >= stops.length) {
+        debugPrint("[Tracker] Skip: already at end");
         return;
       }
 
-      final nextIndex = currentIndex + 1;
-      final nextStop = stops[nextIndex] as Map<String, dynamic>;
+      final currentStop = stops[currentIndex] as Map<String, dynamic>;
+      final stopName = currentStop['name'] ?? currentStop['stopName'] ?? 'Stop';
 
-      await tripRef.update({
+      // Ensure we are skipping the correct stop
+      if (currentStop['stopId'] != stopId && currentStop['id'] != stopId) {
+        debugPrint("[Tracker] Skip: stopId mismatch");
+      }
+
+      final nextIndex = currentIndex + 1;
+      
+      // Update Firestore
+      final updates = {
         'stopProgress.currentIndex': nextIndex,
         'stopProgress.lastUpdated': FieldValue.serverTimestamp(),
         'stopProgress.stops.$stopId.status': 'SKIPPED',
         'stopProgress.stops.$stopId.skippedAt': FieldValue.serverTimestamp(),
-      });
+        'stopProgress.skippedStopIds': FieldValue.arrayUnion([stopId]),
+      };
 
-      await prefs.setDouble(
-          'next_stop_lat', (nextStop['lat'] as num).toDouble());
-      await prefs.setDouble(
-          'next_stop_lng', (nextStop['lng'] as num).toDouble());
-      await prefs.setString('next_stop_id', nextStop['id'] as String? ?? '');
-      await prefs.setString(
-          'next_stop_name', nextStop['name'] as String? ?? 'Stop');
-      await prefs.setBool('has_arrived_current', false);
-      await prefs.remove('skip_warned_stop');
+      await tripRef.update(updates);
 
+      // Notify Server for FCM
       _notifyServer(tripId, busId, collegeId, stopId, "SKIPPED",
-          stopName: data['stops']?[stopId]?['name'] ?? '',
+          stopName: stopName,
           prefs: prefs);
 
-      service.invoke('update', {
-        'nextStopId': nextStop['id'],
-        'nextStopName': nextStop['name'],
-      });
+      if (nextIndex < stops.length) {
+        final nextStop = stops[nextIndex] as Map<String, dynamic>;
+        final nId = nextStop['id'] as String? ?? nextStop['stopId'] as String? ?? '';
+        final nName = nextStop['name'] as String? ?? nextStop['stopName'] as String? ?? 'Stop';
 
-      debugPrint("[Tracker] Manual skip done. Now targeting: ${nextStop['name']}");
+        await prefs.setDouble('next_stop_lat', (nextStop['lat'] as num).toDouble());
+        await prefs.setDouble('next_stop_lng', (nextStop['lng'] as num).toDouble());
+        await prefs.setString('next_stop_id', nId);
+        await prefs.setString('next_stop_name', nName);
+        await prefs.setBool('has_arrived_current', false);
+
+        if (service != null && Platform.isAndroid) {
+          service.invoke('update', {
+            'nextStopId': nId,
+            'nextStopName': nName,
+            'status': 'ON_ROUTE',
+          });
+        }
+        debugPrint("[Tracker] Manual skip done. Now targeting: $nName");
+      } else {
+        debugPrint("[Tracker] Manual skip done. No more stops.");
+      }
     } catch (e) {
       debugPrint("[Tracker] Manual skip error: $e");
+    }
+  }
+
+  // Cross-platform manual skip entry point
+  static Future<void> manualSkip(String stopId) async {
+    if (Platform.isAndroid && _isRunning) {
+      sendCommand('skip_stop', {'stopId': stopId});
+      sendCommand('request_update');
+    } else {
+      // iOS or fallback: execute directly
+      await _handleManualSkip(null, {'stopId': stopId});
     }
   }
 
@@ -760,7 +789,7 @@ class BackgroundTrackingService {
           'busId': busId,
           'collegeId': collegeId,
           'stopId': stopId,
-          'eventType': eventType,
+          'type': eventType, // ✅ Matches backend expectation
           'stopName': stopName,
           'timestamp': DateTime.now().toIso8601String(),
         },

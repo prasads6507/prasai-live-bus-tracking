@@ -495,7 +495,7 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
       return DropOffItem(
         time: status,
         location: stop['name'] as String? ?? stop['stopName'] as String? ?? '',
-        isCompleted: status == "COMPLETED" || status == "SKIPPED",
+        isCompleted: status == "COMPLETED",
         isCurrent: status == "ARRIVED" || status == "ARRIVING",
         isNext: status == "NEXT",
         distanceM: (status == "ARRIVING" || (status == "NEXT" && index == currentIndex)) ? distM : null,
