@@ -3,9 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Lock, Mail, ArrowRight, ShieldCheck, AlertCircle, School, Bus } from 'lucide-react';
 import { validateSlug } from '../services/api';
 import { motion, AnimatePresence } from 'framer-motion';
-import { auth, db } from '../config/firebase';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { auth } from '../config/firebase';
 
 const Login = () => {
     const { orgSlug } = useParams<{ orgSlug: string }>();
@@ -44,55 +42,30 @@ const Login = () => {
         setError('');
 
         try {
-            // 1. Direct Firebase Auth (Serverless)
-            // This ensures login works globally on any network
-            const userCredential = await signInWithEmailAndPassword(auth, email, password);
-            const firebaseUser = userCredential.user;
+            // 1. Call Backend Login API
+            // This validates against Firestore and handles users not yet in Firebase Auth
+            await validateSlug(orgSlug!); // Reuse validateSlug for consistency check
+            // Actually, I should use the login function from services/api
+            const { login } = await import('../services/api');
+            const data = await login({ email, password, orgSlug });
 
-            // 2. Fetch User Data from Firestore
-            let userData: any = null;
-            let role: string = '';
-
-            // Try 'users' collection first (Owner, Admin, Driver)
-            const userDocRef = doc(db, 'users', firebaseUser.uid);
-            const userDocSnap = await getDoc(userDocRef);
-
-            if (userDocSnap.exists()) {
-                userData = userDocSnap.data();
-                role = userData.role;
-            } else {
-                // Try 'students' collection
-                const studentDocRef = doc(db, 'students', firebaseUser.uid);
-                const studentDocSnap = await getDoc(studentDocRef);
-                if (studentDocSnap.exists()) {
-                    userData = studentDocSnap.data();
-                    role = 'STUDENT';
-                }
+            // 2. Sign in to Firebase using the Custom Token from backend
+            if (data.firebaseCustomToken) {
+                const { signInWithCustomToken } = await import('firebase/auth');
+                await signInWithCustomToken(auth, data.firebaseCustomToken);
             }
 
-            if (!userData) {
-                throw new Error('User profile not found in database.');
-            }
+            const role = data.role;
+            const idToken = data.token; // This is the JWT from our backend
 
-            // Security Check: Organization matching (if not owner)
-            if (role !== 'OWNER' && role !== 'SUPER_ADMIN' && userData.collegeId !== orgDetails.collegeId) {
-                // Special check: sometimes owners use slugs as collegeId
-                if (userData.collegeId !== orgSlug) {
-                    throw new Error('You do not have access to this organization.');
-                }
-            }
-
-            // 3. Get ID Token for backend API calls
-            const idToken = await firebaseUser.getIdToken();
-
-            // 4. Handle Redirects based on Role
+            // 3. Handle Redirects based on Role
             if (role === 'DRIVER') {
                 const userToStore = {
-                    _id: firebaseUser.uid,
-                    name: userData.name,
-                    email: userData.email,
+                    _id: data._id,
+                    name: data.name,
+                    email: data.email,
                     role: role,
-                    collegeId: userData.collegeId
+                    collegeId: data.collegeId
                 };
                 localStorage.setItem('driver_user', JSON.stringify(userToStore));
                 localStorage.setItem('driver_token', idToken);
@@ -104,19 +77,19 @@ const Login = () => {
 
             if (role === 'STUDENT') {
                 const userToStore = {
-                    _id: firebaseUser.uid,
-                    name: userData.name,
-                    email: userData.email,
+                    _id: data._id,
+                    name: data.name,
+                    email: data.email,
                     role: role,
-                    collegeId: userData.collegeId,
-                    registerNumber: userData.registerNumber,
-                    isFirstLogin: userData.isFirstLogin || false
+                    collegeId: data.collegeId,
+                    registerNumber: data.registerNumber,
+                    isFirstLogin: data.isFirstLogin || false
                 };
                 localStorage.setItem('student_user', JSON.stringify(userToStore));
                 localStorage.setItem('student_token', idToken);
                 localStorage.setItem('current_college_id', orgDetails.collegeId);
 
-                if (userData.isFirstLogin) {
+                if (data.isFirstLogin) {
                     navigate(`/${orgSlug}/student/login`, { state: { ...userToStore, preAuthenticated: true } });
                     return;
                 }
@@ -130,11 +103,11 @@ const Login = () => {
             }
 
             const userToStore = {
-                _id: firebaseUser.uid,
-                name: userData.name,
-                email: userData.email,
+                _id: data._id,
+                name: data.name,
+                email: data.email,
                 role: role,
-                collegeId: userData.collegeId
+                collegeId: data.collegeId
             };
             localStorage.setItem('user', JSON.stringify(userToStore));
             localStorage.setItem('token', idToken);
@@ -146,7 +119,11 @@ const Login = () => {
         } catch (err: any) {
             console.error("Login Failed:", err);
             let message = 'Login failed';
-            if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+
+            // Check for axios/backend error response
+            if (err.response?.data?.message) {
+                message = err.response.data.message;
+            } else if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
                 message = 'Invalid email or password';
             } else if (err.code === 'auth/network-request-failed') {
                 message = 'Network error. Please check your internet connection.';
