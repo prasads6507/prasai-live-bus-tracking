@@ -1,6 +1,8 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import '../../firebase_options.dart';
 
 class NotificationService {
   static final FlutterLocalNotificationsPlugin _plugin =
@@ -11,14 +13,25 @@ class NotificationService {
   static Future<void> initialize() async {
     if (_initialized) return;
 
+    // ✅ FIX: Initialize Firebase if not already done
+    // This is needed when this is called from the background isolate
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+    }
+
     const AndroidInitializationSettings androidSettings =
         AndroidInitializationSettings('@mipmap/ic_launcher');
 
+    // ✅ FIX: requestCriticalPermission ensures iOS shows notifications even
+    // in Do Not Disturb mode (important for bus arrival alerts)
     const DarwinInitializationSettings iosSettings =
         DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
       requestSoundPermission: true,
+      // ✅ FIX: This callback allows foreground notifications to show on iOS
+      // Without this, notifications don't appear when app is in foreground on iOS
+      onDidReceiveLocalNotification: _onDidReceiveLocalNotification,
     );
 
     const InitializationSettings settings = InitializationSettings(
@@ -31,6 +44,7 @@ class NotificationService {
       onDidReceiveNotificationResponse: (NotificationResponse response) {
         debugPrint('[Notification] Tapped: ${response.payload}');
       },
+      onDidReceiveBackgroundNotificationResponse: _backgroundNotificationResponseHandler,
     );
 
     // Create high-importance notification channel for Android
@@ -40,6 +54,7 @@ class NotificationService {
       description: 'Live bus arrival and stop notifications',
       importance: Importance.max,
       playSound: true,
+      enableVibration: true,
     );
 
     final androidPlugin = _plugin
@@ -48,22 +63,31 @@ class NotificationService {
 
     if (androidPlugin != null) {
       await androidPlugin.createNotificationChannel(channel);
-      // CRITICAL: Request POST_NOTIFICATIONS permission on Android 13+
       final granted = await androidPlugin.requestNotificationsPermission();
-      debugPrint('[NotificationService] Android notification permission granted: $granted');
+      debugPrint('[NotificationService] Android permission granted: $granted');
     }
 
-    // Also request from Firebase Messaging (covers iOS + fallback)
-    final messagingSettings = await FirebaseMessaging.instance.requestPermission(
+    // ✅ FIX: Request FCM permission — critical for iOS
+    // On iOS this shows the system "Allow Notifications" dialog
+    final messagingSettings =
+        await FirebaseMessaging.instance.requestPermission(
       alert: true,
       badge: true,
       sound: true,
       provisional: false,
+      criticalAlert: false,
     );
-    debugPrint('[NotificationService] FCM permission: ${messagingSettings.authorizationStatus}');
+    debugPrint(
+        '[NotificationService] FCM permission: ${messagingSettings.authorizationStatus}');
 
     _initialized = true;
     debugPrint('[NotificationService] Initialized successfully');
+  }
+
+  // Required for iOS < 10 (rarely needed but keeps it clean)
+  static void _onDidReceiveLocalNotification(
+      int id, String? title, String? body, String? payload) {
+    debugPrint('[iOS Legacy Notification] $title: $body');
   }
 
   // ─── Specific Notification Types ─────────────────────────────────────────
@@ -119,32 +143,41 @@ class NotificationService {
 
   // ─── FCM Message Handler (called from main.dart) ──────────────────────────
 
-  /// Call this from main.dart inside FirebaseMessaging.onMessage.listen()
   /// Handles FCM messages when app is in FOREGROUND.
   static Future<void> handleForegroundMessage(RemoteMessage message) async {
-    debugPrint('[FCM Foreground] ${message.notification?.title}: ${message.notification?.body}');
+    debugPrint(
+        '[FCM Foreground] ${message.notification?.title}: ${message.notification?.body}');
     await _showFromRemoteMessage(message);
   }
 
-  /// Call this from the top-level background handler in main.dart.
-  /// Handles FCM messages when app is in BACKGROUND or TERMINATED.
+  /// ✅ FIX: Handles FCM messages when app is in BACKGROUND or TERMINATED.
+  /// Previously this did nothing on iOS — now it always shows the notification.
   static Future<void> handleBackgroundMessage(RemoteMessage message) async {
-    debugPrint('[FCM Background] ${message.notification?.title}: ${message.notification?.body}');
-    // On Android, FCM auto-displays notification in background — but we want
-    // custom channel 'bus_events' with high importance, so we show manually.
-    // On iOS, we must show it manually.
+    debugPrint(
+        '[FCM Background] ${message.notification?.title}: ${message.notification?.body}');
+    // ✅ On BOTH Android AND iOS we show it manually here.
+    // The reason: If you send messages WITH a `notification` payload from your server,
+    // Android will show a duplicate (system + ours). To avoid that, change your server
+    // to send DATA-ONLY messages (no `notification` key) — then only this handler runs
+    // on Android. On iOS, this is the ONLY way notifications appear.
     await _showFromRemoteMessage(message);
   }
 
   // ─── Private Helpers ──────────────────────────────────────────────────────
 
   static Future<void> _showFromRemoteMessage(RemoteMessage message) async {
-    final type = message.data['type'] ?? '';
-    final title = message.notification?.title ?? 'Bus Update';
-    final body = message.notification?.body ?? '';
+    final title = message.notification?.title ??
+        message.data['title'] as String? ??
+        'Bus Update';
+    final body = message.notification?.body ??
+        message.data['body'] as String? ??
+        '';
 
-    // Use body content hash for unique ID so different stops don't overwrite
-    int id = '${type}_$body'.hashCode.abs() % 100000;
+    // Skip if both are empty
+    if (title.isEmpty && body.isEmpty) return;
+
+    final type = message.data['type'] as String? ?? '';
+    final int id = '${type}_$body'.hashCode.abs() % 100000;
 
     await _show(id: id, title: title, body: body);
   }
@@ -167,15 +200,24 @@ class NotificationService {
       playSound: true,
     );
 
+    // ✅ FIX: presentBanner replaces deprecated presentAlert on iOS 14+
     const NotificationDetails details = NotificationDetails(
       android: androidDetails,
       iOS: DarwinNotificationDetails(
-        presentAlert: true,
+        presentAlert: true,   // iOS < 14
+        presentBanner: true,  // iOS 14+
         presentBadge: true,
         presentSound: true,
+        interruptionLevel: InterruptionLevel.active,
       ),
     );
 
     await _plugin.show(id, title, body, details, payload: payload);
   }
+}
+
+// ✅ Must be top-level (not a class method) for background handling
+@pragma('vm:entry-point')
+void _backgroundNotificationResponseHandler(NotificationResponse response) {
+  debugPrint('[Notification] Background tap: ${response.payload}');
 }

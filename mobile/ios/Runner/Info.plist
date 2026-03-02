@@ -45,15 +45,26 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+
+	<!-- ✅ FIX: Location permission strings (all 3 are REQUIRED on iOS) -->
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>This app needs access to location to track bus routes.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>This app needs access to location to track bus routes continuously in the background.</string>
+	<string>This app needs always-on location access so the bus can be tracked even when the screen is locked.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>This app needs always-on location access so the bus can be tracked even when the screen is locked.</string>
+
+	<!-- ✅ FIX: Added remote-notification description (required by some iOS versions) -->
+	<key>NSUserNotificationUsageDescription</key>
+	<string>Receive alerts when your bus is arriving or has departed.</string>
+
+	<!-- ✅ Background modes: location + remote-notification are critical -->
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>
 		<string>fetch</string>
 		<string>remote-notification</string>
+		<string>processing</string>
 	</array>
 </dict>
 </plist>
