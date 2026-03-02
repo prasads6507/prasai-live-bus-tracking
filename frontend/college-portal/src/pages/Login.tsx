@@ -50,13 +50,17 @@ const Login = () => {
             const data = await login({ email, password, orgSlug });
 
             // 2. Sign in to Firebase using the Custom Token from backend
+            let firebaseIdToken = data.token; // Fallback to custom JWT if custom auth fails
             if (data.firebaseCustomToken) {
                 const { signInWithCustomToken } = await import('firebase/auth');
-                await signInWithCustomToken(auth, data.firebaseCustomToken);
+                const userCredential = await signInWithCustomToken(auth, data.firebaseCustomToken);
+                // CRITICAL: Get real Firebase ID Token for college-portal backend
+                // This replaces the custom JWT which is only for the owner-portal
+                firebaseIdToken = await userCredential.user.getIdToken();
             }
 
             const role = data.role;
-            const idToken = data.token; // This is the JWT from our backend
+            const idToken = firebaseIdToken; // Use the real Firebase ID Token
 
             // 3. Handle Redirects based on Role
             if (role === 'DRIVER') {
