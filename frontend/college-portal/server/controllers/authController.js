@@ -42,13 +42,16 @@ const loginUser = async (req, res) => {
                     return res.status(403).json({ message: 'Your organization account is suspended.' });
                 }
 
-                // If orgSlug is provided (Mobile App), verify it matches the user's collegeId/slug
-                if (orgSlug && userData.role === 'DRIVER') {
+                // Organization Isolation: Ensure user (Admin/Driver) belongs to the requested organization
+                // Note: OWNER role is global and skips this check
+                if (orgSlug && userData.role !== 'OWNER') {
                     const collegeData = collegeDoc.exists ? collegeDoc.data() : null;
+                    // Check if the provided orgSlug matches user's collegeId OR the actual slug of that college
                     const matches = userData.collegeId === orgSlug || (collegeData && collegeData.slug === orgSlug);
+
                     if (!matches) {
-                        console.warn(`[Login] Org Mismatch for driver ${userData.email}: Expected ${orgSlug}, got ${userData.collegeId}`);
-                        return res.status(401).json({ message: 'Invalid Organization for this driver account.' });
+                        console.warn(`[Login] Organization Mismatch for ${userData.role} (${userData.email}): Requested ${orgSlug}, user assigned to ${userData.collegeId}`);
+                        return res.status(401).json({ message: 'Invalid Organization for this account.' });
                     }
                 }
             }
