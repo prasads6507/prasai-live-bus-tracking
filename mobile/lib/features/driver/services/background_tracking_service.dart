@@ -615,8 +615,10 @@ class BackgroundTrackingService {
     String stopId,
     Position p,
   ) async {
-    debugPrint("[Tracker] Arrived at stop $stopId");
-    _notifyServer(tripId, busId, collegeId, stopId, "ARRIVED", prefs: prefs);
+    final stopName = prefs.getString('next_stop_name') ?? 'Stop';
+    debugPrint("[Tracker] Arrived at stop $stopId ($stopName)");
+    _notifyServer(tripId, busId, collegeId, stopId, "ARRIVED",
+        stopName: stopName, prefs: prefs);
   }
 
   static Future<void> _handleStopCompletion(

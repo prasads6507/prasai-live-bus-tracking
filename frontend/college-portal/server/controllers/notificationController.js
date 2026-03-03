@@ -465,12 +465,30 @@ const sendStopEventNotification = async (tripId, busId, collegeId, stopId, stopN
             read: false,
         });
 
-        // Mark as processed to prevent re-sending
+        // Write to stopArrivals collection for student app real-time listener
+        const arrivalData = {
+            tripId,
+            busId,
+            collegeId,
+            stopId,
+            stopName: stopName || '',
+            type,
+            location: stopName || stopAddress || '',
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            fcmSent: tokens.length > 0,
+            notifiedAt: new Date().toISOString(),
+        };
+
         if (arrivalDocId) {
+            // Update existing doc
             await db.collection('stopArrivals').doc(arrivalDocId).update({
+                ...arrivalData,
                 fcmSent: true,
-                notifiedAt: new Date().toISOString(),
             });
+        } else {
+            // Create new doc so student app Firestore listener picks it up
+            const newDoc = await db.collection('stopArrivals').add(arrivalData);
+            console.log(`[StopEvent] Created stopArrivals doc: ${newDoc.id}`);
         }
 
     } catch (err) {
