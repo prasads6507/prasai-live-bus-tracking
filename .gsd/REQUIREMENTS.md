@@ -1,16 +1,15 @@
-# Requirements: Bannu Bus Application
+# Requirements: Notification System Fix
 
-## Scoped v1 (Completed)
-- [x] **Real-time Map Tracking**: Students see bus location on MapLibre.
-- [x] **Driver Trip Control**: Start/End trips with background location syncing.
-- [x] **Attendance Marking**: Drivers tick students verified via FCM.
-- [x] **Proximity Notifications**: Automatic alerts when bus is near a stop.
-- [x] **Admin Portal**: Manage buses, routes, and student assignments via Excel/UI.
+## Scoped Fixes
+- [x] **Fix Token Management**: Revert to `getIdToken()` in `_notifyServer`.
+- [x] **Restore Notification Logic**: Ensure `SKIPPED`, `ARRIVED`, and `TRIP_ENDED` events are correctly triggered.
+- [x] **Update Firebase Rules**: Review and tighten `firestore.rules` for notifications and trips.
+- [x] **Force Update Firebase**: Deploy updated rules and verify backend functions/API.
+- [x] **Manual Skip UX**: Ensure the manually triggered skip stop correctly updates Firestore and sends notifications.
 
-## Scoped v2 (Active/Next)
-- [ ] **Advanced Analytics**: Generate reports on trip duration and student boardings.
-- [ ] **Driver Performance**: Track speeding or route deviations.
-- [ ] **Enhanced UI**: Refined glassmorphism across all screens.
+## Build Requirements
+- [ ] **Release APK**: Generate a signed (or release-intent) APK for distribution.
+- [ ] **Code Persistence**: Push all stable changes to the remote repository.
 
 ## Out of Scope (For Now)
 - [ ] Parent-to-Driver direct chat.

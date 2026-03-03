@@ -1,31 +1,35 @@
-# Phase 6: Sync & UI Reliability
+# Phase 6 Plan: Build & Release
 
 <task type="auto">
-  <name>Fix Skip Stop UI Update</name>
-  <files>mobile/lib/features/driver/services/background_tracking_service.dart</files>
+  <name>Dependency Resolution</name>
+  <files>mobile/pubspec.yaml</files>
   <action>
-    - Update `_handleManualSkip` to use `service.invoke('update', ...)` for immediate isolate communication.
-    - Include full telemetry in the update payload to prevent UI flickering.
+    - Navigate to `mobile` directory.
+    - Run `flutter pub get` to ensure all dependencies are resolved and the environment is ready.
   </action>
-  <verify>Skip a stop and check if the 'NEXT STOP' name updates instantly without refresh.</verify>
-  <done>Next stop UI updates instantly after a manual skip.</done>
+  <verify>Check for 'Exit code: 0' and no dependency resolution errors.</verify>
+  <done>Dependencies are fully resolved.</done>
 </task>
 
 <task type="auto">
-  <name>Fix Attendance Cross-Session Carry-over</name>
-  <files>frontend/college-portal/server/controllers/driverController.js, mobile/lib/features/driver/screens/driver_students_screen.dart</files>
+  <name>Generate Release APK</name>
+  <files>mobile/android/</files>
   <action>
-    - Backend: Remove `updatedAt` from the date-checking logic in `getTodayAttendance` to prevent old retried records from appearing as today's.
-    - Mobile: Explicitly clear local set state in `DriverStudentsScreen` before re-sync to prevent merging old data.
+    - Run `flutter build apk --release`.
+    - This will generate the production-ready APK in `build/app/outputs/flutter-apk/app-release.apk`.
   </action>
+  <verify>Check for 'Built build/app/outputs/flutter-apk/app-release.apk' in output.</verify>
+  <done>APK is successfully generated.</done>
+</task>
+
 <task type="auto">
-  <name>EMERGENCY: Fix Attendance Carry-over Race Condition</name>
-  <files>frontend/college-portal/server/controllers/driverController.js, mobile/lib/features/driver/screens/driver_students_screen.dart</files>
+  <name>Git Persistence</name>
+  <files>N/A</files>
   <action>
-    - Backend: Force `.where('direction', '==', direction)` in `getTodayAttendance` Firestore query.
-    - Mobile: Track `_currentSyncDirection` in `DriverStudentsScreen` and discard results from mismatched direction calls (fixes race condition).
-    - Mobile: Explicitly clear local state when a new `activeTripId` is detected.
+    - Add all changes: `git add .`
+    - Commit the fix and build state: `git commit -m "feat: stabilize notification system and generate release APK"`
+    - Push to remote: `git push origin main`
   </action>
-  <verify>Mark student in pickup, start dropoff, and verify list is empty immediately.</verify>
-  <done>Carry-over resolved even under high latency/fast navigation.</done>
+  <verify>Run `git status` to ensure clean working directory.</verify>
+  <done>Code is pushed and remote is up to date.</done>
 </task>

@@ -33,11 +33,17 @@
   - [x] Implement Bulk Delete for Attendance Records in Admin Portal.
   - [x] Implement Attendance Persistence for Drivers (Trip Restart Logic).
 
-## Phase 4: Skip & Attendance Reliability
+## Phase 4: Skip & Attendance Reliability (Completed)
 - **Goal**: Fix skip stop UX and ensure independent attendance for pickup/drop-off.
+- [x] Fix immediate Skip UI after Start Trip.
+- [x] Ensure reliable skip using database truth.
+- [x] Separate pickup and drop-off attendance records.
+- [x] Implement instant parent notifications for attendance.
+
+## Phase 6: Build & Release (Active)
+- **Goal**: Generate production-ready APK and push code.
 - **Tasks**:
-  - [ ] Fix immediate Skip UI after Start Trip.
-  - [ ] Ensure reliable skip using database truth.
-  - [ ] Separate pickup and drop-off attendance records.
-  - [ ] Implement instant parent notifications for attendance.
-  - [ ] Build release APK and push code.
+  - [ ] Run `flutter pub get` and verify dependencies.
+  - [ ] Build release APK (`flutter build apk --release`).
+  - [ ] Push code changes to Git.
+  - [ ] Provide APK path to user.

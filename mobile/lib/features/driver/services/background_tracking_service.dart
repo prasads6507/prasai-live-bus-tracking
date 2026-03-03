@@ -490,7 +490,7 @@ class BackgroundTrackingService {
           await prefs.setString('next_stop_name', (nextStop['name'] as String?) ?? 'Stop');
           await prefs.setBool('has_arrived_current', false);
 
-          debugPrint("[Background] MANUAL SKIP SUCCESS: $stopId -> ${nextStop['stopId']}");
+          debugPrint("[Tracker] MANUAL SKIP SUCCESS: $stopId -> ${nextStop['stopId']}");
           
           // 6. Update UI immediately (Safe invoke using the active service instance)
           service.invoke('update', {
@@ -734,22 +734,40 @@ class BackgroundTrackingService {
     try {
       final apiBase = prefs?.getString('api_base_url') ?? Env.apiUrl;
       
-      // Use Firebase ID Token directly - this ensures it is ALWAYS fresh even in background isolate
+      // Use Firebase ID Token directly - this ensures it is ALWAYS fresh
       final user = FirebaseAuth.instance.currentUser;
-      final token = await user?.getIdToken();
+      if (user == null) {
+        debugPrint('[Tracker] _notifyServer aborted: No active FirebaseAuth user.');
+        return;
+      }
 
+      final token = await user.getIdToken();
       if (token == null || token.isEmpty) {
-        debugPrint('[NotifyServer] WARNING: No Firebase user or ID token — request will be unauthorized (401).');
+        debugPrint('[Tracker] _notifyServer aborted: Failed to fetch fresh ID token.');
+        return;
       }
 
       final dio = Dio(BaseOptions(
-        connectTimeout: const Duration(seconds: 10),
-        receiveTimeout: const Duration(seconds: 10),
+        connectTimeout: const Duration(seconds: 15),
+        receiveTimeout: const Duration(seconds: 15),
         headers: {
           'Content-Type': 'application/json',
-          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+          'Authorization': 'Bearer $token',
         },
       ));
+
+      final payload = {
+        'tripId': tripId,
+        'busId': busId,
+        'collegeId': collegeId,
+        'stopId': stopId,
+        'stopName': stopName ?? 'Stop',
+        'type': type,
+        'timestamp': DateTime.now().toIso8601String(),
+        if (arrivalDocId != null) 'arrivalDocId': arrivalDocId,
+        if (targetStudentIds != null && targetStudentIds.isNotEmpty) 
+          'targetStudentIds': targetStudentIds,
+      };
 
       if (type == 'TRIP_ENDED') {
         final response = await dio.post(
@@ -758,33 +776,24 @@ class BackgroundTrackingService {
             'tripId': tripId,
             'busId': busId,
             'collegeId': collegeId,
+            'timestamp': DateTime.now().toIso8601String(),
           },
         );
-        debugPrint('[NotifyServer] TRIP_ENDED success: ${response.statusCode}');
+        debugPrint('[Tracker] TRIP_ENDED success: ${response.statusCode}');
       } else {
         final response = await dio.post(
           '$apiBase/api/driver/stop-event',
-          data: {
-            'tripId': tripId,
-            'busId': busId,
-            'collegeId': collegeId,
-            'stopId': stopId,
-            'stopName': stopName ?? 'Stop',
-            'type': type,
-            if (arrivalDocId != null) 'arrivalDocId': arrivalDocId,
-            if (targetStudentIds != null && targetStudentIds.isNotEmpty) 
-              'targetStudentIds': targetStudentIds,
-          },
+          data: payload,
         );
-        debugPrint('[NotifyServer] $type success: ${response.statusCode} - ${response.data}');
+        debugPrint('[Tracker] $type success: ${response.statusCode}');
       }
     } on DioException catch (e) {
-      debugPrint('[NotifyServer] FAILED for $type at stopId=$stopId: ${e.message}');
+      debugPrint('[Tracker] FAILED for $type at stopId=$stopId: ${e.message}');
       if (e.response != null) {
-        debugPrint('[NotifyServer] Server response: ${e.response?.statusCode} — ${e.response?.data}');
+        debugPrint('[Tracker] Server response: ${e.response?.statusCode} — ${e.response?.data}');
       }
     } catch (e) {
-      debugPrint('[NotifyServer] Unexpected error for $type at stopId=$stopId: $e');
+      debugPrint('[Tracker] Unexpected error in _notifyServer [$type]: $e');
     }
   }
 }

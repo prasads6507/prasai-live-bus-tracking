@@ -1,86 +1,47 @@
-# Phase 2 Plan: Bulk Delete Attendance
+# Phase 2 Plan: Implementation & Force Update
 
 <task type="auto">
-  <name>Backend: Implement Bulk Delete Attendance Endpoint</name>
-  <files>
-    frontend/college-portal/server/routes/collegeAdmin.routes.js,
-    frontend/college-portal/server/controllers/collegeAdminController.js
-  </files>
+  <name>Fix Token Management in Background Service</name>
+  <files>mobile/lib/features/driver/services/background_tracking_service.dart</files>
   <action>
-    1. Update `collegeAdmin.routes.js` to include `router.delete('/attendance', collegeAdminController.bulkDeleteAttendance)`.
-    2. Update `collegeAdminController.js` to implement `bulkDeleteAttendance`:
-       - Extract `attendanceIds` from `req.body`.
-       - Validate requested IDs belong to the admin's `collegeId`.
-       - Use Firestore `WriteBatch` to delete records.
-       - Return success response.
+    - Update `_notifyServer` to fetch a fresh Firebase ID Token using `FirebaseAuth.instance.currentUser?.getIdToken()`.
+    - Ensure `Dio` options include the `Authorization` header with the Bearer token.
+    - Restore robust error logging for `DioException`.
   </action>
-  <verify>
-    Create a temporary test script to call the endpoint with mock IDs and verify Firestore deletion.
-  </verify>
-  <done>
-    Endpoint added and verified to delete records in Firestore while respecting tenant isolation.
-  </done>
+  <verify>Check logs for "[NotifyServer] success" and ensure no 401 Unauthorized errors.</verify>
+  <done>`_notifyServer` successfully sends requests with a valid ID Token.</done>
 </task>
 
 <task type="auto">
-  <name>Frontend: Update API Service</name>
-  <files>
-    frontend/college-portal/src/services/api.ts
-  </files>
+  <name>Restore Notification Logic for Skip and Trip End</name>
+  <files>mobile/lib/features/driver/services/background_tracking_service.dart</files>
   <action>
-    Add `bulkDeleteAttendance` function to `api.ts`:
-    ```typescript
-    export const bulkDeleteAttendance = async (attendanceIds: string[]) => {
-        const response = await api.delete('/admin/attendance', { data: { attendanceIds } });
-        return response.data;
-    };
-    ```
+    - In `_handleManualSkip`, ensure `_notifyServer` is called with type `SKIPPED`.
+    - In `_handleStopCompletion` (auto-end block), ensure `_notifyServer` is called with type `TRIP_ENDED`.
+    - Verify that `stopName` is correctly passed to `_notifyServer` for all event types.
   </action>
-  <verify>
-    Check if the function is exported and correctly formatted.
-  </verify>
-  <done>
-    `bulkDeleteAttendance` available in API service.
-  </done>
+  <verify>Trigger manual skip and trip end; check Firestore `stopArrivals` and server logs for corresponding events.</verify>
+  <done>All stop events trigger server notifications with correct data.</done>
 </task>
 
 <task type="auto">
-  <name>Frontend: Implement Selection UI in BusAttendance</name>
-  <files>
-    frontend/college-portal/src/pages/BusAttendance.tsx
-  </files>
+  <name>Update Firestore Rules</name>
+  <files>firestore.rules</files>
   <action>
-    1. Add `selectedIds` state (Set or Array).
-    2. Add Checkbox column to the table in Detail View.
-    3. Implement "Select All" functionality in the header.
-    4. Ensure checkboxes match the existing UI theme.
+    - Review `firestore.rules` to ensure `stopArrivals` allows writes from authenticated users (drivers).
+    - Ensure `trips` and `buses` collections have appropriate write permissions for drivers.
   </action>
-  <verify>
-    Manually check if checkboxes allow multi-selection and "Select All" works.
-  </verify>
-  <done>
-    User can select multiple attendance records in the UI.
-  </done>
+  <verify>`firebase deploy --only firestore:rules` (user command) or manual validation.</verify>
+  <done>Firestore rules are correct and allow necessary mobile operations.</done>
 </task>
 
-<task type="auto">
-  <name>Frontend: Implement Bulk Delete Action</name>
-  <files>
-    frontend/college-portal/src/pages/BusAttendance.tsx
-  </files>
+<task type="manual">
+  <name>Force Update Firebase and Verify</name>
+  <files>N/A</files>
   <action>
-    1. Add "Delete Selected" button to the header (visible when `selectedIds.length > 0`).
-    2. Implement `handleBulkDelete`:
-       - Show confirmation dialog.
-       - Call `bulkDeleteAttendance` API.
-       - Refresh data on success.
-       - Clear selection.
-       - Show toast notification (if toast system exists).
+    - User needs to run `firebase deploy` if they have sensitive config.
+    - Verify end-to-end notification flow from mobile driver app to student app.
   </action>
-  <verify>
-    Perform a bulk delete and verify records are removed from the list after refresh.
-  </verify>
-  <done>
-    Selected attendance records are deleted and UI updates accordingly.
-  </done>
+  <verify>User manual verification.</verify>
+  <done>System is synchronized and notifications are working as expected.</done>
 </task>

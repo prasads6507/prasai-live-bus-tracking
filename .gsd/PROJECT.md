@@ -1,16 +1,15 @@
-# Project: Bannu Bus Application
+# Project: Notification System Fix & Firebase Sync
 
 ## Vision
-A comprehensive live bus tracking and student attendance system for colleges. It ensures student safety through real-time notifications for parents and efficient trip management for drivers and admins.
+Stabilize the skip-stop notification system and ensure synchronization between the mobile app's logic and Firebase/Backend triggers. This project aims to fix regressions introduced after version `8efad53` and perform a clean "force update" to Firebase.
 
 ## Tech Stack
-- **Mobile**: Flutter (Riverpod, GoRouter, MapLibre, Firebase SDK)
-- **Backend**: Node.js, Express, Firebase Admin SDK
-- **Frontend**: React, TypeScript, Vite, Tailwind CSS
-- **Database/Auth**: Firebase Firestore & Firebase Auth
-- **Infrastructure**: Vercel (Backend/Frontend), Android release APKs
+- **Mobile**: Flutter (Riverpod, Firebase SDK)
+- **Backend**: Firebase Cloud Functions (Node.js) / Vercel API
+- **Database**: Firebase Firestore
+- **Auth**: Firebase Auth (ID Token based)
 
 ## Non-Negotiable Constraints
-- **Instant Notifications**: Parents must be notified immediately upon student boarding/drop-off.
-- **Battery Efficiency**: Mobile tracking must be optimized for long driver shifts.
-- **Multi-Tenant Isolation**: Data must be strictly scoped to the `collegeId`.
+- **Reliable Token Management**: Use `getIdToken()` for all backend requests to avoid 401s in background.
+- **Atomic Operations**: Use Firestore batches for stop events and progress updates.
+- **Database Truth**: The `trips` collection must remain the source of truth for skip/arrival status.
