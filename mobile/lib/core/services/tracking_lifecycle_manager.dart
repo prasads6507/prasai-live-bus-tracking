@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_background_service/flutter_background_service.dart';
 import '../../features/driver/services/background_tracking_service.dart';
 
 class TrackingLifecycleManager {
@@ -38,13 +38,14 @@ class TrackingLifecycleManager {
       await prefs.remove('next_stop_radius');
       await prefs.remove('next_stop_name');
       
-      // ✅ Attendance isolation safety: clear today's directional keys on trip end
-      // This prevents "ghost" attendance showing up if the next trip starts too quickly.
-      final direction = prefs.getString('track_direction') ?? 'pickup';
-      final tripId = prefs.getString('track_trip_id');
-      if (tripId != null) {
-        await prefs.remove('shared_attendance_${tripId}_$direction');
-        await prefs.remove('shared_attendance_$tripId');
+      // ✅ Attendance isolation safety: clear ALL attendance-related keys
+      // Loop through all keys to find directional or trip-specific caches
+      final keys = prefs.getKeys();
+      for (String key in keys) {
+        if (key.startsWith('shared_attendance_')) {
+          await prefs.remove(key);
+          debugPrint("[TrackingLifecycleManager] Cleared stale attendance cache: $key");
+        }
       }
       
       // Note: trip_history_buffer is no longer deleted here. 

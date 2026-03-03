@@ -63,6 +63,14 @@ service cloud.firestore {
       allow read, write: if isAuthenticated();
     }
 
+    // ─── Attendance ──────────────────────────────────────────────────
+    // Note: Backend manages attendance primarily, but mobile app needs 
+    // to search/read for session restoration.
+    match /attendance/{attendanceId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated(); // Drivers record status
+    }
+
     // ─── Routes ──────────────────────────────────────────────────────
     match /routes/{routeId} {
       allow read: if isAuthenticated();

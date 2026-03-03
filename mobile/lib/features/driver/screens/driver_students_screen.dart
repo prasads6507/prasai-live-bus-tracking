@@ -43,42 +43,44 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
   }
 
   Future<void> _loadLocalAttendance({String? forcedDirection}) async {
-    final activeTripId = ref.read(activeTripIdProvider).value;
-    final assignedBus = ref.read(assignedBusProvider).value;
-    final profile = ref.read(userProfileProvider).value;
-    
-    if (activeTripId == null) {
-      if (mounted) {
-        setState(() {
-          _lockedIds.clear();
-          _localAttendedIds.clear();
-          _pendingIds.clear();
-          _isLoadingPrefs = false;
-        });
-      }
-      return;
-    }
-
-    // 1. Determine direction first to build the correct cache key
-    String? direction = forcedDirection;
-    if (direction == null) {
-      final tripData = ref.read(tripProvider(activeTripId)).value;
-      direction = tripData?['direction'];
-    }
-    final effectiveDirection = direction ?? 'pickup';
-
-    // 2. Clear state when switching direction or trip
+    // 1. AGGRESSIVE RESET: Clear UI immediately before any async work
     if (mounted) {
       setState(() {
         _lockedIds.clear();
         _localAttendedIds.clear();
         _pendingIds.clear();
+        _isLoadingPrefs = true;
       });
+      debugPrint('[DriverStudentsScreen] State reset triggered');
     }
 
+    final activeTripId = ref.read(activeTripIdProvider).value;
+    final assignedBus = ref.read(assignedBusProvider).value;
+    final profile = ref.read(userProfileProvider).value;
+    
+    if (activeTripId == null) {
+      if (mounted) setState(() => _isLoadingPrefs = false);
+      return;
+    }
+
+    // 2. Determine direction
+    String? direction = forcedDirection;
+    if (direction == null) {
+      final tripData = ref.read(tripProvider(activeTripId)).value;
+      direction = tripData?['direction'];
+    }
+
+    // 3. DIRECTION GUARD: Verify direction is actually known
+    if (direction == null) {
+      debugPrint('[DriverStudentsScreen] Direction unknown, waiting for trip data before sync...');
+      if (mounted) setState(() => _isLoadingPrefs = false);
+      return;
+    }
+
+    final effectiveDirection = direction;
     final driverBusId = assignedBus?.id ?? profile?.assignedBusId;
 
-    // 3. Load from SharedPreferences (local cache/offline safety) using direction-aware key
+    // 4. Load from SharedPreferences using direction-aware key
     final prefs = await SharedPreferences.getInstance();
     final cacheKey = 'shared_attendance_${activeTripId}_$effectiveDirection';
     final localList = prefs.getStringList(cacheKey) ?? [];
@@ -89,29 +91,28 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
       });
     }
 
-    // 4. Load from Backend (source of truth)
+    // 5. Load from Backend (source of truth)
     if (driverBusId != null) {
       try {
-        _currentSyncDirection = effectiveDirection; // Set latest target
+        _currentSyncDirection = effectiveDirection;
         final apiDS = await _buildApiDataSource();
         final remoteList = await apiDS.getTodayAttendance(driverBusId, effectiveDirection);
         
-        // GUARD: If the direction changed while we were waiting for the network, DISCARD.
+        // GUARD: If the direction changed while we were waiting, DISCARD the stale result.
         if (_currentSyncDirection != effectiveDirection) {
-           debugPrint('[DriverStudentsScreen] Discarding stale sync for $effectiveDirection (Now: $_currentSyncDirection)');
+           debugPrint('[DriverStudentsScreen] Discarding stale sync for $effectiveDirection');
            return;
         }
 
         if (mounted) {
           setState(() {
             _lockedIds.clear(); 
-            _localAttendedIds.clear(); // RESET local state before remote sync
+            _localAttendedIds.clear();
             if (remoteList.isNotEmpty) {
               _localAttendedIds.addAll(remoteList);
               _lockedIds.addAll(remoteList);
             }
           });
-          // Update local cache too
           await _saveLocalAttendance(activeTripId, effectiveDirection);
         }
       } catch (e) {
@@ -184,9 +185,9 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
         final collegeId = userProfile.collegeId;
         final activeTripId = ref.watch(activeTripIdProvider).value;
         
-        // Listen for trip changes to trigger re-sync (crucial for trip restart persistence)
+        // Listen for trip changes to trigger re-sync (crucial for trip transition)
         ref.listen(activeTripIdProvider, (previous, next) {
-          if (next.value != previous?.value && next.value != null) {
+          if (next.value != previous?.value) {
             _loadLocalAttendance();
           }
         });
