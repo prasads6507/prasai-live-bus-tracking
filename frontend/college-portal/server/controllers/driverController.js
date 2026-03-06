@@ -42,7 +42,7 @@ const populateBusRoutes = async (buses) => {
 // @desc    Get available buses for the driver's college
 // @route   GET /api/driver/buses
 // @access  Private (Driver)
-const getDriverBuses = async (req, res) => {
+async function getDriverBuses(req, res) {
     try {
 
 
@@ -75,7 +75,7 @@ const getDriverBuses = async (req, res) => {
 // @desc    Search ALL buses in college (Global Search)
 // @route   GET /api/driver/buses/search
 // @access  Private (Driver)
-const searchDriverBuses = async (req, res) => {
+async function searchDriverBuses(req, res) {
     try {
         const { q } = req.query;
         if (!q) return res.status(400).json({ success: false, message: 'Query required' });
@@ -121,7 +121,7 @@ const searchDriverBuses = async (req, res) => {
 // @desc    Update bus location and status (real-time, every 5 seconds)
 // @route   POST /api/driver/tracking/:busId
 // @access  Private (Driver)
-const updateBusLocation = async (req, res) => {
+async function updateBusLocation(req, res) {
     try {
         const { busId } = req.params;
         const { latitude, longitude, speed, heading } = req.body;
@@ -205,7 +205,7 @@ const updateBusLocation = async (req, res) => {
 // @desc    End a trip (Atomic Update)
 // @route   POST /api/driver/trips/:tripId/end
 // @access  Private (Driver)
-const endTrip = async (req, res) => {
+async function endTrip(req, res) {
     const { tripId } = req.params;
     const { busId } = req.body;
 
@@ -288,7 +288,7 @@ const endTrip = async (req, res) => {
 // @desc    Start a new trip
 // @route   POST /api/driver/trip/start/:busId
 // @access  Private (Driver)
-const startTrip = async (req, res) => {
+async function startTrip(req, res) {
     try {
         const { busId } = req.params;
         const { tripId, routeId, direction, isMaintenance, originalBusId } = req.body;
@@ -451,7 +451,7 @@ const startTrip = async (req, res) => {
 // @desc    Save trip history point (every 1 minute)
 // @route   POST /api/driver/trip/history/:busId
 // @access  Private (Driver)
-const saveTripHistory = async (req, res) => {
+async function saveTripHistory(req, res) {
     try {
         const { busId } = req.params;
         const { tripId, latitude, longitude, speed, heading, timestamp } = req.body;
@@ -505,7 +505,7 @@ const saveTripHistory = async (req, res) => {
 // @desc    Upload complete trip history at trip end (replaces per-second writes)
 // @route   POST /api/driver/trips/:tripId/history-upload
 // @access  Private (Driver)
-const historyUpload = async (req, res) => {
+async function historyUpload(req, res) {
     try {
         const { tripId } = req.params;
         const { polyline, distanceMeters, durationSeconds, maxSpeedMph, avgSpeedMph, pointsCount, path, attendance } = req.body;
@@ -685,7 +685,7 @@ const historyUpload = async (req, res) => {
 // @desc    Notify single student on attendance tick
 // @route   POST /api/driver/trips/:tripId/attendance/notify
 // @access  Private (Driver)
-const notifyStudentAttendance = async (req, res) => {
+async function notifyStudentAttendance(req, res) {
     try {
         const { tripId } = req.params;
         const { studentId, busId, direction, isChecked, busNumber } = req.body;
@@ -713,7 +713,7 @@ const notifyStudentAttendance = async (req, res) => {
 // @desc    Trigger proximity check (Phase 4.3)
 // @route   POST /api/driver/notifications/proximity
 // @access  Private (Driver)
-const checkProximity = async (req, res) => {
+async function checkProximity(req, res) {
     try {
         const { busId, location, tripId, routeId } = req.body;
         // console.log('Checking proximity for bus:', busId); 
@@ -732,7 +732,7 @@ const checkProximity = async (req, res) => {
 // @desc    Mark student as picked up
 // @route   POST /api/driver/trips/:tripId/attendance/pickup
 // @access  Private (Driver)
-const markPickup = async (req, res) => {
+async function markPickup(req, res) {
     try {
         const { tripId } = req.params;
         const { studentId } = req.body;
@@ -812,7 +812,7 @@ const markPickup = async (req, res) => {
 // @desc    Mark student as dropped off
 // @route   POST /api/driver/trips/:tripId/attendance/dropoff
 // @access  Private (Driver)
-const markDropoff = async (req, res) => {
+async function markDropoff(req, res) {
     try {
         const { tripId } = req.params;
         const { studentId } = req.body;
@@ -888,7 +888,7 @@ const markDropoff = async (req, res) => {
 // @desc    Get all attendance records for a trip
 // @route   GET /api/driver/trips/:tripId/attendance
 // @access  Private (Driver)
-const getTripAttendance = async (req, res) => {
+async function getTripAttendance(req, res) {
     try {
         const { tripId } = req.params;
 
@@ -912,7 +912,7 @@ const getTripAttendance = async (req, res) => {
 // @desc    Get today's total attendance for a bus and direction
 // @route   GET /api/driver/buses/:busId/attendance/today
 // @access  Private (Driver)
-const getTodayAttendance = async (req, res) => {
+async function getTodayAttendance(req, res) {
     try {
         const { busId } = req.params;
         const { direction } = req.query; // pickup or dropoff
@@ -977,7 +977,7 @@ const getTodayAttendance = async (req, res) => {
 // @desc    Get students assigned to a specific bus (for drivers)
 // @route   GET /api/driver/buses/:busId/students
 // @access  Private (Driver)
-const getBusStudents = async (req, res) => {
+async function getBusStudents(req, res) {
     try {
         const { busId } = req.params;
         const collegeId = req.collegeId;
@@ -1015,7 +1015,7 @@ const getBusStudents = async (req, res) => {
 };
 
 // @desc    Generate Handover OTP for a student
-const generateHandoverOTP = async (req, res) => {
+async function generateHandoverOTP(req, res) {
     try {
         const { tripId } = req.params;
         const { studentId, neighborName, neighborPhone } = req.body;
@@ -1075,7 +1075,7 @@ const generateHandoverOTP = async (req, res) => {
 // @desc    Verify Handover OTP and mark student as handed over
 // @route   POST /api/driver/trips/:tripId/attendance/handover/verify
 // @access  Private (Driver)
-const verifyHandoverOTP = async (req, res) => {
+async function verifyHandoverOTP(req, res) {
     try {
         const { tripId } = req.params;
         const { studentId, otp } = req.body;
