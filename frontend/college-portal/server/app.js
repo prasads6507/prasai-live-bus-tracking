@@ -64,24 +64,19 @@ app.get('/', (req, res) => {
     res.send('Multi-College Bus Tracking API Running');
 });
 
-// API Routes (to be imported)
+// API Routes
 app.use('/api/auth', require('./routes/auth.routes'));
 app.use('/api/owner', require('./routes/owner.routes'));
-app.use('/api/admin/routes', require('./routes/bulkRoute.routes')); // Must be before collegeAdmin routes
+app.use('/api/admin/routes', require('./routes/bulkRoute.routes'));
 app.use('/api/admin', require('./routes/collegeAdmin.routes'));
 app.use('/api/driver', require('./routes/driver.routes'));
 app.use('/api/student', require('./routes/student.routes'));
 app.use('/api/geocode', require('./controllers/geocodeController').reverseGeocode);
 
 // Global Error Handler
-app.use((err, req, res, next) => {
-    console.error(`[API ERROR] ${req.method} ${req.originalUrl}:`, err);
-    res.status(err.status || 500).json({
-        success: false,
-        message: err.message || "Internal Server Error",
-        details: process.env.NODE_ENV === 'development' ? err.stack : undefined
-    });
-});
+app.use(errorHandler);
+
+// Start Server
 
 // Init Socket.IO
 // initSocket(server); // Disabled for Firebase Migration
