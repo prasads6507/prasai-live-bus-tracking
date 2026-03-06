@@ -314,7 +314,7 @@ const BusAttendance = () => {
                     <div className="flex items-center gap-4">
                         <button
                             onClick={view === 'detail' ? backToList : () => navigate(-1)}
-                            className="p-2 hover:bg-white rounded-xl border border-slate-200 transition-colors shadow-sm"
+                            className="p-2 hover:bg-white rounded-xl border border-slate-200 transition-colors shadow-sm focus:ring-2 focus:ring-emerald-100"
                         >
                             <ChevronLeft size={20} className="text-slate-600" />
                         </button>
@@ -356,7 +356,7 @@ const BusAttendance = () => {
                         </button>
                         <button
                             onClick={fetchData}
-                            className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all font-medium shadow-lg shadow-blue-200"
+                            className="flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-all font-medium shadow-lg shadow-emerald-200"
                         >
                             <RefreshCcw size={18} />
                             <span>Refresh</span>
@@ -386,7 +386,7 @@ const BusAttendance = () => {
                                     <select
                                         value={filters.busId}
                                         onChange={(e) => setFilters({ ...filters, busId: e.target.value })}
-                                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
                                     >
                                         <option value="">All Buses</option>
                                         {buses.map((bus: any) => (
@@ -406,7 +406,7 @@ const BusAttendance = () => {
                                         type="date"
                                         value={filters.date}
                                         onChange={(e) => setFilters({ ...filters, date: e.target.value })}
-                                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
                                     />
                                 </div>
 
@@ -418,7 +418,7 @@ const BusAttendance = () => {
                                     <select
                                         value={filters.direction}
                                         onChange={(e) => setFilters({ ...filters, direction: e.target.value })}
-                                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
                                     >
                                         <option value="">All Directions</option>
                                         <option value="pickup">⬆ Pickup Only</option>
@@ -432,8 +432,8 @@ const BusAttendance = () => {
                                 <StatCard
                                     title="Total Records"
                                     value={totalStats.total}
-                                    icon={<Users className="text-blue-500" />}
-                                    color="bg-blue-50"
+                                    icon={<Users className="text-emerald-500" />}
+                                    color="bg-emerald-50"
                                 />
                                 <StatCard
                                     title="Present"
@@ -489,8 +489,8 @@ const BusAttendance = () => {
                                 <StatCard
                                     title="Total"
                                     value={selectedGroup.records.length}
-                                    icon={<Users className="text-blue-500" />}
-                                    color="bg-blue-50"
+                                    icon={<Users className="text-emerald-500" />}
+                                    color="bg-emerald-50"
                                 />
                                 <StatCard
                                     title={selectedGroup.direction === 'pickup' ? 'Picked Up' : 'Dropped Off'}
@@ -551,7 +551,7 @@ const BusAttendance = () => {
                                                             initial={{ opacity: 0, y: 8 }}
                                                             animate={{ opacity: 1, y: 0 }}
                                                             transition={{ delay: i * 0.03 }}
-                                                            className={`hover:bg-slate-50 transition-colors ${selectedIds.includes(record.id) ? 'bg-blue-50/50' : ''}`}
+                                                            className={`hover:bg-slate-50 transition-colors ${selectedIds.includes(record.id) ? 'bg-emerald-50/50' : ''}`}
                                                         >
                                                             {/* Checkbox */}
                                                             <td className="px-6 py-4">
@@ -566,7 +566,7 @@ const BusAttendance = () => {
                                                             {/* Student */}
                                                             <td className="px-6 py-4">
                                                                 <div className="flex items-center gap-3">
-                                                                    <div className="w-9 h-9 rounded-full bg-blue-50 flex items-center justify-center font-bold text-blue-600 text-sm flex-shrink-0">
+                                                                    <div className="w-9 h-9 rounded-full bg-emerald-50 flex items-center justify-center font-bold text-emerald-600 text-sm flex-shrink-0">
                                                                         {(record.studentName || '?')[0].toUpperCase()}
                                                                     </div>
                                                                     <div>
@@ -681,11 +681,11 @@ const GroupCard = ({
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: index * 0.06 }}
         onClick={onClick}
-        className="w-full text-left bg-white rounded-2xl border border-slate-100 shadow-sm hover:border-blue-200 hover:shadow-md transition-all p-5 flex items-center gap-4 group"
+        className="w-full text-left bg-white rounded-2xl border border-slate-100 shadow-sm hover:border-emerald-200 hover:shadow-md transition-all p-5 flex items-center gap-4 group"
     >
         {/* Bus icon */}
-        <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
-            <BusIcon size={22} className="text-blue-600" />
+        <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center flex-shrink-0">
+            <BusIcon size={22} className="text-emerald-600" />
         </div>
 
         {/* Info */}
@@ -711,7 +711,7 @@ const GroupCard = ({
         </div>
 
         {/* Arrow */}
-        <ChevronRight size={20} className="text-slate-300 group-hover:text-blue-500 transition-colors flex-shrink-0" />
+        <ChevronRight size={20} className="text-slate-300 group-hover:text-emerald-500 transition-colors flex-shrink-0" />
     </motion.button>
 );
 

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Lock, Mail, ArrowRight, AlertCircle, Bus } from 'lucide-react';
 import { login, validateSlug } from '../services/api';
 import { motion, AnimatePresence } from 'framer-motion';
+import Card from '../components/ui/Card';
 
 const DriverLogin = () => {
     const { orgSlug } = useParams<{ orgSlug: string }>();
@@ -109,11 +110,11 @@ const DriverLogin = () => {
                 initial={{ x: -50, opacity: 0 }}
                 animate={{ x: 0, opacity: 1 }}
                 transition={{ duration: 0.6 }}
-                className="lg:w-1/2 bg-slate-900 relative flex flex-col justify-center items-center p-12 text-white overflow-hidden"
+                className="lg:w-1/2 bg-gradient-success relative flex flex-col justify-center items-center p-12 text-slate-800 overflow-hidden"
             >
-                <div className="absolute top-0 left-0 w-full h-full opacity-10">
-                    <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-green-500 rounded-full blur-[128px]"></div>
-                    <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500 rounded-full blur-[128px]"></div>
+                <div className="absolute top-0 left-0 w-full h-full opacity-20">
+                    <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-white rounded-full blur-[128px]"></div>
+                    <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-green-200 rounded-full blur-[128px]"></div>
                 </div>
 
                 <div className="relative z-10 text-center max-w-lg">
@@ -121,16 +122,16 @@ const DriverLogin = () => {
                         initial={{ y: 20, opacity: 0 }}
                         animate={{ y: 0, opacity: 1 }}
                         transition={{ delay: 0.3 }}
-                        className="w-20 h-20 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center mx-auto mb-8 border border-white/20 shadow-2xl"
+                        className="w-20 h-20 bg-white/60 backdrop-blur-md rounded-2xl flex items-center justify-center mx-auto mb-8 border border-white shadow-xl"
                     >
-                        <Bus className="w-10 h-10 text-green-400" />
+                        <Bus className="w-10 h-10 text-vitrus-successText" />
                     </motion.div>
 
-                    <h1 className="text-4xl lg:text-5xl font-extrabold mb-6 leading-tight">
+                    <h1 className="text-4xl lg:text-5xl font-extrabold mb-6 leading-tight text-slate-900">
                         Driver Portal
                     </h1>
 
-                    <p className="text-lg text-slate-300 mb-8 font-light">
+                    <p className="text-lg text-slate-700 mb-8 font-medium">
                         {orgDetails?.collegeName} <br />
                         Secure login for authorized fleet drivers only.
                     </p>
@@ -138,12 +139,13 @@ const DriverLogin = () => {
             </motion.div>
 
             {/* Right Side - Login Form */}
-            <div className="lg:w-1/2 flex items-center justify-center p-8 lg:p-12 bg-slate-50">
-                <motion.div
+            <div className="lg:w-1/2 flex items-center justify-center p-8 lg:p-12 min-h-screen lg:min-h-0 relative">
+                <Card
                     initial={{ y: 20, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
                     transition={{ delay: 0.2 }}
-                    className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-slate-100 p-10"
+                    className="w-full max-w-md p-10"
+                    glass={false}
                 >
                     <div className="mb-8">
                         <h2 className="text-2xl font-bold text-slate-800">Driver Sign In</h2>
@@ -197,27 +199,24 @@ const DriverLogin = () => {
 
                         <div className="pt-2">
                             <motion.button
-                                whileHover={{ scale: 1.01 }}
-                                whileTap={{ scale: 0.99 }}
+                                whileHover={{ y: -2 }}
+                                whileTap={{ scale: 0.98 }}
                                 type="submit"
                                 disabled={loading}
-                                className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg flex items-center justify-center space-x-2 transition-all ${loading
-                                    ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                                    : 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white shadow-green-200'
-                                    }`}
+                                className={`w-full btn-premium ${loading ? 'bg-slate-200 text-slate-400' : 'btn-success-gradient'} py-4 rounded-[18px] flex items-center justify-center gap-3`}
                             >
                                 {loading ? (
-                                    <span className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                                    <div className="w-6 h-6 border-3 border-white/30 border-t-white rounded-full animate-spin" />
                                 ) : (
                                     <>
-                                        <span>Start Driving</span>
+                                        <span className="text-base">Start Driving</span>
                                         <ArrowRight size={20} />
                                     </>
                                 )}
                             </motion.button>
                         </div>
                     </form>
-                </motion.div>
+                </Card>
             </div>
         </div>
     );

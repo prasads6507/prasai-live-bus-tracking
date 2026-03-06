@@ -3,6 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Bus, LogIn, AlertCircle, Eye, EyeOff, KeyRound } from 'lucide-react';
 import { validateSlug, studentLogin, studentSetPassword } from '../services/api';
+import Card from '../components/ui/Card';
 
 const StudentLogin = () => {
     const { orgSlug } = useParams<{ orgSlug: string }>();
@@ -114,7 +115,7 @@ const StudentLogin = () => {
 
     if (loading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+            <div className="min-h-screen flex items-center justify-center bg-slate-50">
                 <Bus size={40} className="text-blue-500 animate-pulse" />
             </div>
         );
@@ -122,8 +123,8 @@ const StudentLogin = () => {
 
     if (error) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
-                <div className="bg-white rounded-2xl p-8 shadow-xl text-center max-w-md">
+            <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+                <div className="bg-white rounded-2xl p-8 shadow-xl text-center max-w-md border border-slate-100">
                     <AlertCircle size={48} className="text-red-500 mx-auto mb-4" />
                     <h2 className="text-xl font-bold text-slate-800 mb-2">Error</h2>
                     <p className="text-slate-600">{error}</p>
@@ -133,16 +134,17 @@ const StudentLogin = () => {
     }
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
-            <motion.div
+        <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+            <Card
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8"
+                className="w-full max-w-md p-8"
+                glass={false}
             >
                 {/* Header */}
                 <div className="text-center mb-8">
-                    <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-700 rounded-xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-500/30">
-                        <Bus size={32} className="text-white" />
+                    <div className="w-16 h-16 bg-white border border-slate-100 rounded-xl flex items-center justify-center mx-auto mb-4 shadow-sm">
+                        <Bus size={32} className="text-blue-600" />
                     </div>
                     <h1 className="text-2xl font-bold text-slate-800">Student Login</h1>
                     <p className="text-slate-500 mt-1">{college?.collegeName}</p>
@@ -194,14 +196,14 @@ const StudentLogin = () => {
                     <motion.button
                         type="submit"
                         disabled={loginLoading}
-                        whileHover={{ scale: 1.02 }}
+                        whileHover={{ y: -2 }}
                         whileTap={{ scale: 0.98 }}
-                        className="w-full py-3 mt-4 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold rounded-xl shadow-lg shadow-blue-200 flex items-center justify-center gap-2 disabled:opacity-50"
+                        className="w-full btn-premium btn-primary-gradient py-4 rounded-[18px] flex items-center justify-center gap-3 disabled:opacity-50"
                     >
                         {loginLoading ? 'Signing in...' : <><LogIn size={20} /> Sign In</>}
                     </motion.button>
                 </form>
-            </motion.div>
+            </Card>
 
             {/* Set Password Modal */}
             <AnimatePresence>
@@ -212,15 +214,16 @@ const StudentLogin = () => {
                         exit={{ opacity: 0 }}
                         className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
                     >
-                        <motion.div
+                        <Card
                             initial={{ scale: 0.9, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             exit={{ scale: 0.9, opacity: 0 }}
-                            className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8"
+                            className="w-full max-w-md p-8 bg-white border border-slate-100 shadow-2xl"
+                            glass={false}
                         >
                             <div className="text-center mb-6">
-                                <div className="w-16 h-16 bg-gradient-to-br from-green-400 to-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                                    <KeyRound size={32} className="text-white" />
+                                <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <KeyRound size={32} className="text-green-600" />
                                 </div>
                                 <h2 className="text-2xl font-bold text-slate-800">Set New Password</h2>
                                 <p className="text-slate-500 mt-1">Create a secure password for your account.</p>
@@ -260,12 +263,12 @@ const StudentLogin = () => {
                                     disabled={setPasswordLoading}
                                     whileHover={{ scale: 1.02 }}
                                     whileTap={{ scale: 0.98 }}
-                                    className="w-full py-3 mt-4 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-semibold rounded-xl shadow-lg shadow-green-200 disabled:opacity-50"
+                                    className="w-full py-3 mt-4 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl shadow-lg shadow-green-200 disabled:opacity-50 transition-all"
                                 >
                                     {setPasswordLoading ? 'Setting Password...' : 'Set Password & Continue'}
                                 </motion.button>
                             </div>
-                        </motion.div>
+                        </Card>
                     </motion.div>
                 )}
             </AnimatePresence>

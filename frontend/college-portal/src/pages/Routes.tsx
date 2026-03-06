@@ -366,7 +366,7 @@ const Routes = () => {
         return (
             <Layout activeItem="routes">
                 <div className="flex items-center justify-center min-h-screen">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
                 </div>
             </Layout>
         );
@@ -377,9 +377,16 @@ const Routes = () => {
             <div className="p-6">
                 <div className="max-w-7xl mx-auto">
                     {/* Header */}
-                    <div className="mb-8">
-                        <h1 className="text-3xl font-bold text-slate-800 mb-2">Routes</h1>
-                        <p className="text-slate-500">Manage bus routes and stops</p>
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+                        <div>
+                            <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
+                                <div className="p-2.5 bg-emerald-50 border border-emerald-100/50 rounded-2xl text-emerald-600 shadow-sm">
+                                    <MapPin size={24} />
+                                </div>
+                                Routes
+                            </h1>
+                            <p className="text-slate-500 mt-1 ml-14">Manage bus routes and stops</p>
+                        </div>
                     </div>
 
                     {/* Search & Add Button */}
@@ -389,22 +396,22 @@ const Routes = () => {
                             <input
                                 type="text"
                                 placeholder="Search by route name or location..."
-                                className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all"
+                                className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-100 focus:border-emerald-500 outline-none transition-all"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                             />
                         </div>
                         <motion.button
-                            whileHover={{ scale: 1.02 }}
+                            whileHover={{ scale: 1.02, y: -2 }}
                             whileTap={{ scale: 0.98 }}
                             onClick={() => setIsUploadModalOpen(true)}
-                            className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-xl font-semibold shadow-lg shadow-green-200 transition-all"
+                            className="flex items-center gap-2 btn-premium btn-success-gradient text-white px-6 py-3 rounded-xl font-bold shadow-lg transition-all"
                         >
                             <Upload size={20} />
                             <span>Upload Routes</span>
                         </motion.button>
                         <motion.button
-                            whileHover={{ scale: 1.02 }}
+                            whileHover={{ scale: 1.02, y: -2 }}
                             whileTap={{ scale: 0.98 }}
                             onClick={() => {
                                 setIsEditMode(false);
@@ -412,7 +419,7 @@ const Routes = () => {
                                 setNewRoute({ routeName: '', stops: [] });
                                 setIsModalOpen(true);
                             }}
-                            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-semibold shadow-lg shadow-blue-200 transition-all"
+                            className="flex items-center gap-2 btn-premium btn-primary-gradient text-white px-6 py-3 rounded-xl font-bold shadow-lg transition-all"
                         >
                             <Plus size={20} />
                             <span>Add New Route</span>
@@ -436,29 +443,29 @@ const Routes = () => {
                                             <tr key={route._id} className="hover:bg-slate-50 transition-colors">
                                                 <td className="px-6 py-4">
                                                     <div className="flex items-center gap-3">
-                                                        <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
-                                                            <MapPin className="text-green-600" size={20} />
+                                                        <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100/50 flex items-center justify-center shadow-sm">
+                                                            <MapPin className="text-emerald-600" size={20} />
                                                         </div>
-                                                        <span className="font-semibold text-slate-800">{route.routeName}</span>
+                                                        <span className="font-extrabold text-slate-900 tracking-tight">{route.routeName}</span>
                                                     </div>
                                                 </td>
-                                                <td className="px-6 py-4 text-slate-600">
-                                                    <span className="inline-flex px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
+                                                <td className="px-6 py-4">
+                                                    <span className="inline-flex px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-100/50 shadow-sm">
                                                         {route.stopsCount || 0} stops
                                                     </span>
                                                 </td>
-                                                <td className="px-6 py-4">
-                                                    <div className="flex items-center gap-2">
+                                                <td className="px-6 py-4 text-right">
+                                                    <div className="flex items-center justify-end gap-2">
                                                         <button
                                                             onClick={() => handleEditRoute(route)}
-                                                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                            className="p-2 text-emerald-600 hover:bg-emerald-50 border border-transparent hover:border-emerald-100 rounded-lg transition-all"
                                                             title="Edit Route"
                                                         >
                                                             <Edit2 size={18} />
                                                         </button>
                                                         <button
                                                             onClick={() => handleDeleteRoute(route._id, route.routeName)}
-                                                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                            className="p-2 text-red-600 hover:bg-red-50 border border-transparent hover:border-red-100 rounded-lg transition-all"
                                                             title="Delete Route"
                                                         >
                                                             <Trash2 size={18} />
@@ -536,7 +543,7 @@ const Routes = () => {
                                         <input
                                             type="text"
                                             required
-                                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all"
+                                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-100 focus:border-emerald-500 outline-none transition-all"
                                             placeholder="e.g., Route A - City Center"
                                             value={newRoute.routeName}
                                             onChange={(e) => setNewRoute({ ...newRoute, routeName: e.target.value })}
@@ -550,7 +557,7 @@ const Routes = () => {
                                             <button
                                                 type="button"
                                                 onClick={addStop}
-                                                className="text-sm text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1"
+                                                className="text-sm text-emerald-600 hover:text-emerald-700 font-semibold flex items-center gap-1"
                                             >
                                                 <Plus size={16} />
                                                 Add Stop
@@ -563,25 +570,25 @@ const Routes = () => {
                                                     <div key={index} className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
                                                         <div className="flex items-start gap-2 w-full">
                                                             <div className="flex flex-col items-center gap-0.5 mt-1">
-                                                                <button type="button" onClick={() => moveStopUp(index)} className="p-0.5 text-slate-400 hover:text-blue-600 disabled:opacity-30" disabled={index === 0}>
+                                                                <button type="button" onClick={() => moveStopUp(index)} className="p-0.5 text-slate-400 hover:text-emerald-600 disabled:opacity-30" disabled={index === 0}>
                                                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="18 15 12 9 6 15" /></svg>
                                                                 </button>
                                                                 <span className="text-xs font-bold text-slate-400 w-4 text-center">{index + 1}</span>
-                                                                <button type="button" onClick={() => moveStopDown(index)} className="p-0.5 text-slate-400 hover:text-blue-600 disabled:opacity-30" disabled={index === newRoute.stops.length - 1}>
+                                                                <button type="button" onClick={() => moveStopDown(index)} className="p-0.5 text-slate-400 hover:text-emerald-600 disabled:opacity-30" disabled={index === newRoute.stops.length - 1}>
                                                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9" /></svg>
                                                                 </button>
                                                             </div>
                                                             <input
                                                                 type="text"
                                                                 placeholder="Stop Name"
-                                                                className="flex-grow px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
+                                                                className="flex-grow px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-100 focus:border-emerald-500 outline-none"
                                                                 value={stop.stopName}
                                                                 onChange={(e) => updateStop(index, 'stopName', e.target.value)}
                                                             />
                                                             <input
                                                                 type="number"
                                                                 placeholder="Lat"
-                                                                className="w-24 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
+                                                                className="w-24 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-100 focus:border-emerald-500 outline-none"
                                                                 value={stop.latitude || ''}
                                                                 onChange={(e) => updateStop(index, 'latitude', e.target.value)}
                                                                 step="any"
@@ -589,7 +596,7 @@ const Routes = () => {
                                                             <input
                                                                 type="number"
                                                                 placeholder="Lng"
-                                                                className="w-24 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
+                                                                className="w-24 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-100 focus:border-emerald-500 outline-none"
                                                                 value={stop.longitude || ''}
                                                                 onChange={(e) => updateStop(index, 'longitude', e.target.value)}
                                                                 step="any"
@@ -621,14 +628,14 @@ const Routes = () => {
                                                             <input
                                                                 type="text"
                                                                 placeholder="Pickup (HH:MM)"
-                                                                className="w-28 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
+                                                                className="w-28 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-emerald-100 focus:border-emerald-500 outline-none"
                                                                 value={stop.pickupPlannedTime || ''}
                                                                 onChange={(e) => updateStop(index, 'pickupPlannedTime', e.target.value)}
                                                             />
                                                             <input
                                                                 type="text"
                                                                 placeholder="Dropoff (HH:MM)"
-                                                                className="w-28 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none"
+                                                                className="w-28 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-emerald-100 focus:border-emerald-500 outline-none"
                                                                 value={stop.dropoffPlannedTime || ''}
                                                                 onChange={(e) => updateStop(index, 'dropoffPlannedTime', e.target.value)}
                                                             />
@@ -646,7 +653,7 @@ const Routes = () => {
                                         disabled={formLoading || optimizing || newRoute.stops.length < 2 || !newRoute.routeName}
                                         className={`w-full py-3 rounded-xl font-semibold text-white transition-all flex items-center justify-center gap-2 ${formLoading || optimizing || newRoute.stops.length < 2 || !newRoute.routeName
                                             ? 'bg-slate-400 cursor-not-allowed'
-                                            : 'bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-200'
+                                            : 'bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-200'
                                             }`}
                                     >
                                         {formLoading || optimizing ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : (

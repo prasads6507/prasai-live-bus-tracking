@@ -3,6 +3,7 @@ import { User, Building, Mail, LogOut, Info } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { validateSlug } from '../services/api';
+import { motion } from 'framer-motion';
 
 const Settings = () => {
     const { orgSlug } = useParams<{ orgSlug: string }>();
@@ -37,29 +38,36 @@ const Settings = () => {
         <Layout activeItem="settings">
             <div className="p-6">
                 <div className="max-w-4xl mx-auto space-y-8">
-                    {/* Header */}
+                {/* Header */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                     <div>
-                        <h1 className="text-3xl font-bold text-slate-800 mb-2">Settings</h1>
-                        <p className="text-slate-500">Manage your profile and preferences</p>
+                        <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
+                            <div className="p-2.5 bg-emerald-50 border border-emerald-100/50 rounded-2xl text-emerald-600 shadow-sm">
+                                <Info size={24} />
+                            </div>
+                            Settings
+                        </h1>
+                        <p className="text-slate-500 mt-1 ml-14">Manage your profile and preferences</p>
                     </div>
+                </div>
 
                     {/* Profile Section */}
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                         <div className="p-6 border-b border-slate-100">
                             <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-                                <User className="text-blue-600" size={20} />
+                                <User className="text-emerald-600" size={20} />
                                 My Profile
                             </h2>
                         </div>
                         <div className="p-6 space-y-6">
                             <div className="flex items-center gap-6">
-                                <div className="w-20 h-20 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-2xl font-bold">
+                                <div className="w-20 h-20 rounded-2xl bg-emerald-50 border border-emerald-100/50 flex items-center justify-center text-emerald-600 text-2xl font-black shadow-sm">
                                     {user?.name?.charAt(0) || 'A'}
                                 </div>
                                 <div>
                                     <h3 className="text-xl font-bold text-slate-800">{user?.name || 'Administrator'}</h3>
-                                    <span className="inline-block mt-1 px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-xs font-semibold">
-                                        {user?.role || 'COLLEGE_ADMIN'}
+                                    <span className="inline-block mt-2 px-3 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-black uppercase tracking-widest border border-emerald-100/50">
+                                        {user?.role?.replace('_', ' ') || 'COLLEGE ADMIN'}
                                     </span>
                                 </div>
                             </div>
@@ -117,19 +125,21 @@ const Settings = () => {
                                 </div>
                                 <div className="flex justify-between py-2">
                                     <span>Support</span>
-                                    <span className="text-blue-600">support@prasai.com</span>
+                                    <span className="text-emerald-600">support@prasai.com</span>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex items-center justify-center">
-                            <button
+                        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex items-center justify-center group">
+                            <motion.button
+                                whileHover={{ scale: 1.02, y: -2 }}
+                                whileTap={{ scale: 0.98 }}
                                 onClick={logout}
-                                className="flex items-center gap-2 text-red-600 hover:bg-red-50 px-6 py-3 rounded-xl font-semibold transition-all w-full justify-center"
+                                className="flex items-center gap-3 text-red-600 hover:bg-red-50 border border-transparent hover:border-red-100 px-8 py-4 rounded-xl font-bold transition-all w-full justify-center shadow-sm hover:shadow-md"
                             >
-                                <LogOut size={20} />
-                                Sign Out
-                            </button>
+                                <LogOut size={22} />
+                                <span className="uppercase tracking-widest text-xs">Sign Out</span>
+                            </motion.button>
                         </div>
                     </div>
                 </div>

@@ -41,14 +41,14 @@ const Layout = ({ children, activeItem = 'dashboard' }: LayoutProps) => {
                         animate={{ opacity: 1, x: 0 }}
                         className="flex items-center gap-3 font-black text-2xl tracking-tighter"
                     >
-                        <div className="bg-gradient-to-tr from-blue-600 to-blue-500 p-2 rounded-xl shadow-lg shadow-blue-500/20">
+                        <div className="bg-[#1F2937] p-2 rounded-xl shadow-md">
                             <Bus size={22} className="text-white" />
                         </div>
-                        <span className="text-white">Prasai<span className="text-blue-500">Track</span></span>
+                        <span className="text-slate-800">Prasai<span className="text-emerald-500">Track</span></span>
                     </motion.div>
                     <button
                         onClick={() => setSidebarOpen(false)}
-                        className="lg:hidden p-2 text-slate-500 hover:text-white transition-colors"
+                        className="lg:hidden p-2 text-slate-400 hover:text-slate-800 transition-colors"
                     >
                         <X size={20} />
                     </button>
@@ -115,19 +115,21 @@ const Layout = ({ children, activeItem = 'dashboard' }: LayoutProps) => {
             </nav>
 
             <div className="p-6 mt-auto">
-                <div className="p-4 rounded-2xl bg-slate-800/40 border border-slate-700/50 backdrop-blur-sm">
-                    <div className="flex items-center gap-3 mb-4">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center font-black text-sm shadow-inner">
+                <div className="p-4 rounded-[24px] bg-emerald-50/50 border border-emerald-100/50 relative overflow-hidden group">
+                    <div className="absolute -right-4 -top-4 w-24 h-24 bg-emerald-100/20 rounded-full blur-2xl group-hover:bg-emerald-200/30 transition-all duration-500" />
+                    
+                    <div className="flex items-center gap-3 mb-4 relative z-10">
+                        <div className="w-10 h-10 rounded-xl bg-white text-emerald-600 flex items-center justify-center font-black text-sm shadow-sm border border-emerald-50">
                             {user?.name?.charAt(0) || 'A'}
                         </div>
                         <div className="flex-1 min-w-0">
-                            <p className="text-sm font-bold text-white truncate leading-tight">{user?.name || 'Admin'}</p>
-                            <p className="text-[10px] font-bold text-slate-500 truncate uppercase tracking-widest mt-0.5">{user?.role?.replace('_', ' ')}</p>
+                            <p className="text-sm font-extrabold text-slate-900 truncate leading-tight">{user?.name || 'Admin'}</p>
+                            <p className="text-[10px] font-bold text-emerald-500 truncate uppercase tracking-widest mt-0.5">{user?.role?.replace('_', ' ')}</p>
                         </div>
                     </div>
                     <button
                         onClick={handleLogout}
-                        className="w-full flex items-center justify-center gap-2 text-xs font-black uppercase tracking-widest text-slate-400 hover:text-red-400 transition-all py-2.5 rounded-lg hover:bg-red-400/10 border border-transparent hover:border-red-400/20"
+                        className="w-full flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-[0.15em] text-slate-500 hover:text-white transition-all py-3 rounded-xl hover:bg-red-500 border border-slate-200 hover:border-red-500 shadow-sm hover:shadow-red-200 relative z-10 bg-white"
                     >
                         <LogOut size={14} />
                         <span>Sign Out</span>
@@ -138,12 +140,12 @@ const Layout = ({ children, activeItem = 'dashboard' }: LayoutProps) => {
     );
 
     return (
-        <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
+        <div className="flex h-screen bg-transparent overflow-hidden font-sans">
             {/* Desktop Sidebar */}
             <motion.aside
                 initial={{ x: -20, opacity: 0 }}
                 animate={{ x: 0, opacity: 1 }}
-                className="w-72 bg-[#0B0F19] text-white flex-col hidden lg:flex border-r border-slate-800/50"
+                className="w-72 bg-white border-r border-slate-200 flex-col hidden lg:flex"
             >
                 <SidebarContent />
             </motion.aside>
@@ -164,7 +166,7 @@ const Layout = ({ children, activeItem = 'dashboard' }: LayoutProps) => {
                             animate={{ x: 0 }}
                             exit={{ x: -300 }}
                             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-                            className="fixed left-0 top-0 bottom-0 w-[300px] bg-[#0B0F19] text-white flex flex-col z-50 lg:hidden shadow-2xl"
+                            className="fixed left-0 top-0 bottom-0 w-[300px] bg-white border-r border-slate-200 flex flex-col z-50 lg:hidden shadow-lg"
                         >
                             <SidebarContent />
                         </motion.aside>
@@ -175,34 +177,34 @@ const Layout = ({ children, activeItem = 'dashboard' }: LayoutProps) => {
             {/* Main Content */}
             <main className="flex-1 flex flex-col h-full overflow-hidden">
                 {/* Header */}
-                <header className="h-16 h-18 bg-white/80 backdrop-blur-md border-b border-slate-200/60 flex items-center justify-between px-6 sm:px-8 z-10 sticky top-0">
+                <header className="h-16 h-18 bg-white border-b border-slate-200 flex items-center justify-between px-6 sm:px-8 z-10 sticky top-0 shadow-sm">
                     <div className="flex items-center gap-4">
                         <button
                             onClick={() => setSidebarOpen(true)}
-                            className="lg:hidden p-2 text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+                            className="lg:hidden p-2 text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"
                         >
                             <Menu size={22} />
                         </button>
                         <div>
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] leading-none mb-1">Organization</p>
-                            <h1 className="text-xl font-black text-slate-900 tracking-tight">
+                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] leading-none mb-1">Organization</p>
+                            <h1 className="text-xl font-black text-slate-800 tracking-tight">
                                 {localStorage.getItem('orgName') || 'College Portal'}
                             </h1>
                         </div>
                     </div>
                     <div className="flex items-center gap-3">
                         <div className="hidden sm:flex flex-col items-end mr-2">
-                             <p className="text-xs font-bold text-slate-900">{user?.name}</p>
+                             <p className="text-xs font-bold text-slate-800">{user?.name}</p>
                              <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Administrator</p>
                         </div>
-                        <div className="w-10 h-10 rounded-full bg-slate-100 border-2 border-white shadow-sm flex items-center justify-center text-slate-600 font-bold overflow-hidden">
+                        <div className="w-10 h-10 rounded-full bg-emerald-100 border border-emerald-200 flex items-center justify-center text-emerald-700 font-bold overflow-hidden">
                              {user?.name?.charAt(0) || 'A'}
                         </div>
                     </div>
                 </header>
 
                 {/* Page Content */}
-                <div className="flex-1 overflow-auto">
+                <div className="flex-1 overflow-auto p-4 md:p-8">
                     {children}
                 </div>
             </main>
@@ -212,20 +214,28 @@ const Layout = ({ children, activeItem = 'dashboard' }: LayoutProps) => {
 
 const SidebarItem = ({ icon, label, active = false, onClick }: { icon: any, label: string, active?: boolean, onClick?: () => void }) => (
     <motion.button 
+        whileHover={{ x: 4 }}
         whileTap={{ scale: 0.98 }}
         onClick={onClick} 
-        className={`w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all duration-300 relative group ${active
-            ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
-            : 'text-slate-500 hover:bg-slate-800/50 hover:text-slate-200'
+        className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all duration-300 relative group ${active
+            ? 'bg-emerald-50 text-emerald-600 shadow-sm'
+            : 'text-slate-500 hover:bg-slate-50/80 hover:text-slate-900'
         }`}
     >
-        <span className={`${active ? 'text-white' : 'text-slate-500 group-hover:text-blue-400'} transition-colors`}>{icon}</span>
-        <span className={`font-bold text-sm tracking-tight ${active ? 'opacity-100' : 'opacity-70 group-hover:opacity-100'}`}>{label}</span>
+        {active && (
+            <motion.div 
+                layoutId="sidebar-active-bar"
+                className="absolute left-0 w-1.5 h-6 bg-emerald-600 rounded-r-full shadow-lg shadow-emerald-200"
+            />
+        )}
+        
+        <span className={`${active ? 'text-emerald-600' : 'text-slate-400 group-hover:text-emerald-600'} transition-colors duration-300`}>{icon}</span>
+        <span className={`font-bold text-sm tracking-tight ${active ? 'opacity-100' : 'opacity-70 group-hover:opacity-100'} transition-all`}>{label}</span>
         
         {active && (
             <motion.div 
-                layoutId="sidebar-active"
-                className="absolute right-2 w-1.5 h-1.5 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)]"
+                layoutId="sidebar-active-dot"
+                className="ml-auto w-1.5 h-1.5 rounded-full bg-emerald-600 shadow-sm"
             />
         )}
     </motion.button>

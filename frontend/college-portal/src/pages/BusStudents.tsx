@@ -169,7 +169,7 @@ const BusStudents = () => {
         return (
             <Layout activeItem="buses">
                 <div className="flex items-center justify-center min-h-screen">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
                 </div>
             </Layout>
         );
@@ -192,8 +192,8 @@ const BusStudents = () => {
                             Back to Buses
                         </button>
                         <div className="flex items-center gap-3">
-                            <div className="w-12 h-12 rounded-2xl bg-blue-100 flex items-center justify-center">
-                                <Users className="text-blue-600" size={24} />
+                            <div className="w-12 h-12 rounded-2xl bg-emerald-100 flex items-center justify-center">
+                                <Users className="text-emerald-600" size={24} />
                             </div>
                             <div>
                                 <h1 className="text-2xl font-bold text-slate-800">
@@ -241,7 +241,7 @@ const BusStudents = () => {
                                 <input
                                     type="text"
                                     placeholder="Search by name, email, or register number..."
-                                    className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all"
+                                    className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-100 focus:border-emerald-500 outline-none transition-all"
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                     onFocus={() => searchResults.length > 0 && setShowDropdown(true)}
@@ -269,10 +269,10 @@ const BusStudents = () => {
                                             <button
                                                 key={student._id}
                                                 onClick={() => handleSelectStudent(student)}
-                                                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-blue-50 transition-colors text-left border-b border-slate-100 last:border-0"
+                                                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-emerald-50 transition-colors text-left border-b border-slate-100 last:border-0"
                                             >
-                                                <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                                                    <span className="text-blue-600 text-xs font-bold">
+                                                <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                                                    <span className="text-emerald-600 text-xs font-bold">
                                                         {getInitials(student.name)}
                                                     </span>
                                                 </div>
@@ -286,7 +286,7 @@ const BusStudents = () => {
                                                     </span>
                                                 )}
                                                 {stagedStudents.some(st => st._id === student._id) ? (
-                                                    <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1">
+                                                    <span className="text-xs text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1">
                                                         <CheckCircle size={10} />
                                                         Staged
                                                     </span>
@@ -295,7 +295,7 @@ const BusStudents = () => {
                                                         On another bus
                                                     </span>
                                                 ) : null}
-                                                <UserPlus size={16} className="text-blue-400 flex-shrink-0" />
+                                                <UserPlus size={16} className="text-emerald-400 flex-shrink-0" />
                                             </button>
                                         ))}
                                     </motion.div>
@@ -317,10 +317,10 @@ const BusStudents = () => {
                                 className="bg-blue-50 border border-blue-200 rounded-2xl p-6 mb-6"
                             >
                                 <div className="flex items-center justify-between mb-4">
-                                    <h2 className="text-base font-semibold text-blue-800">
+                                    <h2 className="text-base font-semibold text-emerald-800">
                                         Ready to Assign ({stagedStudents.length})
                                     </h2>
-                                    <span className="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded-full">
+                                    <span className="text-xs text-emerald-600 bg-emerald-100 px-2 py-1 rounded-full">
                                         Pending — click Submit to save
                                     </span>
                                 </div>
@@ -334,10 +334,10 @@ const BusStudents = () => {
                                                 animate={{ opacity: 1, x: 0 }}
                                                 exit={{ opacity: 0, x: 10 }}
                                                 transition={{ delay: idx * 0.03 }}
-                                                className="flex items-center gap-3 bg-white rounded-xl px-4 py-3 border border-blue-100"
+                                                className="flex items-center gap-3 bg-white rounded-xl px-4 py-3 border border-emerald-100"
                                             >
-                                                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                                                    <span className="text-blue-600 text-xs font-bold">
+                                                <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                                                    <span className="text-emerald-600 text-xs font-bold">
                                                         {getInitials(student.name)}
                                                     </span>
                                                 </div>
@@ -363,7 +363,7 @@ const BusStudents = () => {
                                     whileTap={{ scale: 0.98 }}
                                     onClick={handleSubmit}
                                     disabled={submitting}
-                                    className="w-full py-3 rounded-xl font-semibold text-white bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                    className="w-full py-3 rounded-xl font-semibold text-white bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                                 >
                                     {submitting ? (
                                         <>

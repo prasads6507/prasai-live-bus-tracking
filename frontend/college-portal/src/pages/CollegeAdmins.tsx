@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { UserCog, Plus, Edit, Trash2, X, Check, AlertTriangle, Shield, Mail, Phone, Crown } from 'lucide-react';
+import { UserCog, Plus, Edit, Trash2, X, Check, AlertTriangle, Shield, Phone, Crown } from 'lucide-react';
 import Layout from '../components/Layout';
 import { getCollegeAdmins, createCollegeAdmin, updateCollegeAdmin, deleteCollegeAdmin } from '../services/api';
 
@@ -109,46 +109,49 @@ const CollegeAdmins = () => {
                 <motion.div
                     initial={{ opacity: 0, y: -20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-500 p-8"
+                    className="relative overflow-hidden rounded-[32px] bg-white p-8 shadow-sm border border-slate-100"
                 >
-                    <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4xIj48cGF0aCBkPSJNMzYgMzRoLTJ2LTRoMnY0em0wLTZ2LTJoMnYyaC0yem0tNC0yaC0ydjJoMnYtMnptMCAydjRoLTJ2LTRoMnptLTYgMGgydjJoLTJ2LTJ6bTItMmgtMnYyaDJ2LTJ6Ii8+PC9nPjwvZz48L3N2Zz4=')] opacity-30"></div>
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-32 -mt-32"></div>
-                    <div className="absolute bottom-0 left-0 w-48 h-48 bg-purple-300/20 rounded-full blur-2xl -ml-24 -mb-24"></div>
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-50 rounded-full blur-3xl -mr-32 -mt-32"></div>
+                    <div className="absolute bottom-0 left-0 w-48 h-48 bg-green-50 rounded-full blur-2xl -ml-24 -mb-24"></div>
 
                     <div className="relative flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                         <div className="flex items-center gap-4">
-                            <div className="p-4 bg-white/20 backdrop-blur-xl rounded-2xl border border-white/20">
-                                <Shield className="w-8 h-8 text-white" />
+                            <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 shadow-sm">
+                                <Shield className="w-8 h-8 text-emerald-600" />
                             </div>
                             <div>
-                                <h1 className="text-3xl font-black text-white tracking-tight">Admin Management</h1>
-                                <p className="text-white/70 font-medium">Add or manage college administrators</p>
+                                <h1 className="text-3xl font-black text-slate-900 tracking-tight leading-tight">Admin Management</h1>
+                                <p className="text-slate-500 font-medium ml-0.5 mt-1">Manage organization administrators and permissions</p>
                             </div>
                         </div>
                         <motion.button
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
+                            whileHover={{ y: -2 }}
+                            whileTap={{ scale: 0.98 }}
                             onClick={() => setShowAddModal(true)}
-                            className="flex items-center gap-2 px-6 py-3 bg-white text-purple-600 rounded-2xl font-bold shadow-xl shadow-purple-900/30 hover:shadow-2xl transition-all"
+                            className="btn-premium btn-primary-gradient flex items-center gap-2 px-8 py-4 rounded-[20px]"
                         >
                             <Plus size={20} />
-                            Add New Admin
+                            <span>Add New Admin</span>
                         </motion.button>
                     </div>
 
                     {/* Stats */}
-                    <div className="relative mt-6 grid grid-cols-2 sm:grid-cols-3 gap-4">
-                        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10">
-                            <p className="text-white/60 text-sm font-medium">Total Admins</p>
-                            <p className="text-3xl font-black text-white">{admins.length}</p>
+                    <div className="relative mt-8 grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        <div className="bg-slate-50/50 rounded-2xl p-4 border border-slate-100">
+                            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Total</p>
+                            <p className="text-3xl font-black text-slate-900">{admins.length}</p>
                         </div>
-                        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10">
-                            <p className="text-white/60 text-sm font-medium">Super Admins</p>
-                            <p className="text-3xl font-black text-white">{admins.filter(a => a.role === 'SUPER_ADMIN').length}</p>
+                        <div className="bg-amber-50/50 rounded-2xl p-4 border border-amber-100">
+                            <p className="text-amber-600 text-xs font-bold uppercase tracking-widest mb-1">Super</p>
+                            <p className="text-3xl font-black text-amber-700">{admins.filter(a => a.role === 'SUPER_ADMIN').length}</p>
                         </div>
-                        <div className="hidden sm:block bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10">
-                            <p className="text-white/60 text-sm font-medium">College Admins</p>
-                            <p className="text-3xl font-black text-white">{admins.filter(a => a.role === 'COLLEGE_ADMIN').length}</p>
+                        <div className="bg-emerald-50/50 rounded-2xl p-4 border border-emerald-100">
+                            <p className="text-emerald-600 text-xs font-bold uppercase tracking-widest mb-1">College</p>
+                            <p className="text-3xl font-black text-emerald-700">{admins.filter(a => a.role === 'COLLEGE_ADMIN').length}</p>
+                        </div>
+                        <div className="bg-green-50/50 rounded-2xl p-4 border border-green-100">
+                            <p className="text-green-600 text-xs font-bold uppercase tracking-widest mb-1">Active</p>
+                            <p className="text-3xl font-black text-green-700">{admins.length}</p>
                         </div>
                     </div>
                 </motion.div>
@@ -157,29 +160,25 @@ const CollegeAdmins = () => {
                 <AnimatePresence>
                     {error && (
                         <motion.div
-                            initial={{ opacity: 0, y: -10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -10 }}
-                            className="bg-gradient-to-r from-red-500/20 to-red-600/20 border border-red-500/30 text-red-400 px-5 py-4 rounded-2xl flex items-center gap-3 backdrop-blur-md"
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            className="bg-red-50 border border-red-100 text-red-600 px-5 py-4 rounded-2xl flex items-center gap-3"
                         >
-                            <div className="p-2 bg-red-500/20 rounded-xl">
-                                <AlertTriangle size={18} />
-                            </div>
-                            <span className="flex-1 font-medium">{error}</span>
-                            <button onClick={() => setError('')} className="p-1 hover:bg-red-500/20 rounded-lg transition-colors"><X size={16} /></button>
+                            <AlertTriangle size={18} />
+                            <span className="flex-1 font-bold text-sm tracking-tight">{error}</span>
+                            <button onClick={() => setError('')} className="p-1 hover:bg-red-100 rounded-lg transition-colors"><X size={16} /></button>
                         </motion.div>
                     )}
                     {success && (
                         <motion.div
-                            initial={{ opacity: 0, y: -10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -10 }}
-                            className="bg-gradient-to-r from-green-500/20 to-emerald-500/20 border border-green-500/30 text-green-400 px-5 py-4 rounded-2xl flex items-center gap-3 backdrop-blur-md"
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            className="bg-green-50 border border-green-100 text-green-600 px-5 py-4 rounded-2xl flex items-center gap-3"
                         >
-                            <div className="p-2 bg-green-500/20 rounded-xl">
-                                <Check size={18} />
-                            </div>
-                            <span className="font-medium">{success}</span>
+                            <Check size={18} />
+                            <span className="font-bold text-sm tracking-tight">{success}</span>
                         </motion.div>
                     )}
                 </AnimatePresence>
@@ -196,85 +195,80 @@ const CollegeAdmins = () => {
                     <motion.div
                         initial={{ opacity: 0, scale: 0.9 }}
                         animate={{ opacity: 1, scale: 1 }}
-                        className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-xl border border-white/5 rounded-3xl p-12 text-center"
+                        className="bg-white border border-slate-100 rounded-[32px] p-16 text-center shadow-sm"
                     >
-                        <div className="w-20 h-20 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-3xl flex items-center justify-center mx-auto mb-6">
-                            <UserCog size={40} className="text-purple-400" />
+                        <div className="w-24 h-24 bg-emerald-50 rounded-[28px] flex items-center justify-center mx-auto mb-8 shadow-inner">
+                            <UserCog size={44} className="text-emerald-500" />
                         </div>
-                        <h3 className="text-xl font-bold text-white mb-2">No Administrators Yet</h3>
-                        <p className="text-slate-400 mb-6">Add your first administrator to get started</p>
+                        <h3 className="text-2xl font-black text-slate-900 mb-2">No Administrators Yet</h3>
+                        <p className="text-slate-500 font-medium mb-10 max-w-sm mx-auto">Create administrator accounts to help manage your organization's fleet and members.</p>
                         <button
                             onClick={() => setShowAddModal(true)}
-                            className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-bold hover:shadow-lg hover:shadow-purple-500/25 transition-all"
+                            className="btn-premium btn-primary-gradient px-10 py-5 rounded-[20px] text-lg shadow-emerald-200"
                         >
-                            Add First Admin
+                            Add Your First Admin
                         </button>
                     </motion.div>
                 ) : (
-                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                         {admins.map((admin, index) => (
                             <motion.div
                                 key={admin.userId}
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: index * 0.1 }}
-                                className="group relative bg-gradient-to-br from-slate-800/90 to-slate-900/90 backdrop-blur-xl border border-white/5 rounded-2xl p-6 hover:border-purple-500/30 transition-all duration-300 hover:shadow-xl hover:shadow-purple-500/10"
+                                whileHover={{ y: -6 }}
+                                transition={{ delay: index * 0.05 }}
+                                className="group bg-white border border-slate-100 rounded-[28px] p-6.5 hover:shadow-2xl hover:shadow-slate-200 transition-all duration-500 relative"
                             >
                                 {admin.role === 'SUPER_ADMIN' && (
-                                    <div className="absolute -top-2 -right-2">
-                                        <div className="p-2 bg-gradient-to-r from-amber-400 to-orange-500 rounded-xl shadow-lg shadow-amber-500/30">
-                                            <Crown size={14} className="text-white" />
+                                    <div className="absolute top-4 right-4">
+                                        <div className="px-3 py-1 bg-amber-50 text-amber-600 rounded-full border border-amber-100 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-sm">
+                                            <Crown size={12} className="fill-amber-600/20" />
+                                            Owner
                                         </div>
                                     </div>
                                 )}
 
                                 <div className="flex items-start gap-4">
-                                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-bold text-xl shadow-lg ${admin.role === 'SUPER_ADMIN'
-                                            ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-amber-500/30'
-                                            : 'bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-blue-500/30'
+                                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black text-xl shadow-sm ${admin.role === 'SUPER_ADMIN'
+                                            ? 'bg-amber-100 text-amber-700'
+                                            : 'bg-emerald-100 text-emerald-700'
                                         }`}>
                                         {admin.name.charAt(0).toUpperCase()}
                                     </div>
-                                    <div className="flex-1 min-w-0">
-                                        <h3 className="font-bold text-white text-lg truncate">{admin.name}</h3>
-                                        <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold mt-1 ${admin.role === 'SUPER_ADMIN'
-                                                ? 'bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-400 border border-amber-500/20'
-                                                : 'bg-gradient-to-r from-blue-500/20 to-indigo-500/20 text-blue-400 border border-blue-500/20'
-                                            }`}>
-                                            {admin.role === 'SUPER_ADMIN' ? '👑 Super Admin' : '🔑 College Admin'}
-                                        </span>
+                                    <div className="flex-1 min-w-0 pr-16">
+                                        <h3 className="font-extrabold text-slate-900 text-lg truncate leading-tight">{admin.name}</h3>
+                                        <p className="text-slate-500 text-sm font-medium truncate mt-0.5">{admin.email}</p>
                                     </div>
                                 </div>
 
-                                <div className="mt-5 space-y-3">
-                                    <div className="flex items-center gap-3 text-slate-400">
-                                        <div className="p-2 bg-slate-700/50 rounded-lg">
-                                            <Mail size={14} />
+                                <div className="mt-6 flex flex-wrap gap-2">
+                                    {admin.phone && (
+                                        <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 text-slate-600 rounded-xl text-xs font-bold border border-slate-100">
+                                            <Phone size={12} className="text-slate-400" />
+                                            {admin.phone}
                                         </div>
-                                        <span className="text-sm truncate">{admin.email}</span>
-                                    </div>
-                                    <div className="flex items-center gap-3 text-slate-400">
-                                        <div className="p-2 bg-slate-700/50 rounded-lg">
-                                            <Phone size={14} />
-                                        </div>
-                                        <span className="text-sm">{admin.phone || 'Not provided'}</span>
+                                    )}
+                                    <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-xl text-xs font-bold border border-emerald-100/50">
+                                        <Shield size={12} className="text-emerald-400" />
+                                        {admin.role.replace('_', ' ')}
                                     </div>
                                 </div>
 
-                                <div className="mt-5 pt-5 border-t border-white/5 flex gap-2">
+                                <div className="mt-6 pt-5 border-t border-slate-50 flex gap-3">
                                     <button
                                         onClick={() => setEditAdmin(admin)}
-                                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-500/10 text-blue-400 rounded-xl font-semibold hover:bg-blue-500/20 transition-colors"
+                                        className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-slate-50 text-slate-600 rounded-[14px] text-xs font-black uppercase tracking-widest hover:bg-emerald-50 hover:text-emerald-600 transition-all border border-slate-100 hover:border-emerald-100"
                                     >
-                                        <Edit size={16} />
+                                        <Edit size={14} />
                                         Edit
                                     </button>
                                     <button
                                         onClick={() => handleDelete(admin.userId)}
-                                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-red-500/10 text-red-400 rounded-xl font-semibold hover:bg-red-500/20 transition-colors"
+                                        className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-white text-slate-400 rounded-[14px] text-[10px] font-black uppercase tracking-widest hover:bg-red-50 hover:text-red-500 transition-all border border-slate-100 hover:border-red-100"
                                     >
-                                        <Trash2 size={16} />
-                                        Delete
+                                        <Trash2 size={14} />
+                                        Remove
                                     </button>
                                 </div>
                             </motion.div>
@@ -294,81 +288,81 @@ const CollegeAdmins = () => {
                         onClick={() => setShowAddModal(false)}
                     >
                         <motion.div
-                            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                            initial={{ opacity: 0, scale: 0.95, y: 20 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 20 }}
                             onClick={(e) => e.stopPropagation()}
-                            className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-3xl p-8 w-full max-w-md border border-white/10 shadow-2xl"
+                            className="bg-white rounded-[32px] p-8 w-full max-w-md border border-slate-100 shadow-2xl"
                         >
-                            <div className="flex items-center justify-between mb-8">
+                             <div className="flex items-center justify-between mb-8">
                                 <div className="flex items-center gap-4">
-                                    <div className="p-3 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl">
-                                        <Plus size={24} className="text-white" />
+                                    <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-100">
+                                        <Plus size={24} className="text-emerald-600" />
                                     </div>
                                     <div>
-                                        <h3 className="text-xl font-bold text-white">Add New Admin</h3>
-                                        <p className="text-slate-400 text-sm">Create a new administrator account</p>
+                                        <h3 className="text-xl font-extrabold text-slate-900 tracking-tight">Add New Admin</h3>
+                                        <p className="text-slate-500 text-sm font-medium">Create a new administrator</p>
                                     </div>
                                 </div>
-                                <button onClick={() => setShowAddModal(false)} className="p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-xl transition-colors">
+                                <button onClick={() => setShowAddModal(false)} className="p-2 text-slate-300 hover:text-slate-600 transition-colors">
                                     <X size={20} />
                                 </button>
                             </div>
                             <form onSubmit={handleCreate} className="space-y-5">
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-300 mb-2">Full Name</label>
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 px-1">Full Name</label>
                                     <input
                                         type="text"
                                         required
                                         value={formData.name}
                                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                                         placeholder="Enter full name"
-                                        className="w-full px-4 py-3.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                                        className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-slate-900 placeholder-slate-400 input-premium"
                                     />
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-semibold text-slate-300 mb-2">Email Address</label>
+                                 <div>
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 px-1">Email Address</label>
                                     <input
                                         type="email"
                                         required
                                         value={formData.email}
                                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                                         placeholder="admin@college.edu"
-                                        className="w-full px-4 py-3.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                                        className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-slate-900 placeholder-slate-400 input-premium"
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-300 mb-2">Phone Number</label>
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 px-1">Phone Number</label>
                                     <input
                                         type="tel"
                                         value={formData.phone}
                                         onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                                         placeholder="+91 98765 43210"
-                                        className="w-full px-4 py-3.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                                        className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-slate-900 placeholder-slate-400 input-premium"
                                     />
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-semibold text-slate-300 mb-2">Initial Password</label>
+                                 <div>
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 px-1">Initial Password</label>
                                     <input
                                         type="password"
                                         required
                                         value={formData.password}
                                         onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                                         placeholder="••••••••"
-                                        className="w-full px-4 py-3.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                                        className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-slate-900 placeholder-slate-400 input-premium"
                                     />
                                 </div>
-                                <div className="flex gap-3 pt-4">
+                                <div className="flex gap-4 pt-6">
                                     <button
                                         type="button"
                                         onClick={() => setShowAddModal(false)}
-                                        className="flex-1 px-4 py-3.5 bg-slate-700/50 text-slate-300 rounded-xl font-semibold hover:bg-slate-700 transition-colors"
+                                        className="flex-1 px-6 py-4 bg-white text-slate-500 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-50 transition-all border border-slate-100"
                                     >
                                         Cancel
                                     </button>
                                     <button
                                         type="submit"
-                                        className="flex-1 px-4 py-3.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-bold hover:shadow-lg hover:shadow-purple-500/25 transition-all"
+                                        className="flex-1 btn-premium btn-primary-gradient px-6 py-4 rounded-2xl"
                                     >
                                         Create Admin
                                     </button>
@@ -390,67 +384,67 @@ const CollegeAdmins = () => {
                         onClick={() => setEditAdmin(null)}
                     >
                         <motion.div
-                            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                            initial={{ opacity: 0, scale: 0.95, y: 20 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 20 }}
                             onClick={(e) => e.stopPropagation()}
-                            className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-3xl p-8 w-full max-w-md border border-white/10 shadow-2xl"
+                            className="bg-white rounded-[32px] p-8 w-full max-w-md border border-slate-100 shadow-2xl"
                         >
                             <div className="flex items-center justify-between mb-8">
                                 <div className="flex items-center gap-4">
-                                    <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-2xl">
-                                        <Edit size={24} className="text-white" />
+                                    <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-100">
+                                        <Edit size={24} className="text-emerald-600" />
                                     </div>
                                     <div>
-                                        <h3 className="text-xl font-bold text-white">Edit Admin</h3>
-                                        <p className="text-slate-400 text-sm">Update administrator details</p>
+                                        <h3 className="text-xl font-extrabold text-slate-900 tracking-tight">Edit Admin</h3>
+                                        <p className="text-slate-500 text-sm font-medium">Update account details</p>
                                     </div>
                                 </div>
-                                <button onClick={() => setEditAdmin(null)} className="p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-xl transition-colors">
+                                <button onClick={() => setEditAdmin(null)} className="p-2 text-slate-300 hover:text-slate-600 transition-colors">
                                     <X size={20} />
                                 </button>
                             </div>
-                            <form onSubmit={handleUpdate} className="space-y-5">
+                             <form onSubmit={handleUpdate} className="space-y-5">
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-300 mb-2">Full Name</label>
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 px-1">Full Name</label>
                                     <input
                                         type="text"
                                         required
                                         value={editAdmin.name}
                                         onChange={(e) => setEditAdmin({ ...editAdmin, name: e.target.value })}
-                                        className="w-full px-4 py-3.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                                        className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-slate-900 input-premium"
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-300 mb-2">Email Address</label>
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 px-1">Email Address</label>
                                     <input
                                         type="email"
                                         required
                                         value={editAdmin.email}
                                         onChange={(e) => setEditAdmin({ ...editAdmin, email: e.target.value })}
-                                        className="w-full px-4 py-3.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                                        className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-slate-900 input-premium"
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-300 mb-2">Phone Number</label>
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 px-1">Phone Number</label>
                                     <input
                                         type="tel"
                                         value={editAdmin.phone || ''}
                                         onChange={(e) => setEditAdmin({ ...editAdmin, phone: e.target.value })}
-                                        className="w-full px-4 py-3.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                                        className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-slate-900 input-premium"
                                     />
                                 </div>
-                                <div className="flex gap-3 pt-4">
+                                <div className="flex gap-4 pt-6">
                                     <button
                                         type="button"
                                         onClick={() => setEditAdmin(null)}
-                                        className="flex-1 px-4 py-3.5 bg-slate-700/50 text-slate-300 rounded-xl font-semibold hover:bg-slate-700 transition-colors"
+                                        className="flex-1 px-6 py-4 bg-white text-slate-500 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-50 transition-all border border-slate-100"
                                     >
                                         Cancel
                                     </button>
                                     <button
                                         type="submit"
-                                        className="flex-1 px-4 py-3.5 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-xl font-bold hover:shadow-lg hover:shadow-blue-500/25 transition-all"
+                                        className="flex-1 btn-premium btn-primary-gradient px-6 py-4 rounded-2xl"
                                     >
                                         Save Changes
                                     </button>

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Bus, Plus, Search, Trash2, Edit2, Wrench, X, CheckCircle, Settings, Users } from 'lucide-react';
+import { Bus, Plus, Search, Trash2, Edit2, Wrench, X, CheckCircle, Users } from 'lucide-react';
 import { getBuses, createBus, updateBus, deleteBus, validateSlug, getDrivers, getRoutes } from '../services/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import Layout from '../components/Layout';
@@ -168,7 +168,7 @@ const Buses = () => {
         return (
             <Layout activeItem="buses">
                 <div className="flex items-center justify-center min-h-screen">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
                 </div>
             </Layout>
         );
@@ -179,9 +179,16 @@ const Buses = () => {
             <div className="p-6">
                 <div className="max-w-7xl mx-auto">
                     {/* Header */}
-                    <div className="mb-8">
-                        <h1 className="text-3xl font-bold text-slate-800 mb-2">Buses</h1>
-                        <p className="text-slate-500">Manage your fleet of buses</p>
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+                        <div>
+                            <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
+                                <div className="p-2.5 bg-emerald-50 border border-emerald-100/50 rounded-2xl text-emerald-600 shadow-sm">
+                                    <Bus size={24} />
+                                </div>
+                                Buses
+                            </h1>
+                            <p className="text-slate-500 mt-1 ml-14">Manage your fleet of buses and route assignments</p>
+                        </div>
                     </div>
 
                     {/* Global messages */}
@@ -217,13 +224,13 @@ const Buses = () => {
                             <input
                                 type="text"
                                 placeholder="Search by bus number or plate..."
-                                className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all"
+                                className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-100 focus:border-emerald-500 outline-none transition-all"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                             />
                         </div>
                         <motion.button
-                            whileHover={{ scale: 1.02 }}
+                            whileHover={{ scale: 1.02, y: -2 }}
                             whileTap={{ scale: 0.98 }}
                             onClick={() => {
                                 setIsEditMode(false);
@@ -231,7 +238,7 @@ const Buses = () => {
                                 setNewBus({ busNumber: '', plateNumber: '', assignedDriverId: '', assignedRouteId: '' });
                                 setIsModalOpen(true);
                             }}
-                            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-semibold shadow-lg shadow-blue-200 transition-all"
+                            className="flex items-center gap-2 btn-premium btn-primary-gradient text-white px-6 py-3 rounded-xl font-bold shadow-lg transition-all"
                         >
                             <Plus size={20} />
                             <span>Add New Bus</span>
@@ -258,10 +265,10 @@ const Buses = () => {
                                             <tr key={bus._id} className="hover:bg-slate-50 transition-colors">
                                                 <td className="px-6 py-4">
                                                     <div className="flex items-center gap-3">
-                                                        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                                                            <Bus className="text-blue-600" size={20} />
+                                                        <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100/50 flex items-center justify-center shadow-sm">
+                                                            <Bus className="text-emerald-600" size={20} />
                                                         </div>
-                                                        <span className="font-semibold text-slate-800">{bus.busNumber}</span>
+                                                        <span className="font-extrabold text-slate-900 tracking-tight">{bus.busNumber}</span>
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 text-slate-600">{bus.plateNumber || 'N/A'}</td>
@@ -287,13 +294,11 @@ const Buses = () => {
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <div className="flex items-center gap-2 flex-wrap">
-
-                                                        {/* ── NEW: Add Students Button ── */}
                                                         <motion.button
-                                                            whileHover={{ scale: 1.05 }}
+                                                            whileHover={{ scale: 1.05, y: -1 }}
                                                             whileTap={{ scale: 0.95 }}
                                                             onClick={() => handleAddStudents(bus)}
-                                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg text-xs font-semibold transition-colors"
+                                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 border border-indigo-100 hover:bg-indigo-100 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors"
                                                             title="Assign Students to this Bus"
                                                         >
                                                             <Users size={14} />
@@ -302,16 +307,15 @@ const Buses = () => {
 
                                                         <button
                                                             onClick={() => toggleMaintenance(bus)}
-                                                            className={`p-2 rounded-lg transition-colors ${bus.status === 'MAINTENANCE'
-                                                                ? 'text-green-600 hover:bg-green-50'
-                                                                : 'text-orange-600 hover:bg-orange-50'
+                                                            className={`p-2 rounded-lg transition-all ${bus.status === 'MAINTENANCE'
+                                                                ? 'text-green-600 hover:bg-green-50 border border-transparent hover:border-green-100'
+                                                                : 'text-orange-600 hover:bg-orange-50 border border-transparent hover:border-orange-100'
                                                                 }`}
                                                             title={bus.status === 'MAINTENANCE' ? "Set Active" : "Set Maintenance"}
                                                         >
                                                             <Wrench size={18} />
                                                         </button>
-
-                                                        {/* Substitute Bus Dropdown */}
+                                                        
                                                         {bus.status === 'MAINTENANCE' && (
                                                             <div className="relative group">
                                                                 <select
@@ -324,22 +328,19 @@ const Buses = () => {
                                                                         <option key={b._id} value={b._id}>{b.busNumber}</option>
                                                                     ))}
                                                                 </select>
-                                                                <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none">
-                                                                    <Settings size={10} className="text-orange-400" />
-                                                                </div>
                                                             </div>
                                                         )}
 
                                                         <button
                                                             onClick={() => handleEditBus(bus)}
-                                                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                            className="p-2 text-emerald-600 hover:bg-emerald-50 border border-transparent hover:border-emerald-100 rounded-lg transition-all"
                                                             title="Edit Bus"
                                                         >
                                                             <Edit2 size={18} />
                                                         </button>
                                                         <button
                                                             onClick={() => handleDeleteBus(bus._id, bus.busNumber)}
-                                                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                            className="p-2 text-red-600 hover:bg-red-50 border border-transparent hover:border-red-100 rounded-lg transition-all"
                                                             title="Delete Bus"
                                                         >
                                                             <Trash2 size={18} />
@@ -406,7 +407,7 @@ const Buses = () => {
                                     <input
                                         type="text"
                                         required
-                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all"
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-100 focus:border-emerald-500 outline-none transition-all"
                                         placeholder="e.g., BUS-01"
                                         value={newBus.busNumber}
                                         onChange={(e) => setNewBus({ ...newBus, busNumber: e.target.value })}
@@ -418,7 +419,7 @@ const Buses = () => {
                                     <input
                                         type="text"
                                         required
-                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all"
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-100 focus:border-emerald-500 outline-none transition-all"
                                         placeholder="e.g., ABC-1234"
                                         value={newBus.plateNumber}
                                         onChange={(e) => setNewBus({ ...newBus, plateNumber: e.target.value })}
@@ -428,7 +429,7 @@ const Buses = () => {
                                 <div>
                                     <label className="block text-sm font-semibold text-slate-700 mb-2">Assign Driver</label>
                                     <select
-                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all"
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-100 focus:border-emerald-500 outline-none transition-all"
                                         value={newBus.assignedDriverId}
                                         onChange={(e) => setNewBus({ ...newBus, assignedDriverId: e.target.value })}
                                     >
@@ -444,7 +445,7 @@ const Buses = () => {
                                 <div>
                                     <label className="block text-sm font-semibold text-slate-700 mb-2">Assign Route</label>
                                     <select
-                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all"
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-100 focus:border-emerald-500 outline-none transition-all"
                                         value={newBus.assignedRouteId}
                                         onChange={(e) => setNewBus({ ...newBus, assignedRouteId: e.target.value })}
                                     >
@@ -458,13 +459,13 @@ const Buses = () => {
                                 </div>
 
                                 <motion.button
-                                    whileHover={{ scale: 1.02 }}
+                                    whileHover={{ scale: 1.02, y: -2 }}
                                     whileTap={{ scale: 0.98 }}
                                     type="submit"
                                     disabled={formLoading}
-                                    className={`w-full py-3 rounded-xl font-semibold text-white transition-all ${formLoading
+                                    className={`w-full py-4 rounded-xl font-bold text-white transition-all ${formLoading
                                         ? 'bg-slate-400 cursor-not-allowed'
-                                        : 'bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-200'
+                                        : 'btn-premium btn-primary-gradient shadow-lg'
                                         }`}
                                 >
                                     {formLoading ? 'Processing...' : (isEditMode ? 'Update Bus' : 'Create Bus Account')}
