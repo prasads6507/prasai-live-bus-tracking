@@ -358,7 +358,6 @@ const getFirebaseHealth = async (req, res) => {
 // @access  Public
 const searchColleges = async (req, res) => {
     try {
-        const { initializationError, db } = require('../config/firebase');
         const query = (req.query.q || '').trim();
 
         if (!query) {

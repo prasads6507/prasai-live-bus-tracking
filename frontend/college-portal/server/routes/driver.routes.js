@@ -14,7 +14,9 @@ const {
     getTripAttendance,
     getBusStudents,
     getTodayAttendance,
-    notifyStudentAttendance
+    notifyStudentAttendance,
+    generateHandoverOTP,
+    verifyHandoverOTP
 } = require('../controllers/driverController');
 const { sendStopEventNotification, sendTripEndedNotification } = require('../controllers/notificationController');
 const { protect, authorize } = require('../middleware/auth');
