@@ -52,46 +52,50 @@ function parsePrivateKey(raw) {
 try {
     let serviceAccount = null;
 
-    // 1. Check environment variables first (Preferred for Vercel/Production)
-    const projectId = (process.env.FIREBASE_PROJECT_ID || '').trim();
-    const clientEmail = (process.env.FIREBASE_CLIENT_EMAIL || '').trim();
-    const privateKeyRaw = process.env.FIREBASE_PRIVATE_KEY || '';
+    if (admin.apps.length > 0) {
+        console.log('[Firebase] Already initialized, reusing existing app');
+    } else {
+        console.log('[Firebase] Cold start: Initializing app...');
 
-    if (projectId && clientEmail && privateKeyRaw) {
-        const privateKey = parsePrivateKey(privateKeyRaw);
-        if (privateKey) {
-            serviceAccount = {
-                projectId,
-                clientEmail,
-                privateKey
-            };
-            console.log('[Firebase] Using environment variable credentials');
-        } else {
-            console.warn('[Firebase] FIREBASE_PRIVATE_KEY found but failed to parse. Falling back to files.');
+        // 1. Check environment variables first (Preferred for Vercel/Production)
+        const projectId = (process.env.FIREBASE_PROJECT_ID || '').trim();
+        const clientEmail = (process.env.FIREBASE_CLIENT_EMAIL || '').trim();
+        const privateKeyRaw = process.env.FIREBASE_PRIVATE_KEY || '';
+
+        if (projectId && clientEmail && privateKeyRaw) {
+            const privateKey = parsePrivateKey(privateKeyRaw);
+            if (privateKey) {
+                serviceAccount = {
+                    projectId,
+                    clientEmail,
+                    privateKey
+                };
+                console.log('[Firebase] Using environment variable credentials');
+            } else {
+                console.warn('[Firebase] FIREBASE_PRIVATE_KEY found but failed to parse.');
+            }
         }
-    }
 
-    // 2. Fallback to local JSON files (for local development)
-    if (!serviceAccount) {
-        for (const file of serviceAccountFiles) {
-            const fullPath = path.join(__dirname, '..', file);
-            if (fs.existsSync(fullPath)) {
-                try {
-                    serviceAccount = require(fullPath);
-                    console.log(`[Firebase] Using service account file: ${file}`);
-                    break;
-                } catch (e) {
-                    console.error(`[Firebase] Failed to load ${file}:`, e.message);
+        // 2. Fallback to local JSON files (for local development)
+        if (!serviceAccount) {
+            for (const file of serviceAccountFiles) {
+                const fullPath = path.join(__dirname, '..', file);
+                if (fs.existsSync(fullPath)) {
+                    try {
+                        serviceAccount = require(fullPath);
+                        console.log(`[Firebase] Using service account file: ${file}`);
+                        break;
+                    } catch (e) {
+                        console.error(`[Firebase] Failed to load ${file}:`, e.message);
+                    }
                 }
             }
         }
-    }
 
-    if (!serviceAccount) {
-        throw new Error('Missing Firebase Admin configuration: No valid environment variables and no JSON files found.');
-    }
+        if (!serviceAccount) {
+            throw new Error('Missing Firebase Admin configuration: No valid environment variables and no JSON files found.');
+        }
 
-    if (!admin.apps.length) {
         admin.initializeApp({
             credential: admin.credential.cert(serviceAccount)
         });
@@ -103,7 +107,7 @@ try {
     auth = admin.auth();
 } catch (error) {
     initializationError = error;
-    console.error('[Firebase Init Error]', error.message);
+    console.error('[Firebase Init Error]', error); // Log full error object
 }
 
 module.exports = {
