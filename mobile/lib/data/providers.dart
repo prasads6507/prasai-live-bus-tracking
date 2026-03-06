@@ -191,7 +191,7 @@ final userNotificationsProvider = StreamProvider<List<UserNotification>>((ref) {
   final firestore = ref.watch(firestoreProvider);
   return firestore
       .collection('user_notifications')
-      .where('studentId', '==', user.uid)
+      .where('studentId', isEqualTo: user.uid)
       .orderBy('createdAt', descending: true)
       .snapshots()
       .map((snapshot) {

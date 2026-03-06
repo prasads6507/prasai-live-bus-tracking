@@ -120,7 +120,7 @@ class _NotificationCard extends ConsumerWidget {
                     const SizedBox(width: 10),
                     Text(
                       notification.title,
-                      style: AppTypography.h4.copyWith(
+                      style: AppTypography.h3.copyWith(
                         color: notification.read ? AppColors.textSecondary : AppColors.textPrimary,
                       ),
                     ),
