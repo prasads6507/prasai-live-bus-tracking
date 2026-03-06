@@ -579,6 +579,21 @@ async function historyUpload(req, res) {
                 const datePrefix = new Date().toISOString().split('T')[0];
                 const attendanceId = `${datePrefix}__${tripData.busId}__${direction}__${studentId}`;
                 const attendanceRef = db.collection('attendance').doc(attendanceId);
+
+                // Check if specialized status already exists (e.g., dropped_off_neighbor)
+                // We do a batch-friendly check by using a map or similar if we were optimized,
+                // but for now, we'll use a simple merge that doesn't overwrite status if possible.
+                // However, batch.set(..., {merge: true}) with a field provided WILL overwrite it.
+                // So we'll skip the status field if we're not sure, or better: 
+                // we'll just use a transaction in historyUpload instead of batch for attendance
+                // OR we'll fetch existing statuses first.
+
+                // OPTIMIZED: Use { merge: true } but we need to know if we should include 'status'.
+                // Since this is a batch, we'll fetch existing records first.
+                const existingAttendance = await attendanceRef.get();
+                const currentData = existingAttendance.exists ? existingAttendance.data() : null;
+                const currentStatus = currentData ? currentData.status : null;
+
                 const attendanceData = {
                     tripId,
                     studentId,
@@ -588,17 +603,25 @@ async function historyUpload(req, res) {
                     driverId: req.user.id,
                     studentName,
                     direction,
-                    status: isPickup ? 'picked_up' : 'dropped_off',
-                    createdAt: serverTimestamp,
+                    createdAt: currentData ? currentData.createdAt : serverTimestamp,
                     updatedAt: serverTimestamp
                 };
-                if (isPickup) {
-                    attendanceData.pickedUpAt = serverTimestamp;
-                    attendanceData.droppedOffAt = null;
+
+                // Preserve specialized status
+                if (currentStatus === 'dropped_off_neighbor') {
+                    attendanceData.status = currentStatus;
                 } else {
-                    attendanceData.droppedOffAt = serverTimestamp;
-                    attendanceData.pickedUpAt = null;
+                    attendanceData.status = isPickup ? 'picked_up' : 'dropped_off';
                 }
+
+                if (isPickup) {
+                    attendanceData.pickedUpAt = currentData?.pickedUpAt || serverTimestamp;
+                    attendanceData.droppedOffAt = currentData?.droppedOffAt || null;
+                } else {
+                    attendanceData.droppedOffAt = currentData?.droppedOffAt || serverTimestamp;
+                    attendanceData.pickedUpAt = currentData?.pickedUpAt || null;
+                }
+
                 batch.set(attendanceRef, attendanceData, { merge: true });
             }
 
@@ -1152,6 +1175,16 @@ async function verifyHandoverOTP(req, res) {
                 updatedAt: admin.firestore.FieldValue.serverTimestamp()
             }, { merge: true });
         });
+
+        // Instant notification to student/parent
+        sendStudentAttendanceNotification({
+            studentId,
+            busId: handoffData.busId,
+            direction: 'dropoff',
+            isChecked: true,
+            busNumber: handoffData.busNumber || 'Unknown',
+            tripId: tripId
+        }).catch(err => console.error('[verifyHandoverOTP] Notification error:', err.message));
 
         res.status(200).json({ success: true, message: 'Student handed over successfully' });
     } catch (error) {

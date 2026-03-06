@@ -745,6 +745,7 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
               controller: nameController,
               decoration: const InputDecoration(labelText: 'Neighbor Name'),
             ),
+            const SizedBox(height: 16),
             TextField(
               controller: phoneController,
               decoration: const InputDecoration(labelText: 'Phone Number'),
@@ -851,9 +852,22 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
                           if (e is DioException) {
                             errorMsg = e.response?.data?['message'] ?? e.message ?? e.toString();
                           }
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text(errorMsg), backgroundColor: Colors.red),
-                          );
+                          
+                          if (mounted) {
+                            showDialog(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                title: const Text('Verification Failed'),
+                                content: Text(errorMsg),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(ctx),
+                                    child: const Text('Retry'),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
                         }
                       }
                     },
