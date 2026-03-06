@@ -708,7 +708,7 @@ const BusAttendance = () => {
                                             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">OTP Status</p>
                                             <p className="text-emerald-600 font-bold flex items-center gap-1.5">
                                                 <CheckCircle2 size={16} />
-                                                Verified Success
+                                                {selectedDetailRecord.otpStatus === 'SUCCESS' ? 'Verified Success' : selectedDetailRecord.otpStatus || 'Verified'}
                                             </p>
                                         </div>
                                     </div>

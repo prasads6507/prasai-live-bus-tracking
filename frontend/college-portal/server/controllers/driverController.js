@@ -960,7 +960,7 @@ async function getTodayAttendance(req, res) {
                 if (recordDirection !== direction) return false;
 
                 // 3. Status Check
-                return ['picked_up', 'dropped_off'].includes(data.status);
+                return ['picked_up', 'dropped_off', 'dropped_off_neighbor'].includes(data.status);
             })
             .map(doc => doc.data().studentId);
 
@@ -1032,11 +1032,16 @@ async function generateHandoverOTP(req, res) {
         const studentData = studentDoc.data();
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
+        const tripData = tripDoc.data();
+
         // Store OTP in a new collection 'handoffs'
         const handoffId = `${tripId}_${studentId}`;
         await db.collection('handoffs').doc(handoffId).set({
             tripId,
             studentId,
+            studentName: studentData.name || 'Unknown Student',
+            busId: tripData.busId,
+            busNumber: tripData.busNumber || 'Unknown',
             otp,
             neighborName: neighborName || null,
             neighborPhone: neighborPhone || null,
@@ -1049,11 +1054,11 @@ async function generateHandoverOTP(req, res) {
 
         // Send FCM Notification to student
         if (studentData.fcmToken) {
+            const title = '🚌 Student Handover OTP';
+            const body = `Your handover OTP is: ${otp}. Please share this with the person receiving you.`;
+            
             const message = {
-                notification: {
-                    title: '🚌 Student Handover OTP',
-                    body: `Your handover OTP is: ${otp}. Please share this with the person receiving you.`
-                },
+                notification: { title, body },
                 data: {
                     type: 'HANDOVER_OTP',
                     otp: otp,
@@ -1063,6 +1068,18 @@ async function generateHandoverOTP(req, res) {
             };
 
             await messaging.send(message).catch(err => console.error('[HandoverOTP] FCM failed:', err));
+
+            // Store in user_notifications for the bell icon in student app
+            await db.collection('user_notifications').add({
+                studentId,
+                title,
+                body,
+                type: 'HANDOVER_OTP',
+                otp: otp,
+                tripId: tripId,
+                read: false,
+                createdAt: admin.firestore.FieldValue.serverTimestamp()
+            });
         }
 
         res.status(200).json({ success: true, message: 'OTP generated and sent to student' });
@@ -1106,7 +1123,8 @@ async function verifyHandoverOTP(req, res) {
 
         // OTP is valid! Mark as handed over in attendance
         const datePrefix = new Date().toISOString().split('T')[0];
-        const attendanceId = `${datePrefix}__${handoffData.collegeId}__dropoff__${studentId}`;
+        // Use busId from handoffData for consistent attendance grouping
+        const attendanceId = `${datePrefix}__${handoffData.busId}__dropoff__${studentId}`;
         const attendanceRef = db.collection('attendance').doc(attendanceId);
 
         await db.runTransaction(async (transaction) => {
@@ -1116,12 +1134,21 @@ async function verifyHandoverOTP(req, res) {
             });
 
             transaction.set(attendanceRef, {
+                tripId: handoffData.tripId,
+                studentId: handoffData.studentId,
+                studentName: handoffData.studentName || 'Unknown Student',
+                busId: handoffData.busId,
+                busNumber: handoffData.busNumber || 'Unknown',
+                collegeId: handoffData.collegeId,
+                driverId: handoffData.driverId,
+                direction: 'dropoff',
                 status: 'dropped_off_neighbor',
                 neighborName: handoffData.neighborName || null,
                 neighborPhone: handoffData.neighborPhone || null,
                 otpStatus: 'SUCCESS',
                 handedOverAt: admin.firestore.FieldValue.serverTimestamp(),
                 droppedOffAt: admin.firestore.FieldValue.serverTimestamp(),
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 updatedAt: admin.firestore.FieldValue.serverTimestamp()
             }, { merge: true });
         });

@@ -110,6 +110,14 @@ service cloud.firestore {
       allow read, write: if isAuthenticated();
     }
 
+    // ─── User Notifications (Student Bell Icon) ──────────────────────
+    match /user_notifications/{notificationId} {
+      // Students read/update/delete their own notifications
+      allow read, update, delete: if isAuthenticated() && resource.data.studentId == request.auth.uid;
+      // Server creates via Admin SDK
+      allow create: if false;
+    }
+
     // ─── Catch-all: deny everything else ─────────────────────────────
     match /{document=**} {
       allow read, write: if false;

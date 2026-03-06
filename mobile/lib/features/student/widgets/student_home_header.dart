@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../../data/providers.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/typography.dart';
 
@@ -75,18 +77,52 @@ class StudentHomeHeader extends ConsumerWidget {
             ),
           ),
           // Notification bell
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: AppColors.bgCard,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.borderSubtle),
-            ),
-            child: const Icon(
-              Icons.notifications_outlined,
-              color: AppColors.textPrimary,
-              size: 22,
+          GestureDetector(
+            onPressed: () => GoRouter.of(context).push('/student/notifications'),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: AppColors.bgCard,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.borderSubtle),
+                  ),
+                  child: const Icon(
+                    Icons.notifications_outlined,
+                    color: AppColors.textPrimary,
+                    size: 22,
+                  ),
+                ),
+                Positioned(
+                  top: -4,
+                  right: -4,
+                  child: Consumer(
+                    builder: (context, ref, child) {
+                      final count = ref.watch(unreadNotificationsCountProvider);
+                      if (count == 0) return const SizedBox.shrink();
+                      
+                      return Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: const BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Text(
+                          count.toString(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
             ),
           ),
         ],

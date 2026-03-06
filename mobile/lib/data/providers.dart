@@ -16,6 +16,7 @@ import 'repositories/trip_repo.dart';
 import 'repositories/user_repo.dart';
 import 'models/bus.dart';
 import 'models/user_profile.dart';
+import 'models/user_notification.dart';
 
 // External Services
 final firebaseAuthProvider = Provider<FirebaseAuth>((ref) => FirebaseAuth.instance);
@@ -181,4 +182,24 @@ final busStudentsProvider = FutureProvider.family<List<UserProfile>, String>((re
         .cast<UserProfile>();
   }
   return [];
+});
+
+final userNotificationsProvider = StreamProvider<List<UserNotification>>((ref) {
+  final user = ref.watch(authStateProvider).value;
+  if (user == null) return Stream.value([]);
+
+  final firestore = ref.watch(firestoreProvider);
+  return firestore
+      .collection('user_notifications')
+      .where('studentId', '==', user.uid)
+      .orderBy('createdAt', descending: true)
+      .snapshots()
+      .map((snapshot) {
+    return snapshot.docs.map((doc) => UserNotification.fromFirestore(doc)).toList();
+  });
+});
+
+final unreadNotificationsCountProvider = Provider<int>((ref) {
+  final notifications = ref.watch(userNotificationsProvider).value ?? [];
+  return notifications.where((n) => !n.read).length;
 });
