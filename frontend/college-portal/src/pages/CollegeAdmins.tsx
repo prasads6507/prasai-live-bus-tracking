@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { UserCog, Plus, Edit, Trash2, X, Check, AlertTriangle, Shield, Phone, Crown, Mail } from 'lucide-react';
+import { UserCog, Plus, Edit, Trash2, X, Check, AlertTriangle, Shield, Phone, Crown } from 'lucide-react';
 import Layout from '../components/Layout';
 import { getCollegeAdmins, createCollegeAdmin, updateCollegeAdmin, deleteCollegeAdmin } from '../services/api';
 

@@ -3,9 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Lock, Mail, ArrowRight, ShieldCheck, AlertCircle, School, Bus } from 'lucide-react';
 import { validateSlug } from '../services/api';
 import { motion, AnimatePresence } from 'framer-motion';
-import { auth, db } from '../config/firebase';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { auth } from '../config/firebase';
 import Card from '../components/ui/Card';
 
 const Login = () => {
