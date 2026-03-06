@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Server secrets and data
+server/*.json
+server/*.xlsx
+server/*.log
+server/.env

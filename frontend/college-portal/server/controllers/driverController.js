@@ -1056,7 +1056,7 @@ async function generateHandoverOTP(req, res) {
         if (studentData.fcmToken) {
             const title = '🚌 Student Handover OTP';
             const body = `Your handover OTP is: ${otp}. Please share this with the person receiving you.`;
-            
+
             const message = {
                 notification: { title, body },
                 data: {
@@ -1112,7 +1112,7 @@ async function verifyHandoverOTP(req, res) {
         }
 
         if (handoffData.otp !== otp) {
-            return res.status(400).json({ success: false, message: 'Invalid OTP' });
+            return res.status(400).json({ success: false, message: 'Wrong OTP entered. Please retry.' });
         }
 
         // Check expiry

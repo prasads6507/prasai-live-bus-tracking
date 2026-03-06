@@ -847,8 +847,12 @@ class _DriverStudentsScreenState extends ConsumerState<DriverStudentsScreen> {
                       } catch (e) {
                         if (mounted) {
                           setModalState(() => isVerifying = false);
+                          String errorMsg = e.toString();
+                          if (e is DioException) {
+                            errorMsg = e.response?.data?['message'] ?? e.message ?? e.toString();
+                          }
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Verification failed: $e'), backgroundColor: Colors.red),
+                            SnackBar(content: Text(errorMsg), backgroundColor: Colors.red),
                           );
                         }
                       }

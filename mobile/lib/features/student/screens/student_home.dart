@@ -32,9 +32,6 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
   Future<void> _getStudentLocation() async {
     try {
       LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
       if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
         final pos = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.high,

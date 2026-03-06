@@ -1,0 +1,43 @@
+# Common
+node_modules/
+.DS_Store
+*.log
+.env
+.env.local
+.env.*.local
+
+# Build
+dist/
+build/
+.next/
+out/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Server secrets and data
+frontend/college-portal/server/*.json
+!frontend/college-portal/server/package.json
+frontend/college-portal/server/*.xlsx
+frontend/college-portal/server/*.pdf
+frontend/college-portal/server/.env
+frontend/college-portal/dist/
+frontend/college-portal/node_modules/
+
+mobile/.dart_tool/
+mobile/.packages
+mobile/.pub-cache/
+mobile/.pub/
+mobile/build/
+mobile/ios/Flutter/Generated.xcconfig
+mobile/ios/Flutter/flutter_export_environment.sh
+mobile/android/local.properties
+mobile/android/*.keystore
+mobile/android/*.jks
+mobile/android/app/src/main/res/values/google-services.json
+
+realtime-relay/node_modules/
+backend/node_modules/
