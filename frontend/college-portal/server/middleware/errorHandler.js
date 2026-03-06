@@ -20,7 +20,7 @@ const errorHandler = (err, req, res, next) => {
         success: false,
         message,
         errorType: err.code || 'UNKNOWN_ERROR',
-        details: err.stack // TEMPORARILY enable stack traces in production for debugging
+        details: process.env.NODE_ENV === 'production' ? null : err.stack
     });
 };
 

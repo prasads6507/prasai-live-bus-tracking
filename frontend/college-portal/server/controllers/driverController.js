@@ -977,9 +977,44 @@ const getTodayAttendance = async (req, res) => {
 // @desc    Get students assigned to a specific bus (for drivers)
 // @route   GET /api/driver/buses/:busId/students
 // @access  Private (Driver)
+const getBusStudents = async (req, res) => {
+    try {
+        const { busId } = req.params;
+        const collegeId = req.collegeId;
+
+        if (!busId) return res.status(400).json({ success: false, message: 'Bus ID required' });
+
+        // Fetch students who have assignedBusId === busId
+        const snapshot = await db.collection('students')
+            .where('collegeId', '==', collegeId)
+            .where('assignedBusId', '==', busId)
+            .get();
+
+        const students = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                _id: doc.id,
+                name: data.name || '',
+                email: data.email || '',
+                phone: data.phone || data.phoneNumber || '',
+                registerNumber: data.registerNumber || '',
+                rollNumber: data.rollNumber || '',
+                assignedBusId: data.assignedBusId || null,
+            };
+        });
+
+        res.status(200).json({
+            success: true,
+            data: students
+        });
+    } catch (error) {
+        console.error('getBusStudents error:', error);
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+    }
+};
+
 // @desc    Generate Handover OTP for a student
-// @route   POST /api/driver/trips/:tripId/attendance/handover/generate
-// @access  Private (Driver)
 const generateHandoverOTP = async (req, res) => {
     try {
         const { tripId } = req.params;
