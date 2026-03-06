@@ -33,11 +33,10 @@ class StudentHomeHeader extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return Container(
       padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).padding.top + 12, 20, 20),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppColors.bgBase, AppColors.bgDeep],
+      decoration: BoxDecoration(
+        color: AppColors.bgBase,
+        border: Border(
+          bottom: BorderSide(color: AppColors.borderSubtle, width: 1),
         ),
       ),
       child: Row(
@@ -56,7 +55,10 @@ class StudentHomeHeader extends ConsumerWidget {
                 ),
                 Text(
                   studentName,
-                  style: AppTypography.h1.copyWith(height: 1.1),
+                  style: AppTypography.h1.copyWith(
+                    color: AppColors.primary,
+                    height: 1.1,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 4),
@@ -86,9 +88,8 @@ class StudentHomeHeader extends ConsumerWidget {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: AppColors.bgCard,
+                    color: AppColors.primarySoft,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.borderSubtle),
                   ),
                   child: const Icon(
                     Icons.notifications_outlined,

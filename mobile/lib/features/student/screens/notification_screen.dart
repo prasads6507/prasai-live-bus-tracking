@@ -126,9 +126,23 @@ class _NotificationCard extends ConsumerWidget {
                     ),
                   ],
                 ),
-                Text(
-                  timeStr,
-                  style: AppTypography.caption.copyWith(color: AppColors.textTertiary),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      timeStr,
+                      style: AppTypography.caption.copyWith(color: AppColors.textTertiary),
+                    ),
+                    const SizedBox(height: 4),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline, size: 20, color: AppColors.textTertiary),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: () {
+                        ref.read(firestoreProvider).collection('user_notifications').doc(notification.id).delete();
+                      },
+                    ),
+                  ],
                 ),
               ],
             ),
