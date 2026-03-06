@@ -133,7 +133,8 @@ class ApiDataSource {
         return List<Map<String, dynamic>>.from(collegesList);
       } catch (apiErr) {
         debugPrint("API search fallback error: $apiErr");
-        return [];
+        // Rethrow so the UI can show the error message (e.g., Quota Exceeded)
+        rethrow;
       }
     }
   }

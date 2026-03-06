@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const { db, admin, auth } = require('../config/firebase');
+const { db, admin, auth, initializationError } = require('../config/firebase');
 
 // Helper to validate password since Mongoose method is gone
 const matchPassword = async (enteredPassword, passwordHash) => {
@@ -353,6 +353,13 @@ const getFirebaseHealth = async (req, res) => {
     });
 };
 
+// In-memory cache for colleges list to reduce Firestore reads
+let cachedColleges = {
+    data: null,
+    lastUpdate: 0
+};
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 // @desc    Search colleges by name
 // @route   GET /api/auth/colleges/search?q=query
 // @access  Public
@@ -375,11 +382,17 @@ const searchColleges = async (req, res) => {
 
         const collegesRef = db.collection('colleges');
 
-        // Fetch ACTIVE colleges and filter in-memory for case-insensitive robust matching
-        const snapshot = await collegesRef.where('status', '==', 'ACTIVE').get();
+        // Efficiency optimization: Use in-memory cache if valid
+        let collegesSource;
+        const now = Date.now();
 
-        const colleges = snapshot.docs
-            .map(doc => {
+        if (cachedColleges.data && (now - cachedColleges.lastUpdate < CACHE_TTL)) {
+            collegesSource = cachedColleges.data;
+        } else {
+            console.log("[Search] Cache expired or empty, fetching from Firestore...");
+            // Fetch ACTIVE colleges
+            const snapshot = await collegesRef.where('status', '==', 'ACTIVE').get();
+            collegesSource = snapshot.docs.map(doc => {
                 const data = doc.data();
                 return {
                     collegeId: data.collegeId,
@@ -387,7 +400,13 @@ const searchColleges = async (req, res) => {
                     slug: data.slug,
                     status: data.status
                 };
-            })
+            });
+            // Update cache
+            cachedColleges.data = collegesSource;
+            cachedColleges.lastUpdate = now;
+        }
+
+        const filteredColleges = collegesSource
             .filter(c => {
                 const name = (c.collegeName || '').toLowerCase();
                 const slug = (c.slug || '').toLowerCase();
@@ -397,7 +416,7 @@ const searchColleges = async (req, res) => {
             .slice(0, 15);
 
         // Standardized response shape: { colleges: [...] }
-        return res.json({ colleges });
+        return res.json({ colleges: filteredColleges });
     } catch (error) {
         console.error("[searchColleges error]", error);
         return res.status(500).json({
