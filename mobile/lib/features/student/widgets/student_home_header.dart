@@ -78,7 +78,7 @@ class StudentHomeHeader extends ConsumerWidget {
           ),
           // Notification bell
           GestureDetector(
-            onPressed: () => GoRouter.of(context).push('/student/notifications'),
+            onTap: () => GoRouter.of(context).push('/student/notifications'),
             child: Stack(
               clipBehavior: Clip.none,
               children: [
