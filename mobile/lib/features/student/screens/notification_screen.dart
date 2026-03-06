@@ -135,7 +135,7 @@ class _NotificationCard extends ConsumerWidget {
                     ),
                     const SizedBox(height: 4),
                     IconButton(
-                      icon: const Icon(Icons.delete_outline, size: 20, color: AppColors.textTertiary),
+                      icon: const Icon(Icons.delete_outline, size: 20, color: AppColors.error),
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
                       onPressed: () {

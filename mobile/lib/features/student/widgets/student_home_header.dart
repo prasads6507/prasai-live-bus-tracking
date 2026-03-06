@@ -34,8 +34,15 @@ class StudentHomeHeader extends ConsumerWidget {
     return Container(
       padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).padding.top + 12, 20, 20),
       decoration: BoxDecoration(
-        color: AppColors.bgBase,
-        border: Border(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            AppColors.primary.withOpacity(0.05),
+            AppColors.bgBase,
+          ],
+        ),
+        border: const Border(
           bottom: BorderSide(color: AppColors.borderSubtle, width: 1),
         ),
       ),
@@ -56,7 +63,8 @@ class StudentHomeHeader extends ConsumerWidget {
                 Text(
                   studentName,
                   style: AppTypography.h1.copyWith(
-                    color: AppColors.primary,
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w800,
                     height: 1.1,
                   ),
                   overflow: TextOverflow.ellipsis,
@@ -106,17 +114,25 @@ class StudentHomeHeader extends ConsumerWidget {
                       if (count == 0) return const SizedBox.shrink();
                       
                       return Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: const BoxDecoration(
-                          color: Colors.red,
-                          shape: BoxShape.circle,
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.error,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppColors.bgBase, width: 1.5),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.error.withOpacity(0.3),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
                         ),
                         child: Text(
-                          count.toString(),
+                          count > 9 ? '9+' : count.toString(),
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 10,
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w900,
                           ),
                         ),
                       );
