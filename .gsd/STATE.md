@@ -1,13 +1,12 @@
-# Project State: Bannu Bus Application
+# Project State: Notification System Fix & Force Update
 
 ## Position
-## Position
-- **Current Phase**: Phase 5 (Attendance Isolation)
-- **Status**: Completed Phase 5 to resolve attendance carry-over issues by clearing the SharedPreferences cache at the start of each trip session. Phase 1-4 are stable.
+- **Current Phase**: Phase 3 (Verification)
+- **Status**: Completed. Notification system stabilized with robust token management and synchronized payloads. Firebase rules deployed.
 
 ## Decisions
-- **FCM Strategy**: Use `sendEachForMulticast` with decoupled token cleanup for maximum speed.
-- **Tracking**: `FlutterBackgroundService` is the primary driver for persistence.
+- **FCM Strategy**: Fire-and-forget API calls to Node.js/Vercel with fresh ID tokens.
+- **Security**: Tightened `firestore.rules` for stop arrivals and verified driver write permissions.
 
 ## Current Blockers
-- None. Ready for next phase of development.
+- None. System is stable and synchronized.

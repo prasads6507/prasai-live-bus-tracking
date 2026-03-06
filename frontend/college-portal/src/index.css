@@ -6,13 +6,33 @@
 
 :root {
   --font-primary: 'Outfit', sans-serif;
-  --bg-main: #fcfcfd;
-  --bg-sidebar: #ffffff;
-  --primary: #101828;
-  --accent: #0052ff;
-  --success: #039855;
-  --warning: #f79009;
-  --danger: #d92d20;
+
+  /* Global Design Tokens & Variables (Vitrus UI) */
+  --portal-bg: #EAF0EC;
+  --card-bg: #FFFFFF;
+  --text-primary: #2D3136;
+  --text-secondary: #8B949E;
+
+  /* Gradients & Accents */
+  --gradient-highlight: linear-gradient(135deg, #FBFF38 0%, #E2F336 100%);
+  --gradient-success: linear-gradient(135deg, #DCEFE6 0%, #CDE8D8 100%);
+  --success-bg: #DCEFE6;
+  --success-text: #2E6A41;
+  --dark-active: #2D3136;
+  --color-primary: #10B981;
+  --color-primary-dark: #059669;
+  --color-primary-light: #D1FAE5;
+
+  /* Card Architecture */
+  --radius-card: 28px;
+  --radius-inner: 9999px;
+  --shadow-card: 0 10px 40px -10px rgba(0, 0, 0, 0.03);
+  --card-border: none;
+
+  /* Premium Utilities */
+  --btn-primary: linear-gradient(135deg, #10B981 0%, #059669 100%);
+  --btn-success: linear-gradient(135deg, #10B981 0%, #059669 100%);
+  --glow-primary: 0 0 15px rgba(16, 185, 129, 0.15);
 }
 
 body {
@@ -20,8 +40,9 @@ body {
   font-family: var(--font-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: var(--bg-main);
-  color: var(--primary);
+  background-color: var(--portal-bg);
+  color: var(--text-primary);
+  min-height: 100vh;
 }
 
 * {
@@ -37,25 +58,39 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #e2e8f0;
+  background: rgba(0, 0, 0, 0.1);
   border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #cbd5e1;
+  background: rgba(0, 0, 0, 0.2);
 }
 
-/* Glassmorphism utilities */
-.glass {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+/* Base Card Class */
+.soft-card {
+  background: var(--card-bg);
+  border: var(--card-border);
+  box-shadow: var(--shadow-card);
+  border-radius: var(--radius-card);
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.dark-glass {
-  background: rgba(16, 24, 40, 0.8);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+/* Premium Button Class */
+.btn-premium {
+  @apply relative overflow-hidden transition-all duration-300 active:scale-[0.97] font-bold tracking-tight;
+}
+
+.btn-primary-gradient {
+  background: var(--btn-primary);
+  @apply text-white shadow-lg shadow-emerald-500/20 hover:shadow-xl hover:shadow-emerald-500/30;
+}
+
+.btn-success-gradient {
+  background: var(--btn-success);
+  @apply text-white shadow-lg shadow-green-500/20 hover:shadow-xl hover:shadow-green-500/30;
+}
+
+/* Input Focus Glow */
+.input-premium {
+  @apply transition-all duration-300 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500/50 focus:shadow-sm outline-none;
 }

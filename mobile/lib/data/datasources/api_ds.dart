@@ -244,5 +244,46 @@ class ApiDataSource {
       return [];
     }
   }
+  /// Generate a handover OTP for a student.
+  Future<void> generateHandoverOTP({
+    required String tripId,
+    required String studentId,
+    String? neighborName,
+    String? neighborPhone,
+  }) async {
+    try {
+      await _dio.post(
+        '${Env.apiUrl}/api/driver/trips/$tripId/attendance/handover/generate',
+        data: {
+          'studentId': studentId,
+          'neighborName': neighborName,
+          'neighborPhone': neighborPhone,
+        },
+      );
+    } catch (e) {
+      debugPrint('[ApiDataSource] generateHandoverOTP failed: $e');
+      rethrow;
+    }
+  }
+
+  /// Verify a handover OTP for a student.
+  Future<void> verifyHandoverOTP({
+    required String tripId,
+    required String studentId,
+    required String otp,
+  }) async {
+    try {
+      await _dio.post(
+        '${Env.apiUrl}/api/driver/trips/$tripId/attendance/handover/verify',
+        data: {
+          'studentId': studentId,
+          'otp': otp,
+        },
+      );
+    } catch (e) {
+      debugPrint('[ApiDataSource] verifyHandoverOTP failed: $e');
+      rethrow;
+    }
+  }
 }
 

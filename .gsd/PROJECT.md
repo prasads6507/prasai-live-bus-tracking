@@ -1,16 +1,14 @@
-# Project: Bannu Bus Application
+# Project: Attendance & Absence Fix
 
 ## Vision
-A comprehensive live bus tracking and student attendance system for colleges. It ensures student safety through real-time notifications for parents and efficient trip management for drivers and admins.
+Stabilize the attendance tracking system by ensuring clean sessions between pickup/drop-off and reliable student absence notifications.
 
-## Tech Stack
-- **Mobile**: Flutter (Riverpod, GoRouter, MapLibre, Firebase SDK)
-- **Backend**: Node.js, Express, Firebase Admin SDK
-- **Frontend**: React, TypeScript, Vite, Tailwind CSS
-- **Database/Auth**: Firebase Firestore & Firebase Auth
-- **Infrastructure**: Vercel (Backend/Frontend), Android release APKs
+## Stack
+- **Mobile**: Flutter/Riverpod
+- **Database**: Firestore
+- **Backend**: Node.js/Vercel (API)
 
-## Non-Negotiable Constraints
-- **Instant Notifications**: Parents must be notified immediately upon student boarding/drop-off.
-- **Battery Efficiency**: Mobile tracking must be optimized for long driver shifts.
-- **Multi-Tenant Isolation**: Data must be strictly scoped to the `collegeId`.
+## Constraints
+- Do not modify existing notification system logic.
+- Do not push to Git.
+- Force update Firebase rules and DB behavior.

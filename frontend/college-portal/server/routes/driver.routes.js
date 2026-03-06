@@ -46,6 +46,10 @@ router.get('/buses/:busId/attendance/today', getTodayAttendance);
 router.post('/trips/:tripId/attendance/notify', notifyStudentAttendance);
 router.get('/buses/:busId/students', getBusStudents);
 
+// Handover OTP
+router.post('/trips/:tripId/attendance/handover/generate', generateHandoverOTP);
+router.post('/trips/:tripId/attendance/handover/verify', verifyHandoverOTP);
+
 // POST /api/driver/trip-started-notify
 router.post('/trip-started-notify', async (req, res) => {
     try {

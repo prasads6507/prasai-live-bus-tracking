@@ -1,17 +1,7 @@
-# Requirements: Bannu Bus Application
+# Requirements: Attendance & Absence Fix
 
-## Scoped v1 (Completed)
-- [x] **Real-time Map Tracking**: Students see bus location on MapLibre.
-- [x] **Driver Trip Control**: Start/End trips with background location syncing.
-- [x] **Attendance Marking**: Drivers tick students verified via FCM.
-- [x] **Proximity Notifications**: Automatic alerts when bus is near a stop.
-- [x] **Admin Portal**: Manage buses, routes, and student assignments via Excel/UI.
-
-## Scoped v2 (Active/Next)
-- [ ] **Advanced Analytics**: Generate reports on trip duration and student boardings.
-- [ ] **Driver Performance**: Track speeding or route deviations.
-- [ ] **Enhanced UI**: Refined glassmorphism across all screens.
-
-## Out of Scope (For Now)
-- [ ] Parent-to-Driver direct chat.
-- [ ] Payment integration for bus fees.
+## Scoped Fixes
+- [ ] **Attendance Isolation**: Guarantee that marking a student in pickup does not affect the drop-off list.
+- [ ] **Absence Notifications**: Verify and fix the logic that sends "not boarded" alerts to students at trip end.
+- [ ] **Firestore Rules**: Stabilize rules for `attendance` and `notifications` collections.
+- [ ] **Session Management**: Explicitly clear all attendance-related cache at trip transition.

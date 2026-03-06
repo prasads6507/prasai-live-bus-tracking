@@ -8,6 +8,7 @@ import { doc, updateDoc, serverTimestamp, collection, query, where, onSnapshot }
 import { db } from '../config/firebase';
 import MapLibreMapComponent from '../components/MapLibreMapComponent';
 import useNotification from '../hooks/useNotification';
+import Card from '../components/ui/Card';
 
 const isLiveBus = (bus: any) => {
     // Canonical: bus.status === 'ON_ROUTE'
@@ -275,11 +276,11 @@ const StudentDashboard = () => {
     );
 
     return (
-        <div className="min-h-screen bg-slate-900 text-slate-100 font-sans selection:bg-blue-500/30">
+        <div className="min-h-screen bg-transparent text-slate-800 font-sans selection:bg-blue-500/30">
 
             {/* Navbar - Hide in tracking mode on mobile, maybe show simplified header */}
             {!trackedBus && (
-                <nav className="sticky top-0 z-30 bg-slate-900/80 backdrop-blur-xl border-b border-white/10">
+                <nav className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-slate-200">
                     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                         <div className="flex justify-between items-center h-16">
                             <div className="flex items-center gap-3">
@@ -305,7 +306,7 @@ const StudentDashboard = () => {
 
             {/* Tracking View */}
             {trackedBus && (
-                <div className="fixed inset-0 z-40 bg-slate-900 flex flex-col md:flex-row">
+                <div className="fixed inset-0 z-40 bg-slate-50 flex flex-col md:flex-row">
                     {/* Header / Back Button for Mobile */}
                     <div className="absolute top-4 left-4 z-50 md:hidden">
                         <button
@@ -515,10 +516,14 @@ const StudentDashboard = () => {
 
                 {/* Favorites Section */}
                 {favoriteBuses.length > 0 && (
-                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
-                        <div className="flex items-center gap-2 mb-3">
-                            <Star size={18} className="text-yellow-400 fill-yellow-400" />
-                            <h3 className="text-lg font-bold text-white">Favorite Buses</h3>
+                    <Card
+                        initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
+                        glass={false}
+                        className="p-6"
+                    >
+                        <div className="flex items-center gap-2 mb-4 border-b border-slate-100 pb-3">
+                            <Star size={18} className="text-vitrus-active fill-vitrus-active" />
+                            <h3 className="text-lg font-bold text-slate-800">Favorite Buses</h3>
                         </div>
                         <div className="flex gap-3 overflow-x-auto pb-2">
                             {favoriteBuses.map(bus => (
@@ -540,21 +545,23 @@ const StudentDashboard = () => {
                                 </button>
                             ))}
                         </div>
-                    </motion.div>
+                    </Card>
                 )}
 
                 {/* Live Map Section - REMOVE since we have tracking view now, or keep as summary? 
                     Actually, let's keep it as "Active Buses" overview map but remove the stop list overlay from here.
                 */}
-                <motion.div
+                <Card
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.1 }}
-                    className="bg-slate-800/50 backdrop-blur-md border border-white/5 rounded-3xl overflow-hidden h-[300px] flex flex-col cursor-pointer hover:border-blue-500/30 transition-colors"
+                    className="overflow-hidden h-[300px] flex flex-col cursor-pointer transition-colors"
+                    noPadding={true}
+                    glass={false}
                 >
-                    <div className="p-4 border-b border-white/10 flex justify-between items-center shrink-0">
-                        <h3 className="font-semibold text-white flex items-center gap-2">
-                            <MapPin size={20} className="text-blue-400" />
+                    <div className="p-4 border-b border-slate-100 flex justify-between items-center shrink-0 bg-white/80 backdrop-blur-sm">
+                        <h3 className="font-semibold text-slate-800 flex items-center gap-2">
+                            <MapPin size={20} className="text-blue-500" />
                             Live Fleet Overview
                         </h3>
                         <div className="flex items-center gap-2">
@@ -652,7 +659,7 @@ const StudentDashboard = () => {
                             );
                         })()}
                     </div>
-                </motion.div>
+                </Card>
 
                 {/* Search Bar */}
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
@@ -663,7 +670,7 @@ const StudentDashboard = () => {
                             placeholder="Search by bus number, plate, or driver..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full pl-12 pr-4 py-3 bg-slate-800/50 border border-white/10 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
+                            className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 shadow-sm rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all font-bold"
                         />
                     </div>
                 </motion.div>
@@ -675,66 +682,64 @@ const StudentDashboard = () => {
                     transition={{ delay: 0.2 }}
                 >
                     <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-bold text-white">College Buses</h3>
+                        <h3 className="text-lg font-bold text-slate-900">College Buses</h3>
                         <span className="text-sm text-slate-400">{filteredBuses.length} buses</span>
                     </div>
                     {loading ? (
                         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                             {[...Array(3)].map((_, i) => (
-                                <div key={i} className="bg-slate-800/50 rounded-2xl p-5 border border-white/5 animate-pulse">
-                                    <div className="h-5 bg-slate-700 rounded w-1/2 mb-3"></div>
-                                    <div className="h-4 bg-slate-700/50 rounded w-3/4"></div>
+                                <div key={i} className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm animate-pulse">
+                                    <div className="h-5 bg-slate-200 rounded w-1/2 mb-3"></div>
+                                    <div className="h-4 bg-slate-100 rounded w-3/4"></div>
                                 </div>
                             ))}
                         </div>
                     ) : filteredBuses.length === 0 ? (
-                        <div className="text-center py-12 bg-slate-800/30 rounded-2xl border border-dashed border-white/10">
-                            <Bus size={48} className="mx-auto text-slate-600 mb-3" />
-                            <p className="text-slate-400">{searchQuery ? 'No buses found matching your search.' : 'No buses available yet.'}</p>
+                        <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                            <Bus size={48} className="mx-auto text-slate-300 mb-3" />
+                            <p className="text-slate-500 font-medium">{searchQuery ? 'No buses found matching your search.' : 'No buses available yet.'}</p>
                         </div>
                     ) : (
                         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                             {filteredBuses.map((bus) => (
-                                <motion.div
+                                <Card
                                     key={bus._id}
-                                    whileHover={{ scale: 1.02 }}
+                                    glass={false}
+                                    whileHover={{ scale: 1.02, boxShadow: 'var(--shadow-card)' }}
                                     whileTap={{ scale: 0.98 }}
                                     onClick={() => setSelectedBus(bus)}
-                                    className={`bg-slate-800/50 backdrop-blur-md border rounded-2xl p-5 cursor-pointer transition-all ${isLiveBus(bus)
-                                        ? 'border-green-500/30 hover:border-green-500/50'
-                                        : 'border-white/5 hover:border-white/10'
-                                        }`}
+                                    className="cursor-pointer transition-all"
                                 >
                                     <div className="flex items-center justify-between mb-3">
                                         <div className="flex items-center gap-3">
-                                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm ${isLiveBus(bus) ? 'bg-green-500/20 text-green-400' : 'bg-blue-500/20 text-blue-400'
+                                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm ${isLiveBus(bus) ? 'bg-green-500/20 text-green-600' : 'bg-blue-500/20 text-blue-600'
                                                 }`}>
                                                 <Bus size={20} />
                                             </div>
                                             <div>
-                                                <h4 className="font-bold text-white">{bus.busNumber}</h4>
-                                                <p className="text-xs text-slate-400">{bus.numberPlate || 'No Plate'}</p>
+                                                <h4 className="font-bold text-slate-800">{bus.busNumber}</h4>
+                                                <p className="text-xs text-slate-500">{bus.numberPlate || 'No Plate'}</p>
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); toggleFavorite(bus._id); }}
-                                                className="p-1.5 hover:bg-white/10 rounded-lg transition-all"
+                                                className="p-1.5 hover:bg-slate-50 rounded-lg transition-all"
                                             >
-                                                <Star size={16} className={favorites.includes(bus._id) ? 'text-yellow-400 fill-yellow-400' : 'text-slate-500'} />
+                                                <Star size={16} className={favorites.includes(bus._id) ? 'text-vitrus-active fill-vitrus-active' : 'text-slate-400'} />
                                             </button>
-                                            <span className={`px-2 py-1 rounded-full text-xs font-bold ${isLiveBus(bus) ? 'bg-green-500/20 text-green-400' :
-                                                bus.status === 'ACTIVE' ? 'bg-blue-500/20 text-blue-400' :
-                                                    'bg-slate-500/20 text-slate-400'
+                                            <span className={`px-2 py-1 rounded-full text-xs font-bold ${isLiveBus(bus) ? 'bg-green-500/20 text-green-600' :
+                                                bus.status === 'ACTIVE' ? 'bg-blue-500/20 text-blue-600' :
+                                                    'bg-slate-100 text-slate-500'
                                                 }`}>
                                                 {isLiveBus(bus) ? 'LIVE' : bus.status || 'Unknown'}
                                             </span>
                                         </div>
                                     </div>
                                     <div className="space-y-2 text-sm">
-                                        <div className="flex items-center gap-2 text-slate-400">
+                                        <div className="flex items-center gap-2 text-slate-600">
                                             <User size={14} />
-                                            <span>{bus.driverName || 'Unassigned'}</span>
+                                            <span className="font-medium">{bus.driverName || 'Unassigned'}</span>
                                         </div>
                                         {isLiveBus(bus) && busLocations[bus._id] && (
                                             <div className="flex items-center gap-2 text-green-400 bg-green-500/10 p-2 rounded-lg">
@@ -743,7 +748,7 @@ const StudentDashboard = () => {
                                             </div>
                                         )}
                                     </div>
-                                </motion.div>
+                                </Card>
                             ))}
                         </div>
                     )}
@@ -765,48 +770,48 @@ const StudentDashboard = () => {
                             animate={{ scale: 1, opacity: 1 }}
                             exit={{ scale: 0.9, opacity: 0 }}
                             onClick={(e) => e.stopPropagation()}
-                            className="bg-slate-800 rounded-3xl p-6 max-w-md w-full border border-white/10 shadow-2xl"
+                            className="bg-white rounded-[28px] p-6 max-w-md w-full border border-slate-100 shadow-2xl"
                         >
                             <div className="flex items-center justify-between mb-6">
                                 <div className="flex items-center gap-3">
-                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${isLiveBus(selectedBus) ? 'bg-green-500/20' : 'bg-blue-500/20'
+                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${isLiveBus(selectedBus) ? 'bg-green-500/10' : 'bg-blue-500/10'
                                         }`}>
-                                        <Bus size={24} className={isLiveBus(selectedBus) ? 'text-green-400' : 'text-blue-400'} />
+                                        <Bus size={24} className={isLiveBus(selectedBus) ? 'text-green-500' : 'text-blue-500'} />
                                     </div>
                                     <div>
-                                        <h3 className="text-xl font-bold text-white">{selectedBus.busNumber}</h3>
-                                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${isLiveBus(selectedBus) ? 'bg-green-500/20 text-green-400' : 'bg-slate-500/20 text-slate-400'
+                                        <h3 className="text-xl font-bold text-slate-800">{selectedBus.busNumber}</h3>
+                                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${isLiveBus(selectedBus) ? 'bg-green-50 text-green-600' : 'bg-slate-100 text-slate-500'
                                             }`}>
                                             {isLiveBus(selectedBus) ? 'LIVE' : selectedBus.status}
                                         </span>
                                     </div>
                                 </div>
-                                <button onClick={() => setSelectedBus(null)} className="p-2 hover:bg-white/10 rounded-lg transition-all">
+                                <button onClick={() => setSelectedBus(null)} className="p-2 hover:bg-slate-100 rounded-lg transition-all">
                                     <X size={20} className="text-slate-400" />
                                 </button>
                             </div>
 
                             <div className="space-y-4 mb-6">
-                                <div className="flex items-center justify-between p-3 bg-slate-700/50 rounded-xl">
-                                    <span className="text-slate-400">Number Plate</span>
-                                    <span className="font-bold text-white">{selectedBus.numberPlate || 'Not Available'}</span>
+                                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                    <span className="text-slate-500 text-sm font-medium">Number Plate</span>
+                                    <span className="font-bold text-slate-800">{selectedBus.numberPlate || 'Not Available'}</span>
                                 </div>
-                                <div className="flex items-center justify-between p-3 bg-slate-700/50 rounded-xl">
-                                    <span className="text-slate-400">Driver</span>
-                                    <span className="font-bold text-white">{selectedBus.driverName || 'Unassigned'}</span>
+                                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                    <span className="text-slate-500 text-sm font-medium">Driver</span>
+                                    <span className="font-bold text-slate-800">{selectedBus.driverName || 'Unassigned'}</span>
                                 </div>
                                 {isLiveBus(selectedBus) && busLocations[selectedBus._id] && (
-                                    <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-xl">
+                                    <div className="p-3 bg-green-50 border border-green-100 rounded-xl">
                                         <div className="flex items-center gap-2 mb-1">
-                                            <MapPin size={16} className="text-green-400" />
-                                            <span className="text-sm text-green-400 font-medium">Current Location</span>
+                                            <MapPin size={16} className="text-green-600" />
+                                            <span className="text-sm text-green-700 font-bold">Current Location</span>
                                         </div>
-                                        <p className="text-white font-semibold">{busLocations[selectedBus._id]}</p>
+                                        <p className="text-slate-800 font-semibold text-sm">{busLocations[selectedBus._id]}</p>
                                     </div>
                                 )}
-                                <div className="flex items-center justify-between p-3 bg-slate-700/50 rounded-xl">
-                                    <span className="text-slate-400">Speed</span>
-                                    <span className={`font-bold ${isStale(selectedBus.lastUpdated || selectedBus.lastLocationUpdate) ? 'text-slate-500' : 'text-white'}`}>
+                                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                    <span className="text-slate-500 text-sm font-medium">Speed</span>
+                                    <span className={`font-bold ${isStale(selectedBus.lastUpdated || selectedBus.lastLocationUpdate) ? 'text-slate-400' : 'text-slate-800'}`}>
                                         {isStale(selectedBus.lastUpdated || selectedBus.lastLocationUpdate) ? '--' : Math.round(selectedBus.speedMph ?? selectedBus.speed ?? selectedBus.speedMPH ?? 0)} mph
                                     </span>
                                 </div>
@@ -816,17 +821,17 @@ const StudentDashboard = () => {
                                 <button
                                     onClick={() => toggleFavorite(selectedBus._id)}
                                     className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold transition-all ${favorites.includes(selectedBus._id)
-                                        ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
-                                        : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                                        ? 'bg-yellow-50 text-vitrus-active border border-yellow-200'
+                                        : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
                                         }`}
                                 >
-                                    <Star size={18} className={favorites.includes(selectedBus._id) ? 'fill-yellow-400' : ''} />
+                                    <Star size={18} className={favorites.includes(selectedBus._id) ? 'fill-vitrus-active text-vitrus-active' : ''} />
                                     {favorites.includes(selectedBus._id) ? 'Favorited' : 'Add to Favorites'}
                                 </button>
                                 {isLiveBus(selectedBus) && (
                                     <button
                                         onClick={() => handleTrackBus(selectedBus)}
-                                        className="flex-1 flex items-center justify-center gap-2 py-3 bg-green-600 hover:bg-green-500 text-white rounded-xl font-semibold transition-all"
+                                        className="flex-1 flex items-center justify-center gap-2 py-3 bg-vitrus-active hover:bg-slate-800 text-white rounded-xl font-semibold transition-all"
                                     >
                                         <Crosshair size={18} />
                                         Track Bus

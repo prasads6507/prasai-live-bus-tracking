@@ -92,7 +92,7 @@ export default function StudentAssignment() {
     const routeStops = selectedRoute?.stops || [];
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 p-6">
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-emerald-50 p-6">
             <div className="max-w-6xl mx-auto">
                 {/* Header */}
                 <div className="flex items-center gap-4 mb-8">
@@ -112,7 +112,7 @@ export default function StudentAssignment() {
                         <div>
                             <label className="block text-xs font-medium text-slate-500 mb-1">Route</label>
                             <select value={selectedRouteId} onChange={e => { setSelectedRouteId(e.target.value); setSelectedStopId(''); }}
-                                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none">
+                                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-100 focus:border-emerald-500 outline-none">
                                 <option value="">Select Route</option>
                                 {routes.map(r => <option key={r._id} value={r._id}>{r.routeName}</option>)}
                             </select>
@@ -121,7 +121,7 @@ export default function StudentAssignment() {
                             <label className="block text-xs font-medium text-slate-500 mb-1">Stop</label>
                             <select value={selectedStopId} onChange={e => setSelectedStopId(e.target.value)}
                                 disabled={!selectedRouteId}
-                                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none disabled:opacity-50">
+                                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-100 focus:border-emerald-500 outline-none disabled:opacity-50">
                                 <option value="">Select Stop (optional)</option>
                                 {routeStops.map(s => <option key={s.stopId} value={s.stopId}>{s.stopName}</option>)}
                             </select>
@@ -129,7 +129,7 @@ export default function StudentAssignment() {
                         <div className="flex items-end">
                             <button onClick={handleAssign}
                                 disabled={saving || !selectedRouteId || selectedStudents.size === 0}
-                                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-medium rounded-xl hover:from-blue-700 hover:to-blue-800 transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white font-medium rounded-xl hover:from-emerald-700 hover:to-emerald-800 transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
                                 <Save size={16} />
                                 {saving ? 'Assigning...' : `Assign ${selectedStudents.size} Student${selectedStudents.size !== 1 ? 's' : ''}`}
                             </button>
@@ -142,7 +142,7 @@ export default function StudentAssignment() {
                     <div className="flex-grow relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                         <input type="text" placeholder="Search students..." value={search} onChange={e => setSearch(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none" />
+                            className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-100 focus:border-emerald-500 outline-none" />
                     </div>
                     <button onClick={selectAll}
                         className="px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition whitespace-nowrap">
@@ -152,13 +152,13 @@ export default function StudentAssignment() {
 
                 {/* Student Table */}
                 {loading ? (
-                    <div className="flex justify-center py-16"><div className="animate-spin h-8 w-8 border-2 border-blue-600 border-t-transparent rounded-full" /></div>
+                    <div className="flex justify-center py-16"><div className="animate-spin h-8 w-8 border-2 border-emerald-600 border-t-transparent rounded-full" /></div>
                 ) : (
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                         <table className="w-full text-sm">
                             <thead className="bg-slate-50 border-b border-slate-200">
                                 <tr>
-                                    <th className="text-left px-4 py-3 w-10"><input type="checkbox" checked={selectedStudents.size === filtered.length && filtered.length > 0} onChange={selectAll} className="accent-blue-600" /></th>
+                                    <th className="text-left px-4 py-3 w-10"><input type="checkbox" checked={selectedStudents.size === filtered.length && filtered.length > 0} onChange={selectAll} className="accent-emerald-600" /></th>
                                     <th className="text-left px-4 py-3 font-semibold text-slate-600">Name</th>
                                     <th className="text-left px-4 py-3 font-semibold text-slate-600">Student ID</th>
                                     <th className="text-left px-4 py-3 font-semibold text-slate-600 flex items-center gap-1"><Bus size={14} /> Route</th>
@@ -170,14 +170,14 @@ export default function StudentAssignment() {
                                     const route = routes.find(r => r._id === s.assignedRouteId);
                                     const stop = route?.stops?.find((st: any) => st.stopId === s.assignedStopId);
                                     return (
-                                        <tr key={s._id} className={`border-b border-slate-100 hover:bg-blue-50/50 cursor-pointer transition ${selectedStudents.has(s._id) ? 'bg-blue-50' : ''}`}
+                                        <tr key={s._id} className={`border-b border-slate-100 hover:bg-emerald-50/50 cursor-pointer transition ${selectedStudents.has(s._id) ? 'bg-emerald-50' : ''}`}
                                             onClick={() => toggleStudent(s._id)}>
-                                            <td className="px-4 py-3"><input type="checkbox" checked={selectedStudents.has(s._id)} onChange={() => toggleStudent(s._id)} className="accent-blue-600" /></td>
+                                            <td className="px-4 py-3"><input type="checkbox" checked={selectedStudents.has(s._id)} onChange={() => toggleStudent(s._id)} className="accent-emerald-600" /></td>
                                             <td className="px-4 py-3 font-medium text-slate-800">{s.name}</td>
                                             <td className="px-4 py-3 text-slate-500">{s.studentId}</td>
                                             <td className="px-4 py-3">
                                                 {route ? (
-                                                    <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">{route.routeName}</span>
+                                                    <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-xs font-medium">{route.routeName}</span>
                                                 ) : (
                                                     <span className="text-slate-400 text-xs">Not assigned</span>
                                                 )}

@@ -171,7 +171,7 @@ const TripDetail = () => {
             <Layout activeItem="trip-history">
                 <div className="flex items-center justify-center h-[80vh]">
                     <div className="text-center">
-                        <RefreshCw size={48} className="animate-spin text-blue-600 mx-auto mb-4" />
+                        <RefreshCw size={48} className="animate-spin text-emerald-600 mx-auto mb-4" />
                         <p className="text-slate-500 font-medium text-lg">Loading trip details...</p>
                     </div>
                 </div>
@@ -215,7 +215,7 @@ const TripDetail = () => {
                         </button>
 
                         <div className="flex items-center gap-4 mb-8">
-                            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${trip.status === 'ACTIVE' ? 'bg-green-100 text-green-600 animate-pulse' : 'bg-blue-100 text-blue-600'}`}>
+                            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${trip.status === 'ACTIVE' ? 'bg-green-100 text-green-600 animate-pulse' : 'bg-emerald-100 text-emerald-600'}`}>
                                 <Bus size={32} />
                             </div>
                             <div>
@@ -244,7 +244,7 @@ const TripDetail = () => {
                         {/* Metrics Grid */}
                         <div className="grid grid-cols-3 gap-3 mb-8">
                             <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                                <Activity size={18} className="text-blue-500 mb-2" />
+                                <Activity size={18} className="text-emerald-500 mb-2" />
                                 <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Duration</p>
                                 <p className="text-sm font-bold text-slate-800 truncate">{formatDuration(trip.durationMinutes)}</p>
                             </div>

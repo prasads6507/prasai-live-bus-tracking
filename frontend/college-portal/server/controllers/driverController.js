@@ -977,49 +977,123 @@ const getTodayAttendance = async (req, res) => {
 // @desc    Get students assigned to a specific bus (for drivers)
 // @route   GET /api/driver/buses/:busId/students
 // @access  Private (Driver)
-const getBusStudents = async (req, res) => {
+// @desc    Generate Handover OTP for a student
+// @route   POST /api/driver/trips/:tripId/attendance/handover/generate
+// @access  Private (Driver)
+const generateHandoverOTP = async (req, res) => {
     try {
-        const { busId } = req.params;
-        const collegeId = req.collegeId;
+        const { tripId } = req.params;
+        const { studentId, neighborName, neighborPhone } = req.body;
 
-        // Verify the driver is assigned to this bus or has permission
-        const busRef = db.collection('buses').doc(busId);
-        const busDoc = await busRef.get();
+        if (!studentId) return res.status(400).json({ success: false, message: 'Student ID required' });
 
-        if (!busDoc.exists) {
-            return res.status(404).json({ success: false, message: 'Bus not found' });
-        }
+        const tripRef = db.collection('trips').doc(tripId);
+        const tripDoc = await tripRef.get();
+        if (!tripDoc.exists) return res.status(404).json({ success: false, message: 'Trip not found' });
 
-        const busData = busDoc.data();
-        if (busData.collegeId !== collegeId) {
-            return res.status(403).json({ success: false, message: 'Access denied: College mismatch' });
-        }
+        const studentDoc = await db.collection('students').doc(studentId).get();
+        if (!studentDoc.exists) return res.status(404).json({ success: false, message: 'Student not found' });
 
-        // Fetch students who have assignedBusId === busId
-        const snapshot = await db.collection('students')
-            .where('collegeId', '==', collegeId)
-            .where('assignedBusId', '==', busId)
-            .get();
+        const studentData = studentDoc.data();
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-        const students = snapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-                id: doc.id,
-                name: data.name || '',
-                email: data.email || '',
-                phone: data.phone || data.phoneNumber || null,
-                registerNumber: data.registerNumber || null,
-                rollNumber: data.rollNumber || null,
-                assignedBusId: data.assignedBusId || null,
+        // Store OTP in a new collection 'handoffs'
+        const handoffId = `${tripId}_${studentId}`;
+        await db.collection('handoffs').doc(handoffId).set({
+            tripId,
+            studentId,
+            otp,
+            neighborName: neighborName || null,
+            neighborPhone: neighborPhone || null,
+            collegeId: req.collegeId,
+            driverId: req.user.id,
+            status: 'PENDING',
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            expiresAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 15 * 60000))
+        });
+
+        // Send FCM Notification to student
+        if (studentData.fcmToken) {
+            const message = {
+                notification: {
+                    title: '🚌 Student Handover OTP',
+                    body: `Your handover OTP is: ${otp}. Please share this with the person receiving you.`
+                },
+                data: {
+                    type: 'HANDOVER_OTP',
+                    otp: otp,
+                    tripId: tripId
+                },
+                token: studentData.fcmToken
             };
+
+            await messaging.send(message).catch(err => console.error('[HandoverOTP] FCM failed:', err));
+        }
+
+        res.status(200).json({ success: true, message: 'OTP generated and sent to student' });
+    } catch (error) {
+        console.error('Error generating handover OTP:', error);
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+    }
+};
+
+// @desc    Verify Handover OTP and mark student as handed over
+// @route   POST /api/driver/trips/:tripId/attendance/handover/verify
+// @access  Private (Driver)
+const verifyHandoverOTP = async (req, res) => {
+    try {
+        const { tripId } = req.params;
+        const { studentId, otp } = req.body;
+
+        if (!studentId || !otp) return res.status(400).json({ success: false, message: 'Student ID and OTP are required' });
+
+        const handoffId = `${tripId}_${studentId}`;
+        const handoffRef = db.collection('handoffs').doc(handoffId);
+        const handoffDoc = await handoffRef.get();
+
+        if (!handoffDoc.exists) return res.status(404).json({ success: false, message: 'Handoff session not found' });
+
+        const handoffData = handoffDoc.data();
+
+        if (handoffData.status !== 'PENDING') {
+            return res.status(400).json({ success: false, message: `Handoff already ${handoffData.status.toLowerCase()}` });
+        }
+
+        if (handoffData.otp !== otp) {
+            return res.status(400).json({ success: false, message: 'Invalid OTP' });
+        }
+
+        // Check expiry
+        if (handoffData.expiresAt.toDate() < new Date()) {
+            await handoffRef.update({ status: 'EXPIRED' });
+            return res.status(400).json({ success: false, message: 'OTP expired' });
+        }
+
+        // OTP is valid! Mark as handed over in attendance
+        const datePrefix = new Date().toISOString().split('T')[0];
+        const attendanceId = `${datePrefix}__${handoffData.collegeId}__dropoff__${studentId}`;
+        const attendanceRef = db.collection('attendance').doc(attendanceId);
+
+        await db.runTransaction(async (transaction) => {
+            transaction.update(handoffRef, {
+                status: 'VERIFIED',
+                verifiedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+
+            transaction.set(attendanceRef, {
+                status: 'dropped_off_neighbor',
+                neighborName: handoffData.neighborName || null,
+                neighborPhone: handoffData.neighborPhone || null,
+                otpStatus: 'SUCCESS',
+                handedOverAt: admin.firestore.FieldValue.serverTimestamp(),
+                droppedOffAt: admin.firestore.FieldValue.serverTimestamp(),
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
         });
 
-        res.status(200).json({
-            success: true,
-            data: students
-        });
+        res.status(200).json({ success: true, message: 'Student handed over successfully' });
     } catch (error) {
-        console.error('Error fetching bus students for driver:', error);
+        console.error('Error verifying handover OTP:', error);
         res.status(500).json({ success: false, message: 'Server Error', error: error.message });
     }
 };
@@ -1038,6 +1112,8 @@ module.exports = {
     getTripAttendance,
     getBusStudents,
     getTodayAttendance,
-    notifyStudentAttendance
+    notifyStudentAttendance,
+    generateHandoverOTP,
+    verifyHandoverOTP
 };
 

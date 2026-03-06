@@ -235,32 +235,37 @@ const Students = () => {
         <Layout activeItem="students">
             <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
                 {/* Header */}
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
                     <div>
-                        <h1 className="text-2xl font-bold text-slate-800">Student Management</h1>
-                        <p className="text-slate-500 mt-1">Manage student records</p>
+                        <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
+                            <div className="p-2.5 bg-emerald-50 border border-emerald-100/50 rounded-2xl text-emerald-600 shadow-sm">
+                                <User size={24} />
+                            </div>
+                            Student Management
+                        </h1>
+                        <p className="text-slate-500 mt-1 ml-14">Manage student records and access credentials</p>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-3">
                         <motion.button
-                            whileHover={{ scale: 1.02 }}
+                            whileHover={{ scale: 1.02, y: -2 }}
                             whileTap={{ scale: 0.98 }}
                             onClick={downloadStudentList}
-                            className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-semibold"
+                            className="flex items-center gap-2 px-4 py-2 bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 rounded-xl font-bold shadow-sm transition-all"
                         >
                             <Download size={18} />
                             Download List
                         </motion.button>
                         <motion.button
-                            whileHover={{ scale: 1.02 }}
+                            whileHover={{ scale: 1.02, y: -2 }}
                             whileTap={{ scale: 0.98 }}
                             onClick={() => setIsBulkModalOpen(true)}
-                            className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-semibold"
+                            className="flex items-center gap-2 px-4 py-2 bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 rounded-xl font-bold shadow-sm transition-all"
                         >
                             <Upload size={18} />
                             Bulk Upload
                         </motion.button>
                         <motion.button
-                            whileHover={{ scale: 1.02 }}
+                            whileHover={{ scale: 1.02, y: -2 }}
                             whileTap={{ scale: 0.98 }}
                             onClick={() => {
                                 setIsEditMode(false);
@@ -268,10 +273,10 @@ const Students = () => {
                                 setNewStudent({ name: '', registerNumber: '', rollNumber: '', email: '', phone: '' });
                                 setIsModalOpen(true);
                             }}
-                            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg font-semibold shadow-lg shadow-blue-200"
+                            className="flex items-center gap-2 px-6 py-2 btn-premium btn-primary-gradient text-white rounded-xl font-bold shadow-lg transition-all"
                         >
                             <Plus size={20} />
-                            Add Student
+                            <span>Add Student</span>
                         </motion.button>
                     </div>
                 </div>
@@ -284,7 +289,7 @@ const Students = () => {
                         placeholder="Search by name, email, or register number..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all"
+                        className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-100 focus:border-emerald-500 outline-none transition-all"
                     />
                 </div>
 
@@ -325,32 +330,48 @@ const Students = () => {
                                 key={student.studentId}
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
-                                className="bg-white rounded-xl p-5 border border-slate-200 hover:shadow-lg transition-all group"
+                                whileHover={{ y: -5, boxShadow: '0 20px 40px -15px rgba(0,0,0,0.08)' }}
+                                className="bg-white rounded-2xl p-5 border border-slate-100/50 hover:border-emerald-100/50 transition-all group relative overflow-hidden"
                             >
-                                <div className="flex items-center justify-between mb-4">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center text-blue-600 font-bold text-lg">
+                                <div className="flex items-center justify-between mb-4 relative z-10">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-12 h-12 rounded-xl bg-emerald-50 border border-emerald-100/50 flex items-center justify-center text-emerald-600 font-extrabold text-lg shadow-sm">
                                             {(student.name || 'U').charAt(0).toUpperCase()}
                                         </div>
                                         <div>
-                                            <h3 className="font-semibold text-slate-800">{student.name || 'N/A'}</h3>
-                                            <p className="text-sm text-slate-500">{student.registerNumber || 'N/A'}</p>
+                                            <h3 className="font-extrabold text-slate-900 tracking-tight">{student.name || 'N/A'}</h3>
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{student.registerNumber || 'N/A'}</p>
                                         </div>
                                     </div>
                                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={() => handleEditStudent(student)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg" title="Edit"><Edit2 size={16} /></button>
-                                        <button onClick={() => handleDeleteStudent(student.studentId, student.name)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg" title="Delete"><Trash2 size={16} /></button>
-                                        <button onClick={() => handleResetPassword(student.studentId, student.name)} className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg" title="Reset Password"><Key size={16} /></button>
+                                        <button onClick={() => handleEditStudent(student)} className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-xl" title="Edit"><Edit2 size={16} /></button>
+                                        <button onClick={() => handleDeleteStudent(student.studentId, student.name)} className="p-2 text-red-600 hover:bg-red-50 rounded-xl" title="Delete"><Trash2 size={16} /></button>
+                                        <button onClick={() => handleResetPassword(student.studentId, student.name)} className="p-2 text-orange-600 hover:bg-orange-50 rounded-xl" title="Reset Password"><Key size={16} /></button>
                                     </div>
                                 </div>
-                                <div className="space-y-2 text-sm">
-                                    <div className="flex items-center gap-2 text-slate-600">
-                                        <Mail size={14} className="text-slate-400" />
+                                <div className="space-y-2 text-sm relative z-10 mt-6 pt-5 border-t border-slate-50">
+                                    <div className="flex items-center gap-3 text-slate-600 font-medium">
+                                        <div className="p-1.5 bg-slate-50 rounded-lg">
+                                            <Mail size={12} className="text-slate-400" />
+                                        </div>
                                         {student.email || 'No Email'}
                                     </div>
-                                    {student.rollNumber && <div className="flex items-center gap-2 text-slate-600"><Hash size={14} className="text-slate-400" />{student.rollNumber}</div>}
-                                    {student.phone && <div className="flex items-center gap-2 text-slate-600"><Phone size={14} className="text-slate-400" />{student.phone}</div>}
+                                    <div className="grid grid-cols-2 gap-2 mt-4">
+                                        {student.rollNumber && (
+                                            <div className="flex items-center gap-2 text-slate-500 font-bold text-[10px] uppercase bg-slate-50/50 px-3 py-1.5 rounded-lg border border-slate-100/50">
+                                                <Hash size={12} className="text-slate-400" />
+                                                {student.rollNumber}
+                                            </div>
+                                        )}
+                                        {student.phone && (
+                                            <div className="flex items-center gap-2 text-slate-500 font-bold text-[10px] uppercase bg-slate-50/50 px-3 py-1.5 rounded-lg border border-slate-100/50">
+                                                <Phone size={12} className="text-slate-400" />
+                                                {student.phone}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
+                                <div className="absolute -bottom-4 -right-4 w-20 h-20 bg-emerald-50/30 rounded-full blur-2xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
                             </motion.div>
                         ))}
                     </div>
@@ -387,12 +408,12 @@ const Students = () => {
                             ) : (
                                 <form onSubmit={handleCreateStudent} className="space-y-4">
                                     {formError && <div className="bg-red-50 border-l-4 border-red-500 text-red-700 p-3 rounded-lg text-sm">{formError}</div>}
-                                    <div><label className="block text-sm font-semibold text-slate-700 mb-2">Name *</label><input type="text" value={newStudent.name} onChange={(e) => setNewStudent({ ...newStudent, name: e.target.value })} required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-100" /></div>
-                                    <div><label className="block text-sm font-semibold text-slate-700 mb-2">Register Number *</label><input type="text" value={newStudent.registerNumber} onChange={(e) => setNewStudent({ ...newStudent, registerNumber: e.target.value })} required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-100" /></div>
-                                    <div><label className="block text-sm font-semibold text-slate-700 mb-2">Roll Number</label><input type="text" value={newStudent.rollNumber} onChange={(e) => setNewStudent({ ...newStudent, rollNumber: e.target.value })} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-100" /></div>
-                                    <div><label className="block text-sm font-semibold text-slate-700 mb-2">Email *</label><input type="email" value={newStudent.email} onChange={(e) => setNewStudent({ ...newStudent, email: e.target.value })} required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-100" /></div>
-                                    <div><label className="block text-sm font-semibold text-slate-700 mb-2">Phone</label><input type="tel" value={newStudent.phone} onChange={(e) => setNewStudent({ ...newStudent, phone: e.target.value })} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-100" /></div>
-                                    <motion.button type="submit" disabled={formLoading} className="w-full mt-6 py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 shadow-lg shadow-blue-200 disabled:opacity-50">{formLoading ? 'Saving...' : isEditMode ? 'Update Student' : 'Create Student'}</motion.button>
+                                    <div><label className="block text-sm font-semibold text-slate-700 mb-2">Name *</label><input type="text" value={newStudent.name} onChange={(e) => setNewStudent({ ...newStudent, name: e.target.value })} required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-100" /></div>
+                                    <div><label className="block text-sm font-semibold text-slate-700 mb-2">Register Number *</label><input type="text" value={newStudent.registerNumber} onChange={(e) => setNewStudent({ ...newStudent, registerNumber: e.target.value })} required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-100" /></div>
+                                    <div><label className="block text-sm font-semibold text-slate-700 mb-2">Roll Number</label><input type="text" value={newStudent.rollNumber} onChange={(e) => setNewStudent({ ...newStudent, rollNumber: e.target.value })} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-100" /></div>
+                                    <div><label className="block text-sm font-semibold text-slate-700 mb-2">Email *</label><input type="email" value={newStudent.email} onChange={(e) => setNewStudent({ ...newStudent, email: e.target.value })} required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-100" /></div>
+                                    <div><label className="block text-sm font-semibold text-slate-700 mb-2">Phone</label><input type="tel" value={newStudent.phone} onChange={(e) => setNewStudent({ ...newStudent, phone: e.target.value })} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-100" /></div>
+                                    <motion.button type="submit" disabled={formLoading} className="w-full mt-6 py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 shadow-lg shadow-emerald-200 disabled:opacity-50">{formLoading ? 'Saving...' : isEditMode ? 'Update Student' : 'Create Student'}</motion.button>
                                 </form>
                             )}
                         </motion.div>
@@ -436,15 +457,15 @@ const Students = () => {
                                             <div className="flex-1 flex flex-col items-center justify-center">
                                                 <div className="border-2 border-dashed border-slate-300 rounded-2xl p-12 flex flex-col items-center justify-center text-center bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer w-full max-w-xl group" onClick={() => document.getElementById('student-file-input')?.click()}>
                                                     <input id="student-file-input" type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleProcessFile} />
-                                                    <div className="w-16 h-16 bg-white rounded-full shadow-sm flex items-center justify-center mb-4 group-hover:scale-110 transition-transform text-blue-500"><Upload size={32} /></div>
+                                                    <div className="w-16 h-16 bg-white rounded-full shadow-sm flex items-center justify-center mb-4 group-hover:scale-110 transition-transform text-emerald-500"><Upload size={32} /></div>
                                                     <p className="font-bold text-slate-700 text-lg">Click to Upload Excel File</p>
-                                                    <button onClick={(e) => { e.stopPropagation(); downloadStudentTemplate(); }} className="mt-6 flex items-center gap-2 text-blue-600 font-bold hover:underline"><Download size={16} /> Download Template</button>
+                                                    <button onClick={(e) => { e.stopPropagation(); downloadStudentTemplate(); }} className="mt-6 flex items-center gap-2 text-emerald-600 font-bold hover:underline"><Download size={16} /> Download Template</button>
                                                 </div>
                                             </div>
                                         ) : (
                                             <div className="flex-1 flex flex-col min-h-0">
                                                 <div className="flex items-center justify-between mb-4">
-                                                    <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={selectedBulkIndices.length === bulkPreview.length} onChange={toggleSelectAll} className="w-4 h-4 text-blue-600 rounded" /><span className="text-sm font-medium text-slate-700">Select All ({bulkPreview.length})</span></label>
+                                                    <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={selectedBulkIndices.length === bulkPreview.length} onChange={toggleSelectAll} className="w-4 h-4 text-emerald-600 rounded" /><span className="text-sm font-medium text-slate-700">Select All ({bulkPreview.length})</span></label>
                                                     <button onClick={() => { setBulkPreview([]); setSelectedBulkIndices([]); }} className="text-red-500 text-sm hover:underline">Clear & Upload New</button>
                                                 </div>
                                                 <div className="flex-1 overflow-auto border border-slate-200 rounded-xl">
@@ -455,7 +476,7 @@ const Students = () => {
                                                         <tbody className="divide-y divide-slate-100">
                                                             {bulkPreview.map((row, idx) => (
                                                                 <tr key={idx} className="hover:bg-slate-50">
-                                                                    <td className="p-3"><input type="checkbox" checked={selectedBulkIndices.includes(idx)} onChange={() => { if (selectedBulkIndices.includes(idx)) { setSelectedBulkIndices(selectedBulkIndices.filter(i => i !== idx)); } else { setSelectedBulkIndices([...selectedBulkIndices, idx]); } }} className="w-4 h-4 text-blue-600 rounded" /></td>
+                                                                    <td className="p-3"><input type="checkbox" checked={selectedBulkIndices.includes(idx)} onChange={() => { if (selectedBulkIndices.includes(idx)) { setSelectedBulkIndices(selectedBulkIndices.filter(i => i !== idx)); } else { setSelectedBulkIndices([...selectedBulkIndices, idx]); } }} className="w-4 h-4 text-emerald-600 rounded" /></td>
                                                                     <td className="p-3 font-medium text-slate-800">{row.name}</td>
                                                                     <td className="p-3 text-slate-600">{row.registerNumber}</td>
                                                                     <td className="p-3 text-slate-600">{row.rollNumber}</td>

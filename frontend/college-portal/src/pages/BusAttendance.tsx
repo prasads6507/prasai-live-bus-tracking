@@ -32,11 +32,14 @@ interface AttendanceRecord {
     busId: string;
     busNumber: string;
     direction: string;
-    status: 'picked_up' | 'dropped_off' | 'not_boarded' | 'not_dropped';
+    status: 'picked_up' | 'dropped_off' | 'not_boarded' | 'not_dropped' | 'dropped_off_neighbor';
     pickedUpAt: string | null;
     droppedOffAt: string | null;
     createdAt: string | null;
     tripId: string;
+    neighborName?: string;
+    neighborPhone?: string;
+    otpStatus?: string;
 }
 
 interface AttendanceGroup {
@@ -52,7 +55,7 @@ interface AttendanceGroup {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const isPresent = (status: string) => status === 'picked_up' || status === 'dropped_off';
+const isPresent = (status: string) => status === 'picked_up' || status === 'dropped_off' || status === 'dropped_off_neighbor';
 
 const formatTime = (iso: string | null | undefined): string => {
     if (!iso) return '—';
@@ -92,6 +95,7 @@ const BusAttendance = () => {
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [isDeleting, setIsDeleting] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [selectedDetailRecord, setSelectedDetailRecord] = useState<AttendanceRecord | null>(null);
 
     // ── Data fetching ──────────────────────────────────────────────────────────
 
@@ -314,7 +318,7 @@ const BusAttendance = () => {
                     <div className="flex items-center gap-4">
                         <button
                             onClick={view === 'detail' ? backToList : () => navigate(-1)}
-                            className="p-2 hover:bg-white rounded-xl border border-slate-200 transition-colors shadow-sm"
+                            className="p-2 hover:bg-white rounded-xl border border-slate-200 transition-colors shadow-sm focus:ring-2 focus:ring-emerald-100"
                         >
                             <ChevronLeft size={20} className="text-slate-600" />
                         </button>
@@ -356,7 +360,7 @@ const BusAttendance = () => {
                         </button>
                         <button
                             onClick={fetchData}
-                            className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all font-medium shadow-lg shadow-blue-200"
+                            className="flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-all font-medium shadow-lg shadow-emerald-200"
                         >
                             <RefreshCcw size={18} />
                             <span>Refresh</span>
@@ -386,7 +390,7 @@ const BusAttendance = () => {
                                     <select
                                         value={filters.busId}
                                         onChange={(e) => setFilters({ ...filters, busId: e.target.value })}
-                                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
                                     >
                                         <option value="">All Buses</option>
                                         {buses.map((bus: any) => (
@@ -406,7 +410,7 @@ const BusAttendance = () => {
                                         type="date"
                                         value={filters.date}
                                         onChange={(e) => setFilters({ ...filters, date: e.target.value })}
-                                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
                                     />
                                 </div>
 
@@ -418,7 +422,7 @@ const BusAttendance = () => {
                                     <select
                                         value={filters.direction}
                                         onChange={(e) => setFilters({ ...filters, direction: e.target.value })}
-                                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
                                     >
                                         <option value="">All Directions</option>
                                         <option value="pickup">⬆ Pickup Only</option>
@@ -432,8 +436,8 @@ const BusAttendance = () => {
                                 <StatCard
                                     title="Total Records"
                                     value={totalStats.total}
-                                    icon={<Users className="text-blue-500" />}
-                                    color="bg-blue-50"
+                                    icon={<Users className="text-emerald-500" />}
+                                    color="bg-emerald-50"
                                 />
                                 <StatCard
                                     title="Present"
@@ -489,8 +493,8 @@ const BusAttendance = () => {
                                 <StatCard
                                     title="Total"
                                     value={selectedGroup.records.length}
-                                    icon={<Users className="text-blue-500" />}
-                                    color="bg-blue-50"
+                                    icon={<Users className="text-emerald-500" />}
+                                    color="bg-emerald-50"
                                 />
                                 <StatCard
                                     title={selectedGroup.direction === 'pickup' ? 'Picked Up' : 'Dropped Off'}
@@ -551,7 +555,7 @@ const BusAttendance = () => {
                                                             initial={{ opacity: 0, y: 8 }}
                                                             animate={{ opacity: 1, y: 0 }}
                                                             transition={{ delay: i * 0.03 }}
-                                                            className={`hover:bg-slate-50 transition-colors ${selectedIds.includes(record.id) ? 'bg-blue-50/50' : ''}`}
+                                                            className={`hover:bg-slate-50 transition-colors ${selectedIds.includes(record.id) ? 'bg-emerald-50/50' : ''}`}
                                                         >
                                                             {/* Checkbox */}
                                                             <td className="px-6 py-4">
@@ -565,12 +569,15 @@ const BusAttendance = () => {
 
                                                             {/* Student */}
                                                             <td className="px-6 py-4">
-                                                                <div className="flex items-center gap-3">
-                                                                    <div className="w-9 h-9 rounded-full bg-blue-50 flex items-center justify-center font-bold text-blue-600 text-sm flex-shrink-0">
+                                                                <div
+                                                                    className={`flex items-center gap-3 ${record.status === 'dropped_off_neighbor' ? 'cursor-pointer group/name' : ''}`}
+                                                                    onClick={() => record.status === 'dropped_off_neighbor' && setSelectedDetailRecord(record)}
+                                                                >
+                                                                    <div className="w-9 h-9 rounded-full bg-emerald-50 flex items-center justify-center font-bold text-emerald-600 text-sm flex-shrink-0 group-hover/name:bg-emerald-100 transition-colors">
                                                                         {(record.studentName || '?')[0].toUpperCase()}
                                                                     </div>
                                                                     <div>
-                                                                        <div className="font-semibold text-slate-900">
+                                                                        <div className={`font-semibold text-slate-900 ${record.status === 'dropped_off_neighbor' ? 'group-hover/name:text-emerald-600 group-hover/name:underline decoration-emerald-200 underline-offset-4' : ''}`}>
                                                                             {record.studentName || 'Unknown Student'}
                                                                         </div>
                                                                         <div className="text-xs text-slate-400">
@@ -660,6 +667,86 @@ const BusAttendance = () => {
                         </div>
                     )}
                 </AnimatePresence>
+
+                {/* ── Neighbor Handover Details Modal ── */}
+                <AnimatePresence>
+                    {selectedDetailRecord && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                                className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden"
+                            >
+                                <div className="p-6 border-b border-slate-100 bg-emerald-50/30 flex justify-between items-center">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-emerald-100 text-emerald-600 rounded-xl">
+                                            <UserCheck size={24} />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-xl font-bold text-slate-900">{selectedDetailRecord.studentName}</h3>
+                                            <p className="text-slate-500 text-sm">Handover Verification</p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => setSelectedDetailRecord(null)}
+                                        className="p-2 hover:bg-white rounded-lg transition-colors text-slate-400 hover:text-slate-600"
+                                    >
+                                        <RefreshCcw size={20} className="rotate-45" />
+                                    </button>
+                                </div>
+                                <div className="p-6 space-y-6">
+                                    <div className="grid grid-cols-2 gap-6">
+                                        <div className="space-y-1">
+                                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Drop Off Time</p>
+                                            <p className="text-slate-700 font-semibold flex items-center gap-1.5">
+                                                <Clock size={16} className="text-slate-400" />
+                                                {formatTime(selectedDetailRecord.droppedOffAt)}
+                                            </p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">OTP Status</p>
+                                            <p className="text-emerald-600 font-bold flex items-center gap-1.5">
+                                                <CheckCircle2 size={16} />
+                                                Verified Success
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-4 pt-4 border-t border-slate-100">
+                                        <div className="flex items-start gap-3">
+                                            <div className="p-2 bg-amber-50 text-amber-600 rounded-lg flex-shrink-0">
+                                                <ClipboardList size={20} />
+                                            </div>
+                                            <div>
+                                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">Neighbor Name</p>
+                                                <p className="text-slate-900 font-bold text-lg">{selectedDetailRecord.neighborName || 'Not specified'}</p>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-start gap-3">
+                                            <div className="p-2 bg-slate-50 text-slate-600 rounded-lg flex-shrink-0">
+                                                <Users size={20} />
+                                            </div>
+                                            <div>
+                                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">Contact Number</p>
+                                                <p className="text-slate-900 font-bold text-lg">{selectedDetailRecord.neighborPhone || 'Not specified'}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="p-4 bg-slate-50 border-t border-slate-100">
+                                    <button
+                                        onClick={() => setSelectedDetailRecord(null)}
+                                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-600 hover:bg-slate-50 transition-all shadow-sm"
+                                    >
+                                        Close Details
+                                    </button>
+                                </div>
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>
             </div>
         </Layout>
     );
@@ -681,11 +768,11 @@ const GroupCard = ({
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: index * 0.06 }}
         onClick={onClick}
-        className="w-full text-left bg-white rounded-2xl border border-slate-100 shadow-sm hover:border-blue-200 hover:shadow-md transition-all p-5 flex items-center gap-4 group"
+        className="w-full text-left bg-white rounded-2xl border border-slate-100 shadow-sm hover:border-emerald-200 hover:shadow-md transition-all p-5 flex items-center gap-4 group"
     >
         {/* Bus icon */}
-        <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
-            <BusIcon size={22} className="text-blue-600" />
+        <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center flex-shrink-0">
+            <BusIcon size={22} className="text-emerald-600" />
         </div>
 
         {/* Info */}
@@ -711,7 +798,7 @@ const GroupCard = ({
         </div>
 
         {/* Arrow */}
-        <ChevronRight size={20} className="text-slate-300 group-hover:text-blue-500 transition-colors flex-shrink-0" />
+        <ChevronRight size={20} className="text-slate-300 group-hover:text-emerald-500 transition-colors flex-shrink-0" />
     </motion.button>
 );
 
@@ -743,6 +830,13 @@ const StatusBadge = ({ status }: { status: string }) => {
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-violet-50 text-violet-700 rounded-full text-xs font-bold border border-violet-100">
                     <CheckCircle2 size={11} />
                     Dropped Off
+                </span>
+            );
+        case 'dropped_off_neighbor':
+            return (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-700 rounded-full text-xs font-bold border border-amber-100">
+                    <Users size={11} />
+                    Dropped Off - Neighbor
                 </span>
             );
         case 'not_boarded':

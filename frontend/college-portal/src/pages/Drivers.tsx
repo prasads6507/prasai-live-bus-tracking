@@ -204,28 +204,28 @@ const Drivers = () => {
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                         <div>
                             <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
-                                <div className="p-2 bg-blue-100 rounded-lg text-blue-600">
+                                <div className="p-2.5 bg-emerald-50 border border-emerald-100/50 rounded-2xl text-emerald-600 shadow-sm">
                                     <User size={24} />
                                 </div>
                                 Driver Management
                             </h1>
-                            <p className="text-slate-500 mt-1 ml-12">Manage fleet drivers and access credentials</p>
+                            <p className="text-slate-500 mt-1 ml-14">Manage fleet drivers and access credentials</p>
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex gap-3">
                             <motion.button
-                                whileHover={{ scale: 1.05 }}
+                                whileHover={{ scale: 1.05, y: -2 }}
                                 whileTap={{ scale: 0.95 }}
                                 onClick={() => setIsBulkModalOpen(true)}
-                                className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-emerald-200 transition-colors"
+                                className="btn-premium btn-success-gradient text-white px-5 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg transition-all"
                             >
                                 <Upload size={20} />
                                 Bulk Upload
                             </motion.button>
                             <motion.button
-                                whileHover={{ scale: 1.05 }}
+                                whileHover={{ scale: 1.05, y: -2 }}
                                 whileTap={{ scale: 0.95 }}
                                 onClick={() => setIsModalOpen(true)}
-                                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-blue-200 transition-colors"
+                                className="btn-premium btn-primary-gradient text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg transition-all"
                             >
                                 <Plus size={20} />
                                 Add New Driver
@@ -264,7 +264,7 @@ const Drivers = () => {
                     <div className="flex-1 overflow-auto bg-white rounded-2xl shadow-sm border border-slate-200">
                         {loading ? (
                             <div className="flex items-center justify-center h-full">
-                                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
                             </div>
                         ) : filteredDrivers.length > 0 ? (
                             <table className="w-full text-left">
@@ -282,12 +282,12 @@ const Drivers = () => {
                                         <tr key={driver._id} className="hover:bg-slate-50 transition-colors group">
                                             <td className="p-5">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold">
+                                                    <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100/50 text-emerald-600 flex items-center justify-center font-black shadow-sm">
                                                         {(driver.name || 'D').charAt(0)}
                                                     </div>
                                                     <div>
-                                                        <p className="font-bold text-slate-800">{driver.name || 'Unknown Driver'}</p>
-                                                        <p className="text-xs text-slate-400">ID: {driver._id ? driver._id.slice(-6) : 'N/A'}</p>
+                                                        <p className="font-extrabold text-slate-900 tracking-tight">{driver.name || 'Unknown Driver'}</p>
+                                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">ID: {driver._id ? driver._id.slice(-6) : 'N/A'}</p>
                                                     </div>
                                                 </div>
                                             </td>
@@ -320,7 +320,7 @@ const Drivers = () => {
                                                 <div className="flex items-center justify-end gap-2">
                                                     <button
                                                         onClick={() => handleEditDriver(driver)}
-                                                        className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                                                        className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
                                                         title="Edit Driver"
                                                     >
                                                         <Edit2 size={16} />
@@ -354,7 +354,7 @@ const Drivers = () => {
                                 </p>
                                 <button
                                     onClick={() => setIsModalOpen(true)}
-                                    className="mt-6 text-blue-600 font-bold hover:underline"
+                                    className="mt-6 text-emerald-600 font-bold hover:underline"
                                 >
                                     Add Driver Now
                                 </button>
@@ -411,7 +411,7 @@ const Drivers = () => {
                                             <input
                                                 type="text"
                                                 required
-                                                className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all"
+                                                className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-100 focus:border-emerald-500 outline-none transition-all"
                                                 placeholder="John Doe"
                                                 value={newDriver.name}
                                                 onChange={e => setNewDriver({ ...newDriver, name: e.target.value })}
@@ -428,7 +428,7 @@ const Drivers = () => {
                                                 <input
                                                     type="email"
                                                     required
-                                                    className="w-full pl-9 pr-3 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all text-sm"
+                                                    className="w-full pl-9 pr-3 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-100 focus:border-emerald-500 outline-none transition-all text-sm"
                                                     placeholder="email@Example.com"
                                                     value={newDriver.email}
                                                     onChange={e => setNewDriver({ ...newDriver, email: e.target.value })}
@@ -441,7 +441,7 @@ const Drivers = () => {
                                                 <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                                                 <input
                                                     type="tel"
-                                                    className="w-full pl-9 pr-3 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all text-sm"
+                                                    className="w-full pl-9 pr-3 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-100 focus:border-emerald-500 outline-none transition-all text-sm"
                                                     placeholder="123-456-7890"
                                                     value={newDriver.phone}
                                                     onChange={e => setNewDriver({ ...newDriver, phone: e.target.value })}
@@ -460,7 +460,7 @@ const Drivers = () => {
                                             <input
                                                 type="password"
                                                 required={!isEditMode}
-                                                className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all"
+                                                className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-100 focus:border-emerald-500 outline-none transition-all"
                                                 placeholder="••••••••"
                                                 value={newDriver.password}
                                                 onChange={e => setNewDriver({ ...newDriver, password: e.target.value })}
@@ -476,14 +476,16 @@ const Drivers = () => {
                                         </div>
                                     )}
 
-                                    <button
+                                    <motion.button
+                                        whileHover={{ scale: 1.02, y: -2 }}
+                                        whileTap={{ scale: 0.98 }}
                                         type="submit"
                                         disabled={formLoading}
-                                        className={`w-full py-4 rounded-xl font-bold text-white shadow-lg shadow-blue-200 transition-all ${formLoading ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 hover:shadow-xl hover:-translate-y-0.5'
+                                        className={`w-full py-4 rounded-xl font-bold text-white shadow-lg transition-all ${formLoading ? 'bg-slate-400 cursor-not-allowed' : 'btn-premium btn-primary-gradient'
                                             }`}
                                     >
                                         {formLoading ? (isEditMode ? 'Updating...' : 'Creating...') : (isEditMode ? 'Update Driver' : 'Create Driver Account')}
-                                    </button>
+                                    </motion.button>
                                 </form>
                             )}
                         </motion.div>
@@ -560,7 +562,7 @@ const Drivers = () => {
                                                     if (file) handleProcessFile(file);
                                                 }}
                                             />
-                                            <div className="w-16 h-16 bg-white rounded-full shadow-sm flex items-center justify-center mb-4 group-hover:scale-110 transition-transform text-blue-500">
+                                            <div className="w-16 h-16 bg-white rounded-full shadow-sm flex items-center justify-center mb-4 group-hover:scale-110 transition-transform text-emerald-500">
                                                 <Upload size={32} />
                                             </div>
                                             <p className="font-bold text-slate-700 text-lg">Click to Upload Excel File</p>
@@ -571,7 +573,7 @@ const Drivers = () => {
                                                     e.stopPropagation();
                                                     downloadDriverTemplate();
                                                 }}
-                                                className="mt-6 flex items-center gap-2 text-blue-600 font-bold hover:underline"
+                                                className="mt-6 flex items-center gap-2 text-emerald-600 font-bold hover:underline"
                                             >
                                                 <Download size={16} /> Download Template
                                             </button>

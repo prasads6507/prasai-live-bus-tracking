@@ -103,22 +103,27 @@ const StudentTripHistory = () => {
     };
 
     return (
-        <div className="min-h-screen bg-slate-900 text-slate-100 font-sans pb-10">
+        <div className="min-h-screen bg-[#F4F6F8] text-slate-900 font-sans pb-10">
             {/* Header */}
-            <nav className="sticky top-0 z-30 bg-slate-900/80 backdrop-blur-xl border-b border-white/10">
+            <nav className="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-slate-100">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="flex items-center h-16 gap-4">
-                        <button
+                    <div className="flex items-center h-20 gap-4">
+                        <motion.button
+                            whileHover={{ x: -2 }}
+                            whileTap={{ scale: 0.95 }}
                             onClick={() => navigate(`/${orgSlug}/student/dashboard`)}
-                            className="p-2 hover:bg-white/5 rounded-full transition-all text-slate-400 hover:text-white"
+                            className="p-3 hover:bg-slate-50 rounded-2xl transition-all text-slate-400 hover:text-blue-600 border border-transparent hover:border-slate-100"
                         >
-                            <ArrowLeft size={20} />
-                        </button>
-                        <div className="flex items-center gap-3">
-                            <div className="bg-blue-600/20 p-2 rounded-lg">
-                                <History size={20} className="text-blue-400" />
+                            <ArrowLeft size={22} />
+                        </motion.button>
+                        <div className="flex items-center gap-4">
+                            <div className="bg-blue-50 p-3 rounded-2xl border border-blue-100/50 shadow-sm">
+                                <History size={24} className="text-blue-600" />
                             </div>
-                            <h1 className="font-bold text-lg tracking-tight">Trip History</h1>
+                            <div>
+                                <h1 className="font-black text-xl tracking-tight text-slate-900 leading-none">Trip History</h1>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1.5">View your past journeys</p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -134,23 +139,27 @@ const StudentTripHistory = () => {
                 {loading ? (
                     <div className="space-y-4">
                         {[...Array(5)].map((_, i) => (
-                            <div key={i} className="h-24 bg-slate-800/50 rounded-2xl animate-pulse border border-white/5" />
+                            <div key={i} className="h-24 bg-white rounded-2xl animate-pulse border border-slate-100 shadow-sm" />
                         ))}
                     </div>
                 ) : trips.length === 0 ? (
-                    <div className="text-center py-20 bg-slate-800/30 rounded-3xl border border-dashed border-white/10">
-                        <History size={48} className="mx-auto text-slate-600 mb-4" />
-                        <h3 className="text-lg font-bold text-white mb-1">No trips recorded yet</h3>
-                        <p className="text-slate-400">Past bus routes will appear here once trips are completed.</p>
+                    <div className="text-center py-24 bg-white rounded-[40px] border border-slate-100 shadow-sm">
+                        <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center mx-auto mb-6">
+                            <History size={40} className="text-slate-300" />
+                        </div>
+                        <h3 className="text-xl font-black text-slate-900 mb-2">No trips recorded yet</h3>
+                        <p className="text-slate-500 font-medium">Past bus routes will appear here once trips are completed.</p>
                     </div>
                 ) : (
                     <div className="space-y-4">
                         {trips.map((trip) => (
                             <motion.div
                                 key={trip._id}
-                                initial={{ opacity: 0, y: 10 }}
+                                initial={{ opacity: 0, y: 15 }}
                                 animate={{ opacity: 1, y: 0 }}
-                                className="group bg-slate-800/50 backdrop-blur-md border border-white/5 hover:border-blue-500/30 rounded-2xl overflow-hidden transition-all"
+                                whileHover={{ y: -4, boxShadow: '0 20px 40px -18px rgba(0,0,0,0.08)' }}
+                                transition={{ delay: trips.indexOf(trip) * 0.05 }}
+                                className="group bg-white border border-slate-100 hover:border-blue-100 rounded-3xl overflow-hidden transition-all shadow-sm"
                             >
                                 <div className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                     <div className="flex items-center gap-4">
