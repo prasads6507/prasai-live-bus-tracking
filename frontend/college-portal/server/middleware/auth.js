@@ -1,5 +1,9 @@
 const { auth, db } = require('../config/firebase');
 
+/**
+ * Middleware to protect routes and verify Firebase ID tokens.
+ * Supports hierarchical multi-tenant structure by checking custom claims first.
+ */
 const protect = async (req, res, next) => {
     let token;
 
@@ -14,46 +18,67 @@ const protect = async (req, res, next) => {
             const decodedToken = await auth.verifyIdToken(token);
             const uid = decodedToken.uid;
 
-            // 2. Fetch User Profile from Firestore to get role and collegeId
-            // Search order: 1. Root users, 2. Scoped users, 3. Scoped students
-            let userDoc = await db.collection('users').doc(uid).get();
-            let userData = userDoc.exists ? userDoc.data() : null;
+            // 2. Fetch User Profile
+            // Tiered Lookup Strategy:
+            // - Priority 1: Use 'role' and 'collegeId' claims for a direct, indexed hit.
+            // - Priority 2: Check root 'users' for legacy/global OWNER accounts.
+            // - Priority 3: Fallback to collectionGroup if claims are missing.
 
+            let userData = null;
+            const role = decodedToken.role;
+            const collegeId = decodedToken.collegeId;
+
+            // Direct Scoped Lookup (Performance optimized)
+            if (collegeId && role) {
+                const colName = role === 'STUDENT' ? 'students' : 'users';
+                const docSnap = await db.collection('colleges').doc(collegeId).collection(colName).doc(uid).get();
+                if (docSnap.exists) {
+                    userData = docSnap.data();
+                    if (role === 'STUDENT') userData.role = 'STUDENT';
+                }
+            }
+
+            // Fallback Lookups
             if (!userData) {
-                // Search across all 'users' sub-collections 
-                const userQuery = await db.collectionGroup('users').where('userId', '==', uid).limit(1).get();
-                if (!userQuery.empty) {
-                    userData = userQuery.docs[0].data();
+                // Check root 'users' (Global Owners)
+                const rootDoc = await db.collection('users').doc(uid).get();
+                if (rootDoc.exists) {
+                    userData = rootDoc.data();
                 } else {
-                    // Search across all 'students' sub-collections
-                    const studentQuery = await db.collectionGroup('students').where('studentId', '==', uid).limit(1).get();
-                    if (!studentQuery.empty) {
-                        userData = studentQuery.docs[0].data();
-                        userData.role = 'STUDENT';
+                    // Last Resort: CollectionGroup (Depends on indexes)
+                    const userQuery = await db.collectionGroup('users').where('userId', '==', uid).limit(1).get();
+                    if (!userQuery.empty) {
+                        userData = userQuery.docs[0].data();
+                    } else {
+                        const studentQuery = await db.collectionGroup('students').where('studentId', '==', uid).limit(1).get();
+                        if (!studentQuery.empty) {
+                            userData = studentQuery.docs[0].data();
+                            userData.role = 'STUDENT';
+                        }
                     }
                 }
             }
 
             if (!userData) {
-                console.error(`[AuthMiddleware] User profile not found for UID: ${uid}`);
+                console.warn(`[AuthMiddleware] User profile not found for UID: ${uid}`);
                 return res.status(401).json({
                     message: 'User profile not found. Please log in again.',
                     code: 'USER_NOT_FOUND'
                 });
             }
 
-            // Attach user info to request
+            // 3. Attach Scoped User to Request
             req.user = {
                 id: uid,
                 _id: uid,
                 email: userData.email,
                 role: userData.role,
-                collegeId: userData.collegeId
+                collegeId: userData.collegeId || collegeId
             };
 
             next();
         } catch (error) {
-            console.error('Firebase token verification failed:', error.message);
+            console.error('[AuthMiddleware] Verification Error:', error.message);
 
             if (error.code === 'auth/id-token-expired') {
                 return res.status(401).json({
@@ -76,6 +101,9 @@ const protect = async (req, res, next) => {
     }
 };
 
+/**
+ * Middleware to restrict access based on user roles.
+ */
 const authorize = (...roles) => {
     return (req, res, next) => {
         if (!req.user || !roles.includes(req.user.role)) {
