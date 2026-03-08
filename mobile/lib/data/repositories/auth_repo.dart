@@ -17,8 +17,8 @@ class AuthRepository {
     return _firestoreDataSource.findCollegeIdBySlug(slug);
   }
 
-  Future<DocumentSnapshot> getUserInCollege(String collegeId, String uid) {
-    return _firestoreDataSource.getUserInCollege(collegeId, uid);
+  Future<DocumentSnapshot> getUserInCollege(String collegeId, String uid, {String? email}) {
+    return _firestoreDataSource.getUserInCollege(collegeId, uid, email: email);
   }
 
   Future<Map<String, dynamic>> signIn(String email, String password, String orgSlug) async {

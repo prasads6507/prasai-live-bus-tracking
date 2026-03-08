@@ -352,8 +352,7 @@ class FirestoreDataSource {
         .asyncMap((doc) async => await _populateDriverDetails(Bus.fromFirestore(doc)));
   }
 
-  /// Checks if a user exists in either 'users' or 'students' top-level collections.
-  Future<DocumentSnapshot> getUserInCollege(String collegeId, String uid) async {
+  Future<DocumentSnapshot> getUserInCollege(String collegeId, String uid, {String? email}) async {
     // 1. Try scoped 'users' (Admins, Drivers)
     try {
       final doc = await _firestore.collection('colleges').doc(collegeId).collection('users').doc(uid).get();
@@ -383,11 +382,13 @@ class FirestoreDataSource {
     
     // 4. Fallback: search students by 'studentId' or 'email' in scoped collection
     try {
-      final snap = await _firestore.collection('colleges').doc(collegeId).collection('students')
-          .where('email', isEqualTo: uid.contains('@') ? uid : '') // If uid passed is actually an email
-          .limit(1).get();
-          
-      if (snap.docs.isNotEmpty) return snap.docs.first;
+      if (email != null && email.isNotEmpty) {
+        final snap = await _firestore.collection('colleges').doc(collegeId).collection('students')
+            .where('email', isEqualTo: email)
+            .limit(1).get();
+            
+        if (snap.docs.isNotEmpty) return snap.docs.first;
+      }
 
       // Also try searching by common student record fields
       final snapById = await _firestore.collection('colleges').doc(collegeId).collection('students')
@@ -401,10 +402,12 @@ class FirestoreDataSource {
 
     // 5. TRY USERS COLLECTION BY EMAIL (Handles drivers/admins with UID mismatch)
     try {
-      final userSnap = await _firestore.collection('colleges').doc(collegeId).collection('users')
-          .where('email', isEqualTo: uid.contains('@') ? uid : '')
-          .limit(1).get();
-      if (userSnap.docs.isNotEmpty) return userSnap.docs.first;
+      if (email != null && email.isNotEmpty) {
+        final userSnap = await _firestore.collection('colleges').doc(collegeId).collection('users')
+            .where('email', isEqualTo: email)
+            .limit(1).get();
+        if (userSnap.docs.isNotEmpty) return userSnap.docs.first;
+      }
     } catch (e) {
       debugPrint('Error in user email fallback: $e');
     }

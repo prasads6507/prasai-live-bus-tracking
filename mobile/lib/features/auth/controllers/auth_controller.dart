@@ -53,7 +53,7 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
       }
 
       // 3. Verify user belongs to this college
-      final userDoc = await _authRepository.getUserInCollege(collegeId, user.uid);
+      final userDoc = await _authRepository.getUserInCollege(collegeId, user.uid, email: email);
       if (!userDoc.exists) {
         await _authRepository.signOut();
         throw 'Access denied. You are not registered with $collegeSlug.';
