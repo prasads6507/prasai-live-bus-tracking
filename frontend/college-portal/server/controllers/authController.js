@@ -508,18 +508,35 @@ const studentLogin = async (req, res) => {
             return res.status(403).json({ message: 'Organization is suspended.' });
         }
 
-        // 2. Find student by email in Scoped Collection
+        // 2. Find student by email
         const normalizedEmail = String(email || '').toLowerCase().trim();
-        const snapshot = await getCollegeCollection(collegeId, 'students')
+
+        // A. Primary: Search in Scoped Collection (Hierarchy)
+        let snapshot = await getCollegeCollection(collegeId, 'students')
             .where('email', '==', normalizedEmail)
             .limit(1)
             .get();
 
-        if (snapshot.empty) {
+        let studentDoc = !snapshot.empty ? snapshot.docs[0] : null;
+
+        // B. Fallback: Search in Global Root Students (Transition phase)
+        if (!studentDoc) {
+            console.log(`[StudentLogin] ${normalizedEmail} not found in hierarchy for ${orgSlug}. Checking root...`);
+            const rootSnapshot = await db.collection('students')
+                .where('email', '==', normalizedEmail)
+                .where('collegeId', '==', collegeId)
+                .limit(1)
+                .get();
+            if (!rootSnapshot.empty) {
+                studentDoc = rootSnapshot.docs[0];
+                console.log(`[StudentLogin] Found ${normalizedEmail} in root students for ${orgSlug}`);
+            }
+        }
+
+        if (!studentDoc) {
             return res.status(401).json({ message: 'Invalid email or credentials' });
         }
 
-        const studentDoc = snapshot.docs[0];
         const student = studentDoc.data();
 
         // 3. Check password

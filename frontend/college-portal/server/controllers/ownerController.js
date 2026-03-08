@@ -262,7 +262,7 @@ const getCollegeAdmins = async (req, res) => {
         const { collegeId: filterId } = req.query;
         const enriched = [];
 
-        // 1. If filterId is provided, perform single targeted lookup
+        // 1. Fetch from Hierarchical Collections (multi-tenant)
         if (filterId && filterId !== 'ALL') {
             const collegeDoc = await db.collection('colleges').doc(filterId).get();
             if (collegeDoc.exists) {
@@ -281,7 +281,6 @@ const getCollegeAdmins = async (req, res) => {
                 });
             }
         } else {
-            // 2. Fallback to full list if no filter or 'ALL'
             const collegesSnap = await db.collection('colleges').get();
             for (const collegeDoc of collegesSnap.docs) {
                 const collegeId = collegeDoc.id;
@@ -302,7 +301,38 @@ const getCollegeAdmins = async (req, res) => {
             }
         }
 
-        console.log(`[GET_ADMINS] Found ${enriched.length} administrators via sequential lookup`);
+        // 2. Fetch from GLOBAL ROOT collection (transition phase Fallback)
+        // This finds admins like 'ram@gmail.com' who are still at root but have a collegeId
+        const rootAdminsQuery = db.collection('users').where('role', 'in', ['COLLEGE_ADMIN', 'SUPER_ADMIN']);
+        const rootAdminsSnap = (filterId && filterId !== 'ALL')
+            ? await rootAdminsQuery.where('collegeId', '==', filterId).get()
+            : await rootAdminsQuery.get();
+
+        const collegeInfoMap = {}; // Cache to avoid multiple lookups for the same college
+
+        for (const doc of rootAdminsSnap.docs) {
+            const data = doc.data();
+            const cid = data.collegeId;
+
+            // Avoid duplicates if they already exist in enriched (from hierarchical search)
+            if (enriched.some(a => a.userId === data.userId || a.email === data.email)) continue;
+
+            if (cid && cid !== 'OWNER_GLOBAL') {
+                if (!collegeInfoMap[cid]) {
+                    const cDoc = await db.collection('colleges').doc(cid).get();
+                    collegeInfoMap[cid] = cDoc.exists ? cDoc.data() : { collegeName: cid, status: 'ACTIVE' };
+                }
+
+                enriched.push({
+                    ...data,
+                    collegeId: cid,
+                    collegeName: collegeInfoMap[cid].collegeName || cid,
+                    collegeStatus: collegeInfoMap[cid].status || 'ACTIVE'
+                });
+            }
+        }
+
+        console.log(`[GET_ADMINS] Found ${enriched.length} administrators (Hierarchical + Root fallback)`);
         res.json(enriched);
     } catch (error) {
         console.error('[GET_ADMINS_ERROR]', error);
