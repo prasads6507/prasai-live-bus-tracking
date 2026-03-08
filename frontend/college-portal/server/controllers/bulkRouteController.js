@@ -1,4 +1,4 @@
-const { db } = require('../config/firebase');
+const { db, getCollegeCollection } = require('../config/firebase');
 const xlsx = require('xlsx');
 
 // @desc    Upload and import routes from Excel/CSV file
@@ -28,7 +28,7 @@ const createBulkRoutesJson = async (req, res) => {
         // Fetch existing routes to minimize reads? or just check one by one.
         // For simplicity and correctness with overwrite, let's check one by one or fetch all.
         // Fetching all routes for college to check existence efficiently.
-        const routesSnapshot = await db.collection('routes').where('collegeId', '==', collegeId).get();
+        const routesSnapshot = await getCollegeCollection(collegeId, 'routes').get();
         const existingRoutesMap = new Map();
         routesSnapshot.docs.forEach(doc => {
             existingRoutesMap.set(doc.data().routeName, doc.id);
@@ -57,7 +57,7 @@ const createBulkRoutesJson = async (req, res) => {
                         endPoint: '',
                         createdAt: new Date().toISOString()
                     };
-                    batch.set(db.collection('routes').doc(routeId), newRoute);
+                    batch.set(getCollegeCollection(collegeId, 'routes').doc(routeId), newRoute);
                     results.createdRoutes++;
                 } else {
                     // If updating... we don't really change much on route itself unless start/end point provided
@@ -70,12 +70,12 @@ const createBulkRoutesJson = async (req, res) => {
                 // Let's standardise: If uploading via bulk, we REPLACE the stops for that route.
 
                 // 1. Find existing stops to delete
-                const stopsRef = db.collection('stops');
+                const stopsRef = getCollegeCollection(collegeId, 'stops');
                 if (existingRoutesMap.has(routeName)) {
                     // We need to delete old stops.
                     // This is expensive in a loop.
                     // IMPORTANT: Limit execution. If too many routes, this might timeout.
-                    const oldStops = await stopsRef.where('routeId', '==', routeId).where('collegeId', '==', collegeId).get();
+                    const oldStops = await stopsRef.where('routeId', '==', routeId).get();
                     oldStops.docs.forEach(doc => {
                         batch.delete(doc.ref);
                     });
@@ -93,7 +93,7 @@ const createBulkRoutesJson = async (req, res) => {
                         longitude: 0,
                         order: index + 1
                     };
-                    batch.set(db.collection('stops').doc(stopId), stopData);
+                    batch.set(getCollegeCollection(collegeId, 'stops').doc(stopId), stopData);
                     results.createdStops++;
                 });
 
@@ -175,8 +175,7 @@ const uploadRoutesFile = async (req, res) => {
                 }
 
                 // Check if route already exists in database
-                const existingRoute = await db.collection('routes')
-                    .where('collegeId', '==', req.collegeId)
+                const existingRoute = await getCollegeCollection(req.collegeId, 'routes')
                     .where('routeName', '==', routeName)
                     .get();
 
@@ -199,7 +198,7 @@ const uploadRoutesFile = async (req, res) => {
                     createdAt: new Date().toISOString()
                 };
 
-                batch.set(db.collection('routes').doc(routeId), newRoute);
+                batch.set(getCollegeCollection(req.collegeId, 'routes').doc(routeId), newRoute);
                 processedRoutes.set(routeName, routeId);
                 results.createdRoutes++;
                 results.success.push(routeName);
@@ -221,7 +220,7 @@ const uploadRoutesFile = async (req, res) => {
                             longitude: 0,
                             order: index + 1
                         };
-                        batch.set(db.collection('stops').doc(stopId), stopData);
+                        batch.set(getCollegeCollection(req.collegeId, 'stops').doc(stopId), stopData);
                         results.createdStops++;
                     }
                 });

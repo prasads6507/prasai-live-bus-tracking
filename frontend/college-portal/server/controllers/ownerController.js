@@ -1,4 +1,4 @@
-const { db, initializationError } = require('../config/firebase');
+const { db, initializationError, getCollegeCollection } = require('../config/firebase');
 
 // Early check middleware-like guard for this controller
 const checkInit = (res) => {
@@ -30,7 +30,7 @@ const createCollege = async (req, res) => {
 
     try {
         const collegesRef = db.collection('colleges');
-        const usersRef = db.collection('users');
+        const usersRef = getCollegeCollection(collegeId, 'users');
 
         // 1. Check if slug is already taken
         const slugDoc = await collegesRef.doc(slug).get();
@@ -39,7 +39,7 @@ const createCollege = async (req, res) => {
         }
 
         // 2. Check if faculty email is already taken
-        const userSnapshot = await usersRef.where('email', '==', facultyEmail).get();
+        const userSnapshot = await db.collectionGroup('users').where('email', '==', facultyEmail).get();
         if (!userSnapshot.empty) {
             return res.status(400).json({ message: 'Faculty Email already exists.' });
         }
@@ -129,7 +129,7 @@ const updateCollegeStatus = async (req, res) => {
 
         // 2. Propagate Status to all users associated with this college
         // This acts as a 'cached' status on the user for faster login checks
-        const usersSnap = await db.collection('users').where('collegeId', '==', collegeId).get();
+        const usersSnap = await getCollegeCollection(collegeId, 'users').get();
         usersSnap.forEach(userDoc => {
             batch.update(userDoc.ref, { collegeStatus: status });
         });
@@ -148,7 +148,7 @@ const createCollegeAdmin = async (req, res) => {
     const { collegeId, name, email, password, phone } = req.body;
 
     try {
-        const userQuery = await db.collection('users').where('email', '==', email).get();
+        const userQuery = await db.collectionGroup('users').where('email', '==', email).get();
         if (!userQuery.empty) {
             return res.status(400).json({ message: 'User already exists' });
         }
@@ -171,7 +171,7 @@ const createCollegeAdmin = async (req, res) => {
             createdAt: new Date().toISOString()
         };
 
-        await db.collection('users').doc(userId).set(newUser);
+        await getCollegeCollection(collegeId, 'users').doc(userId).set(newUser);
 
         res.status(201).json(newUser);
     } catch (error) {
@@ -182,12 +182,16 @@ const createCollegeAdmin = async (req, res) => {
 const updateCollegeAdmin = async (req, res) => {
     try {
         const { name, email, phone, password } = req.body;
-        const userRef = db.collection('users').doc(req.params.id);
-        const doc = await userRef.get();
 
-        if (!doc.exists) {
+        // Find user by ID across all colleges
+        const userQuery = await db.collectionGroup('users').where('userId', '==', req.params.id).limit(1).get();
+
+        if (userQuery.empty) {
             return res.status(404).json({ message: 'Admin not found' });
         }
+
+        const userDoc = userQuery.docs[0];
+        const userRef = userDoc.ref;
 
         const updates = {};
         if (name) updates.name = name;
@@ -222,12 +226,12 @@ const deleteCollege = async (req, res) => {
         await collegeRef.delete();
 
         // Delete users
-        const usersSnap = await db.collection('users').where('collegeId', '==', collegeId).get();
+        const usersSnap = await getCollegeCollection(collegeId, 'users').get();
         const batch = db.batch();
         usersSnap.forEach(doc => batch.delete(doc.ref));
 
         // Delete Buses, Routes, etc.
-        const busesSnap = await db.collection('buses').where('collegeId', '==', collegeId).get();
+        const busesSnap = await getCollegeCollection(collegeId, 'buses').get();
         busesSnap.forEach(doc => batch.delete(doc.ref));
 
         // Commit batch
@@ -242,7 +246,10 @@ const deleteCollege = async (req, res) => {
 
 const deleteCollegeAdmin = async (req, res) => {
     try {
-        await db.collection('users').doc(req.params.id).delete();
+        const userQuery = await db.collectionGroup('users').where('userId', '==', req.params.id).limit(1).get();
+        if (!userQuery.empty) {
+            await userQuery.docs[0].ref.delete();
+        }
         res.json({ message: 'Admin removed' });
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -251,13 +258,13 @@ const deleteCollegeAdmin = async (req, res) => {
 
 const getCollegeAdmins = async (req, res) => {
     try {
-        // Fetch both COLLEGE_ADMIN and SUPER_ADMIN
-        const adminsSnap = await db.collection('users').where('role', 'in', ['COLLEGE_ADMIN', 'SUPER_ADMIN']).get();
+        // Fetch both COLLEGE_ADMIN and SUPER_ADMIN across all colleges
+        const adminsSnap = await db.collectionGroup('users').where('role', 'in', ['COLLEGE_ADMIN', 'SUPER_ADMIN']).get();
         const admins = adminsSnap.docs.map(doc => doc.data());
         console.log(`[GET_ADMINS] Found ${admins.length} administrators (COLLEGE_ADMIN + SUPER_ADMIN)`);
 
         if (admins.length === 0) {
-            const totalUsersSamples = await db.collection('users').limit(5).get();
+            const totalUsersSamples = await db.collectionGroup('users').limit(5).get();
             console.log(`[DEBUG] Total users sample count: ${totalUsersSamples.size}`);
             totalUsersSamples.forEach(u => console.log(`[DEBUG] User Role Found: ${u.data().role}`));
         }
@@ -296,15 +303,15 @@ const getDashboardStats = async (req, res) => {
 
         try {
             // New count() aggregation
-            const busesSnap = await db.collection('buses').count().get();
+            const busesSnap = await db.collectionGroup('buses').count().get();
             totalBuses = busesSnap.data().count;
-            const usersSnap = await db.collection('users').where('role', '==', 'STUDENT').count().get();
+            const usersSnap = await db.collectionGroup('students').count().get();
             totalStudents = usersSnap.data().count;
         } catch (e) {
             console.log("Count aggregation not supported, falling back to basic size...");
-            const bSnap = await db.collection('buses').get();
+            const bSnap = await db.collectionGroup('buses').get();
             totalBuses = bSnap.size;
-            const uSnap = await db.collection('users').where('role', '==', 'STUDENT').get();
+            const uSnap = await db.collectionGroup('students').get();
             totalStudents = uSnap.size;
         }
 
@@ -361,16 +368,16 @@ const getAnalytics = async (req, res) => {
 
             try {
                 // Aggregations
-                const bSnap = await db.collection('buses').where('collegeId', '==', cid).count().get();
+                const bSnap = await getCollegeCollection(cid, 'buses').count().get();
                 busCount = bSnap.data().count;
 
-                const sSnap = await db.collection('users').where('collegeId', '==', cid).where('role', '==', 'STUDENT').count().get();
+                const sSnap = await getCollegeCollection(cid, 'students').count().get();
                 studentCount = sSnap.data().count;
             } catch (e) {
                 // Fallback for emulators or envs without count()
-                const bQ = await db.collection('buses').where('collegeId', '==', cid).get();
+                const bQ = await getCollegeCollection(cid, 'buses').get();
                 busCount = bQ.size;
-                const sQ = await db.collection('users').where('collegeId', '==', cid).where('role', '==', 'STUDENT').get();
+                const sQ = await getCollegeCollection(cid, 'students').get();
                 studentCount = sQ.size;
             }
 

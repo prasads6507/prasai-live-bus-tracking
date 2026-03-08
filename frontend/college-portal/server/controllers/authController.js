@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const { db, admin, auth, initializationError } = require('../config/firebase');
+const { db, admin, auth, initializationError, getCollegeCollection } = require('../config/firebase');
 
 // Helper to validate password since Mongoose method is gone
 const matchPassword = async (enteredPassword, passwordHash) => {
@@ -21,140 +21,132 @@ const generateToken = (id, role, collegeId) => {
 // @access  Public
 const loginUser = async (req, res) => {
     const { email, password, orgSlug } = req.body;
+    const normalizedEmail = String(email || '').toLowerCase().trim();
 
     try {
-        // -------------------------
-        // 1. Try Users Collection (Owner, Admin, Driver)
-        // -------------------------
-        const usersRef = db.collection('users');
-        const userSnapshot = await usersRef.where('email', '==', email).limit(1).get();
+        console.log(`[Login] Attempt for ${normalizedEmail} (Org: ${orgSlug || 'Global'})`);
 
-        if (!userSnapshot.empty) {
-            const userDoc = userSnapshot.docs[0];
-            const userData = userDoc.data();
-            console.log(`[Login] Found user in users collection: ${userData.email} (Role: ${userData.role})`);
+        let collegeId = null;
+        let collegeData = null;
 
-            // Security Check: College Status
-            if (userData.role !== 'OWNER' && userData.collegeId !== 'OWNER_GLOBAL') {
-                const collegeDoc = await db.collection('colleges').doc(userData.collegeId).get();
-                if (collegeDoc.exists && collegeDoc.data().status === 'SUSPENDED') {
-                    console.warn(`[Login] Blocking login for ${userData.email}: College ${userData.collegeId} is SUSPENDED`);
+        // 1. Resolve College Context if orgSlug is provided
+        if (orgSlug) {
+            const collegesRef = db.collection('colleges');
+            let collegeDoc = await collegesRef.doc(orgSlug).get();
+            if (!collegeDoc.exists) {
+                const slugSnap = await collegesRef.where('slug', '==', orgSlug).limit(1).get();
+                if (!slugSnap.empty) collegeDoc = slugSnap.docs[0];
+            }
+
+            if (collegeDoc.exists) {
+                collegeId = collegeDoc.id;
+                collegeData = collegeDoc.data();
+                if (collegeData.status === 'SUSPENDED') {
                     return res.status(403).json({ message: 'Your organization account is suspended.' });
                 }
+            } else {
+                console.warn(`[Login] Organization ${orgSlug} not found`);
+                return res.status(404).json({ message: 'Organization not found' });
+            }
+        }
 
-                // Organization Isolation: Ensure user (Admin/Driver) belongs to the requested organization
-                // Note: OWNER role is global and skips this check
-                if (orgSlug && userData.role !== 'OWNER') {
-                    const collegeData = collegeDoc.exists ? collegeDoc.data() : null;
-                    // Check if the provided orgSlug matches user's collegeId OR the actual slug of that college
-                    const matches = userData.collegeId === orgSlug || (collegeData && collegeData.slug === orgSlug);
+        let userData = null;
+        let loginType = null; // 'USER' or 'STUDENT'
 
-                    if (!matches) {
-                        console.warn(`[Login] Organization Mismatch for ${userData.role} (${userData.email}): Requested ${orgSlug}, user assigned to ${userData.collegeId}`);
+        // 2. Search in Hierarchy if collegeId is known
+        if (collegeId) {
+            // Check Scoped Users (Admin, Driver)
+            const scopedUserSnap = await getCollegeCollection(collegeId, 'users').where('email', '==', email).limit(1).get();
+            if (!scopedUserSnap.empty) {
+                userData = scopedUserSnap.docs[0].data();
+                loginType = 'USER';
+            } else {
+                // Check Scoped Students
+                const scopedStudentSnap = await getCollegeCollection(collegeId, 'students').where('email', '==', normalizedEmail).limit(1).get();
+                if (!scopedStudentSnap.empty) {
+                    userData = scopedStudentSnap.docs[0].data();
+                    loginType = 'STUDENT';
+                }
+            }
+        }
+
+        // 3. Fallback: Search GLOBAL Users (Owners) and cross-tenant users if still not found
+        if (!userData) {
+            const globalUserSnap = await db.collectionGroup('users').where('email', '==', email).limit(1).get();
+            if (!globalUserSnap.empty) {
+                const docSnap = globalUserSnap.docs[0];
+                userData = docSnap.data();
+
+                // If it's a scoped user (has collegeId) but we found them via collectionGroup because no orgSlug was provided
+                if (userData.collegeId) {
+                    collegeId = userData.collegeId;
+                }
+                loginType = 'USER';
+                // Security: Global users must be OWNERs (except for migration period)
+                if (userData.role !== 'OWNER' && orgSlug) {
+                    // If they are not owner but logged into a specific slug, they should have been found in the scoped search
+                    // If we found them here, it means they are currently "mixed up" at the root.
+                    // We allow this temporarily for migration, but enforce collegeId match.
+                    if (userData.collegeId !== collegeId && userData.collegeId !== orgSlug) {
+                        console.warn(`[Login] Organization Mismatch for legacy user ${userData.email}`);
                         return res.status(401).json({ message: 'Invalid Organization for this account.' });
                     }
                 }
             }
+        }
 
+        if (!userData) {
+            return res.status(401).json({ message: 'Invalid email or password' });
+        }
+
+        // 4. Verify Credentials
+        let isValid = false;
+        let isFirstLogin = userData.isFirstLogin || false;
+
+        if (loginType === 'STUDENT' && (isFirstLogin || !userData.passwordHash)) {
+            // Student first login logic
+            if (String(password).trim() === String(userData.registerNumber || '').trim()) {
+                isValid = true;
+                isFirstLogin = true;
+            }
+        } else {
+            // Standard password check
             if (await matchPassword(password, userData.passwordHash)) {
-                console.log(`[Login] Password verified for ${userData.email}`);
-                // Generate Firebase Custom Token for Mobile/Direct Auth
-                const firebaseCustomToken = await auth.createCustomToken(userData.userId, {
-                    role: userData.role,
-                    collegeId: userData.collegeId
-                });
-
-                return res.json({
-                    _id: userData.userId,
-                    name: userData.name,
-                    email: userData.email,
-                    role: userData.role,
-                    collegeId: userData.collegeId,
-                    token: generateToken(userData.userId, userData.role, userData.collegeId),
-                    firebaseCustomToken
-                });
-            } else {
-                console.warn(`[Login] Invalid password for ${userData.email}`);
-                return res.status(401).json({ message: 'Invalid email or password' });
+                isValid = true;
             }
         }
 
-        // -------------------------
-        // 2. Try Students Collection
-        // -------------------------
-        const normalizedEmail = String(email || '').toLowerCase().trim();
-        let studentsQuery = db.collection('students').where('email', '==', normalizedEmail);
-
-        // Optimization: prevent cross-college login if orgSlug is known
-        if (orgSlug) {
-            const collegesRef = db.collection('colleges');
-            // Try to resolve orgSlug to collegeId
-            let collegeId = null;
-            let collegeDoc = await collegesRef.doc(orgSlug).get();
-            if (collegeDoc.exists) collegeId = collegeDoc.data().collegeId;
-            else {
-                const slugSnap = await collegesRef.where('slug', '==', orgSlug).limit(1).get();
-                if (!slugSnap.empty) collegeId = slugSnap.docs[0].data().collegeId;
+        if (!isValid) {
+            if (loginType === 'STUDENT' && (isFirstLogin || !userData.passwordHash)) {
+                return res.status(401).json({ message: 'Invalid credentials. Use your Register Number as initial password.' });
             }
-
-            if (collegeId) {
-                studentsQuery = studentsQuery.where('collegeId', '==', collegeId);
-            }
+            return res.status(401).json({ message: 'Invalid email or password' });
         }
 
-        const studentSnapshot = await studentsQuery.limit(1).get();
+        // 5. Success - Generate tokens and custom claims
+        const finalCollegeId = userData.collegeId || collegeId;
+        const firebaseCustomToken = await auth.createCustomToken(userData.userId || userData.studentId, {
+            role: userData.role || 'STUDENT',
+            collegeId: finalCollegeId
+        });
 
-        if (!studentSnapshot.empty) {
-            const studentDoc = studentSnapshot.docs[0];
-            const student = studentDoc.data();
+        const response = {
+            _id: userData.userId || userData.studentId,
+            name: userData.name,
+            email: userData.email,
+            role: userData.role || 'STUDENT',
+            collegeId: finalCollegeId,
+            token: generateToken(userData.userId || userData.studentId, userData.role || 'STUDENT', finalCollegeId),
+            firebaseCustomToken
+        };
 
-            // Check College Status for student
-            const collegeDoc = await db.collection('colleges').doc(student.collegeId).get();
-            if (collegeDoc.exists && collegeDoc.data().status === 'SUSPENDED') {
-                return res.status(403).json({ message: 'Your organization account is suspended.' });
-            }
-
-            let isValid = false;
-            let isFirstLogin = student.isFirstLogin || false;
-
-            if (isFirstLogin || !student.passwordHash) {
-                // First login: password should match registerNumber (harden with String/trim)
-                if (String(password).trim() === String(student.registerNumber || '').trim()) {
-                    isValid = true;
-                }
-            } else {
-                // Subsequent login
-                if (await matchPassword(password, student.passwordHash)) {
-                    isValid = true;
-                    isFirstLogin = false; // Confirm it's not first login flow effectively
-                }
-            }
-
-            if (isValid) {
-                const firebaseCustomToken = await auth.createCustomToken(student.studentId, {
-                    role: 'STUDENT',
-                    collegeId: student.collegeId
-                });
-                return res.json({
-                    _id: student.studentId,
-                    name: student.name,
-                    email: student.email,
-                    registerNumber: student.registerNumber,
-                    collegeId: student.collegeId,
-                    role: 'STUDENT',
-                    isFirstLogin, // Frontend needs this to trigger password change modal
-                    token: generateToken(student.studentId, 'STUDENT', student.collegeId),
-                    firebaseCustomToken
-                });
-            }
-            else {
-                if (isFirstLogin || !student.passwordHash) {
-                    return res.status(401).json({ message: 'Invalid credentials. Use your Register Number as initial password.' });
-                }
-            }
+        if (loginType === 'STUDENT') {
+            response.isFirstLogin = isFirstLogin;
+            response.registerNumber = userData.registerNumber;
         }
 
-        return res.status(401).json({ message: 'Invalid email or password' });
+        console.log(`[Login] Successful login for ${userData.email} (${response.role})`);
+        return res.json(response);
 
     } catch (error) {
         console.error("Login Error:", error);
@@ -169,10 +161,9 @@ const registerOwner = async (req, res) => {
     const { name, email, password } = req.body;
 
     try {
-        const usersRef = db.collection('users');
-        const snapshot = await usersRef.where('email', '==', email).get();
+        const userQuery = await db.collectionGroup('users').where('email', '==', email).limit(1).get();
 
-        if (!snapshot.empty) {
+        if (!userQuery.empty) { // Corrected logic: if userQuery is NOT empty, user exists
             return res.status(400).json({ message: 'User already exists' });
         }
 
@@ -210,15 +201,34 @@ const registerOwner = async (req, res) => {
 // @access  Private
 const getMe = async (req, res) => {
     try {
-        // req.user is set by authMiddleware (needs validation of what ID is passed)
-        // Ideally should query by custom userId field, as we used 'userId' in mongo
+        const userId = req.user.id;
+        const collegeId = req.user.collegeId;
 
-        const usersRef = db.collection('users');
-        const snapshot = await usersRef.where('userId', '==', req.user.id).limit(1).get();
+        let userData = null;
 
-        if (!snapshot.empty) {
-            const userData = snapshot.docs[0].data();
-            // Exclude passwordHash manually
+        // 1. Try Scoped Search if collegeId is available in token
+        if (collegeId && collegeId !== 'OWNER_GLOBAL') {
+            const scopedSnap = await getCollegeCollection(collegeId, 'users').doc(userId).get();
+            if (scopedSnap.exists) {
+                userData = scopedSnap.data();
+            } else {
+                // Try as student
+                const studentSnap = await getCollegeCollection(collegeId, 'students').doc(userId).get();
+                if (studentSnap.exists) {
+                    userData = studentSnap.data();
+                }
+            }
+        }
+
+        // 2. Try Global Search (for Owners or missing context)
+        if (!userData) {
+            const globalSnap = await db.collection('users').doc(userId).get();
+            if (globalSnap.exists) {
+                userData = globalSnap.data();
+            }
+        }
+
+        if (userData) {
             const { passwordHash, ...userWithoutPassword } = userData;
             res.json(userWithoutPassword);
         } else {
@@ -263,7 +273,7 @@ const googleLogin = async (req, res) => {
             console.log("New User Created via Google:", email);
         } else {
             userData = snapshot.docs[0].data();
-            userId = userData.userId;
+            userId = userData.userId || userData.studentId;
 
             // Security Check: College Status for existing users
             if (userData.role !== 'OWNER' && userData.collegeId !== 'OWNER_GLOBAL') {
@@ -443,16 +453,14 @@ const studentLogin = async (req, res) => {
         if (!collegeDoc || !collegeDoc.exists) {
             return res.status(404).json({ message: 'Organization not found' });
         }
-        const collegeId = collegeDoc.data().collegeId;
+        const collegeId = collegeDoc.id;
         if (collegeDoc.data().status === 'SUSPENDED') {
             return res.status(403).json({ message: 'Organization is suspended.' });
         }
 
-        // 2. Find student by email and collegeId
+        // 2. Find student by email in Scoped Collection
         const normalizedEmail = String(email || '').toLowerCase().trim();
-        const studentsRef = db.collection('students');
-        const snapshot = await studentsRef
-            .where('collegeId', '==', collegeId)
+        const snapshot = await getCollegeCollection(collegeId, 'students')
             .where('email', '==', normalizedEmail)
             .limit(1)
             .get();
@@ -516,14 +524,17 @@ const studentLogin = async (req, res) => {
 // @access  Private (requires token from first login)
 const studentSetPassword = async (req, res) => {
     const { newPassword } = req.body;
-    const studentId = req.user.id; // From protect middleware
+    const studentId = req.user.id;
+    const collegeId = req.user.collegeId;
 
     try {
+        if (!collegeId) return res.status(400).json({ message: 'Missing college context' });
+
         if (!newPassword || newPassword.length < 6) {
             return res.status(400).json({ message: 'Password must be at least 6 characters' });
         }
 
-        const studentRef = db.collection('students').doc(studentId);
+        const studentRef = getCollegeCollection(collegeId, 'students').doc(studentId);
         const studentDoc = await studentRef.get();
 
         if (!studentDoc.exists) {

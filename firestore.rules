@@ -8,119 +8,102 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isOwner(uid) {
-      return isAuthenticated() && request.auth.uid == uid;
+    function isOwner() {
+      return isAuthenticated() && (
+        request.auth.token.role == 'OWNER' || 
+        request.auth.token.role == 'SUPER_ADMIN' ||
+        request.auth.token.collegeId == 'OWNER_GLOBAL'
+      );
     }
 
-    // ─── Colleges ────────────────────────────────────────────────────
-    // Any user can read colleges (needed for login/slug lookup before auth)
+    function getCollegeId() {
+      return request.auth.token.collegeId;
+    }
+
+    function isCollegeMember(collegeId) {
+      return isOwner() || (isAuthenticated() && getCollegeId() == collegeId);
+    }
+
+    // ─── Colleges (Root) ─────────────────────────────────────────────
     match /colleges/{collegeId} {
+      // Any user can read colleges for login/lookup
       allow read: if true;
-      allow write: if false; // Admin SDK only
-    }
+      allow write: if isOwner();
 
-    // ─── Users (admins, drivers) ─────────────────────────────────────
-    match /users/{uid} {
-      // Users can read their own doc; admins/drivers need this for login
-      allow read: if isAuthenticated();
-      // Users can update their own doc (e.g., fcmToken, favoriteBusIds)
-      allow update: if isOwner(uid);
-      // Create/delete via Admin SDK only
-      allow create, delete: if false;
-    }
+      // ─── Scoped Sub-collections ────────────────────────────────────
+      
+      match /users/{uid} {
+        allow read: if isCollegeMember(collegeId) || request.auth.uid == uid;
+        allow update: if isAuthenticated() && (isOwner() || request.auth.uid == uid);
+        allow create, delete: if isOwner();
+      }
 
-    // ─── Students ────────────────────────────────────────────────────
-    match /students/{studentId} {
-      // Any authenticated user can read student docs
-      // (students read their own; admins read for management)
-      allow read: if isAuthenticated();
-      // Students can update their own doc (favoriteBusIds, fcmToken, lastLocation)
-      allow update: if isOwner(studentId);
-      // BUG FIX: Students must be able to write their own fcmToken and
-      // collegeId. Previously only `update` was allowed, which blocked
-      // set+merge when the doc was first created from the mobile app.
-      allow create: if isOwner(studentId);
-      // Delete via Admin SDK only (admin portal manages students)
-      allow delete: if false;
-    }
+      match /students/{studentId} {
+        allow read: if isCollegeMember(collegeId) || request.auth.uid == studentId;
+        allow update: if isAuthenticated() && (isOwner() || request.auth.uid == studentId || (getCollegeId() == collegeId && request.auth.token.role == 'COLLEGE_ADMIN'));
+        allow create: if isAuthenticated() && (isOwner() || (getCollegeId() == collegeId && request.auth.token.role == 'COLLEGE_ADMIN'));
+        allow delete: if isOwner();
+      }
 
-    // ─── Buses ───────────────────────────────────────────────────────
-    match /buses/{busId} {
-      // Any authenticated user can read buses (students track, admins manage)
-      allow read: if isAuthenticated();
-      // Drivers update bus location/status
-      allow write: if isAuthenticated();
+      match /buses/{busId} {
+        allow read: if isCollegeMember(collegeId);
+        allow write: if isAuthenticated() && (isOwner() || (getCollegeId() == collegeId && (request.auth.token.role == 'DRIVER' || request.auth.token.role == 'COLLEGE_ADMIN')));
 
-      // Trips subcollection (used by mobile app for trip management)
+        match /trips/{tripId} {
+          allow read: if isAuthenticated(); 
+          allow write: if isAuthenticated() && (isOwner() || request.auth.token.role == 'DRIVER' || request.auth.token.role == 'COLLEGE_ADMIN');
+        }
+      }
+
+      match /routes/{routeId} {
+        allow read: if isCollegeMember(collegeId);
+        allow write: if isOwner() || (getCollegeId() == collegeId && request.auth.token.role == 'COLLEGE_ADMIN');
+      }
+
+      match /stops/{stopId} {
+        allow read: if isCollegeMember(collegeId);
+        allow write: if isOwner() || (getCollegeId() == collegeId && request.auth.token.role == 'COLLEGE_ADMIN');
+      }
+
       match /trips/{tripId} {
-        allow read, write: if isAuthenticated();
+        allow read: if isCollegeMember(collegeId);
+        allow write: if isAuthenticated() && (isOwner() || (getCollegeId() == collegeId && (request.auth.token.role == 'DRIVER' || request.auth.token.role == 'COLLEGE_ADMIN')));
+        
+        match /path/{pointId} {
+          allow read: if isAuthenticated();
+          allow write: if isAuthenticated() && (isOwner() || request.auth.token.role == 'DRIVER');
+        }
+      }
+
+      match /attendance/{attendanceId} {
+        allow read: if isCollegeMember(collegeId);
+        allow write: if isAuthenticated() && (isOwner() || (getCollegeId() == collegeId && (request.auth.token.role == 'DRIVER' || request.auth.token.role == 'COLLEGE_ADMIN')));
+      }
+
+      match /stopArrivals/{arrivalId} {
+        allow read: if isCollegeMember(collegeId);
+        allow write: if isAuthenticated() && (isOwner() || request.auth.token.role == 'DRIVER');
+      }
+
+      match /notifications/{notificationId} {
+        allow read: if isCollegeMember(collegeId);
+        allow write: if isOwner() || (getCollegeId() == collegeId && request.auth.token.role == 'COLLEGE_ADMIN');
+      }
+
+      match /user_notifications/{notificationId} {
+        allow read: if isAuthenticated() && (isOwner() || resource.data.studentId == request.auth.uid);
+        allow update, delete: if isAuthenticated() && (isOwner() || resource.data.studentId == request.auth.uid);
+        allow create: if false; // Admin SDK only
+      }
+
+      match /handoffs/{handoffId} {
+        allow read, write: if isCollegeMember(collegeId);
       }
     }
 
-    // ─── Stop Arrivals ───────────────────────────────────────────────
-    match /stopArrivals/{arrivalId} {
-      // Drivers record arrivals; server/admins read to trigger notifications
-      allow read, write: if isAuthenticated();
-    }
-
-    // ─── Attendance ──────────────────────────────────────────────────
-    // Note: Backend manages attendance primarily, but mobile app needs 
-    // to search/read for session restoration.
-    match /attendance/{attendanceId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated(); // Drivers record status
-    }
-
-    // ─── Routes ──────────────────────────────────────────────────────
-    match /routes/{routeId} {
-      allow read: if isAuthenticated();
-      allow write: if false; // Admin SDK only
-    }
-
-    // ─── Stops ───────────────────────────────────────────────────────
-    match /stops/{stopId} {
-      allow read: if isAuthenticated();
-      allow write: if false; // Admin SDK only
-    }
-
-    // ─── Trips ───────────────────────────────────────────────────────
-    match /trips/{tripId} {
-      // Students need to read active trips for tracking
-      allow read: if isAuthenticated();
-      // Drivers start/end trips from mobile app
-      allow write: if isAuthenticated();
-
-      // Trip path subcollection
-      match /path/{pointId} {
-        allow read: if isAuthenticated();
-        allow write: if isAuthenticated();
-      }
-    }
-
-    // ─── Notifications ───────────────────────────────────────────────
-    match /notifications/{notificationId} {
-      // Admins read notifications on dashboard
-      allow read: if isAuthenticated();
-      // Server creates notifications via Admin SDK; no client writes
-      allow write: if false;
-    }
-
-    // ─── Handoffs (Student Handover OTP) ─────────────────────────────
-    match /handoffs/{handoffId} {
-      allow read, write: if isAuthenticated();
-    }
-
-    // ─── User Notifications (Student Bell Icon) ──────────────────────
-    match /user_notifications/{notificationId} {
-      // Students read/update/delete their own notifications
-      allow read, update, delete: if isAuthenticated() && resource.data.studentId == request.auth.uid;
-      // Server creates via Admin SDK
-      allow create: if false;
-    }
-
-    // ─── Catch-all: deny everything else ─────────────────────────────
+    // ─── Catch-all ───────────────────────────────────────────────────
     match /{document=**} {
-      allow read, write: if false;
+      allow read, write: if isOwner();
     }
   }
 }

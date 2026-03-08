@@ -1,4 +1,4 @@
-const { db, initializationError } = require('../config/firebase');
+const { db, initializationError, getCollegeCollection } = require('../config/firebase');
 
 // Early check middleware-like guard for this controller
 const checkInit = (res) => {
@@ -26,28 +26,26 @@ const createStudent = async (req, res) => {
             return res.status(400).json({ message: 'Name, Register Number, and Email are required' });
         }
 
-        // Check if student with this email or register number already exists
-        const existingByEmail = await db.collection('students')
-            .where('collegeId', '==', collegeId)
+        // Check if student with this email or register number already exists in THIS college
+        const existingByEmail = await getCollegeCollection(req.collegeId, 'students')
             .where('email', '==', email)
             .get();
         if (!existingByEmail.empty) {
-            return res.status(400).json({ message: 'Student with this email already exists' });
+            return res.status(400).json({ success: false, message: 'Student with this email already exists in this college' });
         }
 
-        const existingByRegNo = await db.collection('students')
-            .where('collegeId', '==', collegeId)
+        const existingByRegNo = await getCollegeCollection(req.collegeId, 'students')
             .where('registerNumber', '==', registerNumber)
             .get();
         if (!existingByRegNo.empty) {
-            return res.status(400).json({ message: 'Student with this register number already exists' });
+            return res.status(400).json({ success: false, message: 'Student with this register number already exists in this college' });
         }
 
-        // Check if email exists in users collection (Driver/Admin)
-        const userSnapshot = await db.collection('users').where('email', '==', email).limit(1).get();
+        // Check if email exists in users collection (Driver/Admin) in THIS college
+        const userSnapshot = await getCollegeCollection(req.collegeId, 'users').where('email', '==', email).limit(1).get();
         if (!userSnapshot.empty) {
             const userData = userSnapshot.docs[0].data();
-            return res.status(400).json({ message: `This email is already registered as a ${userData.role}.` });
+            return res.status(400).json({ message: `This email is already registered as a ${userData.role} in this college.` });
         }
 
         const studentId = 'student-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
@@ -65,7 +63,7 @@ const createStudent = async (req, res) => {
             createdAt: new Date().toISOString()
         };
 
-        await db.collection('students').doc(studentId).set(studentData);
+        await getCollegeCollection(req.collegeId, 'students').doc(studentId).set(studentData);
 
         res.status(201).json({ success: true, data: { _id: studentId, ...studentData, passwordHash: undefined } });
     } catch (error) {
@@ -78,20 +76,20 @@ const createStudent = async (req, res) => {
 // @route   GET /api/admin/students
 // @access  Private (College Admin)
 const getStudents = async (req, res) => {
+    if (!checkInit(res)) return;
+
     try {
         const collegeId = req.collegeId;
         let snapshot;
         try {
-            snapshot = await db.collection('students')
-                .where('collegeId', '==', collegeId)
+            snapshot = await getCollegeCollection(req.collegeId, 'students')
                 .orderBy('createdAt', 'desc')
                 .get();
         } catch (error) {
             // Fallback: If index is missing, fetch without sorting
             if (error.code === 9 || error.message.includes('requires an index')) {
                 console.warn('Index missing for sorting. Fetching unordered data.');
-                snapshot = await db.collection('students')
-                    .where('collegeId', '==', collegeId)
+                snapshot = await getCollegeCollection(req.collegeId, 'students')
                     .get();
             } else {
                 throw error;
@@ -117,15 +115,17 @@ const getStudents = async (req, res) => {
 // @route   PUT /api/admin/students/:id
 // @access  Private (College Admin)
 const updateStudent = async (req, res) => {
+    if (!checkInit(res)) return;
+
     try {
         const { id } = req.params;
         const { name, registerNumber, rollNumber, email, phone } = req.body;
         const collegeId = req.collegeId;
 
-        const studentRef = db.collection('students').doc(id);
+        const studentRef = getCollegeCollection(req.collegeId, 'students').doc(id);
         const studentDoc = await studentRef.get();
 
-        if (!studentDoc.exists || studentDoc.data().collegeId !== collegeId) {
+        if (!studentDoc.exists) { // collegeId check is implicit with getCollegeCollection
             return res.status(404).json({ message: 'Student not found' });
         }
 
@@ -149,14 +149,16 @@ const updateStudent = async (req, res) => {
 // @route   DELETE /api/admin/students/:id
 // @access  Private (College Admin)
 const deleteStudent = async (req, res) => {
+    if (!checkInit(res)) return;
+
     try {
         const { id } = req.params;
         const collegeId = req.collegeId;
 
-        const studentRef = db.collection('students').doc(id);
+        const studentRef = getCollegeCollection(req.collegeId, 'students').doc(id);
         const studentDoc = await studentRef.get();
 
-        if (!studentDoc.exists || studentDoc.data().collegeId !== collegeId) {
+        if (!studentDoc.exists) { // collegeId check is implicit with getCollegeCollection
             return res.status(404).json({ message: 'Student not found' });
         }
 
@@ -173,6 +175,8 @@ const deleteStudent = async (req, res) => {
 // @route   POST /api/admin/students/bulk-json
 // @access  Private (College Admin)
 const createBulkStudents = async (req, res) => {
+    if (!checkInit(res)) return;
+
     try {
         const { students } = req.body;
         const collegeId = req.collegeId;
@@ -184,9 +188,8 @@ const createBulkStudents = async (req, res) => {
         const batch = db.batch();
         const results = { success: [], errors: [], created: 0 };
 
-        // Get existing students for duplicate check
-        const existingSnapshot = await db.collection('students')
-            .where('collegeId', '==', collegeId)
+        // Get existing students for duplicate check within THIS college
+        const existingSnapshot = await getCollegeCollection(req.collegeId, 'students')
             .get();
         const existingEmails = new Set(existingSnapshot.docs.map(d => d.data().email));
         const existingRegNos = new Set(existingSnapshot.docs.map(d => d.data().registerNumber));
@@ -201,17 +204,17 @@ const createBulkStudents = async (req, res) => {
                 }
 
                 if (existingEmails.has(email)) {
-                    results.errors.push({ student, error: `Email ${email} already exists` });
+                    results.errors.push({ student, error: `Email ${email} already exists in this college` });
                     continue;
                 }
 
                 if (existingRegNos.has(registerNumber)) {
-                    results.errors.push({ student, error: `Register Number ${registerNumber} already exists` });
+                    results.errors.push({ student, error: `Register Number ${registerNumber} already exists in this college` });
                     continue;
                 }
 
                 // Check if email exists in users collection (Driver/Admin)
-                const userSnapshot = await db.collection('users').where('email', '==', email).limit(1).get();
+                const userSnapshot = await getCollegeCollection(req.collegeId, 'users').where('email', '==', email).limit(1).get();
                 if (!userSnapshot.empty) {
                     const userData = userSnapshot.docs[0].data();
                     results.errors.push({ student, error: `Email ${email} is already registered as a ${userData.role}.` });
@@ -232,7 +235,7 @@ const createBulkStudents = async (req, res) => {
                     createdAt: new Date().toISOString()
                 };
 
-                batch.set(db.collection('students').doc(studentId), studentData);
+                batch.set(getCollegeCollection(req.collegeId, 'students').doc(studentId), studentData);
                 existingEmails.add(email); // Prevent duplicates within same batch
                 existingRegNos.add(registerNumber);
                 results.success.push(email);
@@ -283,9 +286,7 @@ const getStudentBuses = async (req, res) => {
             return res.status(400).json({ message: 'College ID not found' });
         }
 
-        const snapshot = await db.collection('buses')
-            .where('collegeId', '==', collegeId)
-            .get();
+        const snapshot = await getCollegeCollection(collegeId, 'buses').get();
 
         const buses = snapshot.docs.map(doc => ({
             _id: doc.id,
@@ -307,7 +308,7 @@ const resetStudentPassword = async (req, res) => {
         const { id } = req.params;
         const collegeId = req.collegeId;
 
-        const studentRef = db.collection('students').doc(id);
+        const studentRef = getCollegeCollection(collegeId, 'students').doc(id);
         const studentDoc = await studentRef.get();
 
         if (!studentDoc.exists || studentDoc.data().collegeId !== collegeId) {

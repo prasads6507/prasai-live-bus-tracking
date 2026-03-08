@@ -160,7 +160,7 @@ void onStart(ServiceInstance service) async {
         final intervalElapsed = elapsedMs >= (intervalSec * 1000);
 
         if (statusChanged || modeChanged || intervalElapsed) {
-          BackgroundTrackingService._writeToFirestore(prefs, busId, tripId,
+          BackgroundTrackingService._writeToFirestore(prefs, collegeId, busId, tripId,
               position, newMode, newStatus, nextStopId, finalSpeedMph);
           lastWriteMs = now.millisecondsSinceEpoch;
           currentMode = newMode;
@@ -349,7 +349,7 @@ class IosLocationTracker {
             if ((newStatus != currentStatus) ||
                 (newMode != currentMode) ||
                 (elapsedMs >= intervalSec * 1000)) {
-              BackgroundTrackingService._writeToFirestore(prefs, busId, tripId,
+              BackgroundTrackingService._writeToFirestore(prefs, collegeId, busId, tripId,
                   position, newMode, newStatus, nextStopId, finalSpeedMph);
               lastWriteMs = now.millisecondsSinceEpoch;
               currentMode = newMode;
@@ -549,6 +549,7 @@ class BackgroundTrackingService {
 
   static Future<void> _writeToFirestore(
     SharedPreferences prefs,
+    String collegeId,
     String busId,
     String tripId,
     Position p,
@@ -560,7 +561,7 @@ class BackgroundTrackingService {
     try {
       final db = FirebaseFirestore.instance;
 
-      await db.collection('buses').doc(busId).update({
+      await db.collection('colleges').doc(collegeId).collection('buses').doc(busId).update({
         'status': 'ON_ROUTE',
         'lastLocationUpdate': FieldValue.serverTimestamp(),
         'location': {
@@ -623,7 +624,7 @@ class BackgroundTrackingService {
   ) async {
     try {
       final db = FirebaseFirestore.instance;
-      final tripRef = db.collection('trips').doc(tripId);
+      final tripRef = db.collection('colleges').doc(collegeId).collection('trips').doc(tripId);
       final tripDoc = await tripRef.get();
       if (!tripDoc.exists) return;
 
@@ -636,7 +637,7 @@ class BackgroundTrackingService {
         final batch = db.batch();
         
         // 1. Mark stop as arrived
-        final notifRef = db.collection('stopArrivals').doc();
+        final notifRef = db.collection('colleges').doc(collegeId).collection('stopArrivals').doc();
         batch.set(notifRef, {
           'id': notifRef.id,
           'tripId': tripId,
@@ -651,7 +652,7 @@ class BackgroundTrackingService {
         });
 
         // 3. Update Bus
-        batch.update(db.collection('buses').doc(busId), {
+        batch.update(db.collection('colleges').doc(collegeId).collection('buses').doc(busId), {
           'currentStatus': 'ARRIVED',
           'trackingMode': 'NEAR_STOP',
         });
@@ -686,7 +687,7 @@ class BackgroundTrackingService {
   ) async {
     try {
       final db = FirebaseFirestore.instance;
-      final tripRef = db.collection('trips').doc(tripId);
+      final tripRef = db.collection('colleges').doc(collegeId).collection('trips').doc(tripId);
       final tripDoc = await tripRef.get();
       if (!tripDoc.exists) return;
 
@@ -726,7 +727,7 @@ class BackgroundTrackingService {
         await prefs.setString('next_stop_name', (nextStop['name'] as String?) ?? 'Stop');
         await prefs.setBool('has_arrived_current', false);
 
-        batch.update(db.collection('buses').doc(busId), busUpdate);
+        batch.update(db.collection('colleges').doc(collegeId).collection('buses').doc(busId), busUpdate);
         await batch.commit();
 
         // 5. Update UI immediately
@@ -760,7 +761,7 @@ class BackgroundTrackingService {
         await prefs.setString('pending_bus_id', busId);
         await prefs.setString('pending_college_id', collegeId);
         
-        batch.update(db.collection('buses').doc(busId), busUpdate);
+        batch.update(db.collection('colleges').doc(collegeId).collection('buses').doc(busId), busUpdate);
         await batch.commit(); // Ensure firestore is updated before finalization
 
         try {
@@ -795,7 +796,7 @@ class BackgroundTrackingService {
   ) async {
     try {
       final db = FirebaseFirestore.instance;
-      final tripRef = db.collection('trips').doc(tripId);
+      final tripRef = db.collection('colleges').doc(collegeId).collection('trips').doc(tripId);
       final tripDoc = await tripRef.get();
       if (!tripDoc.exists) return;
 
@@ -840,7 +841,7 @@ class BackgroundTrackingService {
       if (collegeId == null || busId == null || tripId == null) return;
 
       final db = FirebaseFirestore.instance;
-      final tripRef = db.collection('trips').doc(tripId);
+      final tripRef = db.collection('colleges').doc(collegeId).collection('trips').doc(tripId);
       final tripDoc = await tripRef.get();
       if (!tripDoc.exists) return;
 

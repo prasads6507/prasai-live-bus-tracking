@@ -1,5 +1,5 @@
 
-const { admin, db, messaging } = require('../config/firebase');
+const { admin, db, messaging, getCollegeCollection } = require('../config/firebase');
 
 /**
  * Send notification to all students assigned to a trip's route
@@ -12,7 +12,7 @@ const sendBusStartedNotification = async (tripId, busId, collegeId, busNumber, i
         console.log(`[BusStarted] Triggering for bus="${busId}" college="${collegeId}" trip="${tripId}" isMaintenance=${isMaintenance}`);
 
         // 1. Query by busId first to avoid composite index requirement
-        const studentsRef = db.collection('students');
+        const studentsRef = getCollegeCollection(collegeId, 'students');
         const queryBusId = isMaintenance ? originalBusId : busId;
 
         if (!queryBusId) {
@@ -106,14 +106,14 @@ const sendBusStartedNotification = async (tripId, busId, collegeId, busNumber, i
                 const result = await messaging.sendEachForMulticast(message);
                 console.log(`[BusStarted] Batch result: sent=${result.successCount} failed=${result.failureCount}`);
                 // Fire and forget the cleanup to not block API response
-                cleanupStaleTokens(result, batch, db, admin).catch(err => console.error('[FCM Cleanup Error]', err.message));
+                cleanupStaleTokens(result, batch, db, admin, collegeId).catch(err => console.error('[FCM Cleanup Error]', err.message));
             } catch (fcmErr) {
                 console.error('[BusStarted] FCM transmission error:', fcmErr.message);
             }
         }
 
         // Log to notifications collection for admin panel
-        await db.collection('notifications').add({
+        await getCollegeCollection(collegeId, 'notifications').add({
             type: 'BUS_STARTED',
             busId, tripId, collegeId,
             message: isMaintenance
@@ -151,8 +151,8 @@ const getDistanceFromLatLonInKm = (lat1, lon1, lat2, lon2) => {
  * BUG FIX (Bug 5): Wrapped in try/catch so a missing Firestore index never
  * crashes the notification send pipeline. Also checks the users (drivers) collection.
  */
-const cleanupStaleTokens = async (result, tokensBatch, db, admin) => {
-    if (result.failureCount === 0) return;
+const cleanupStaleTokens = async (result, tokensBatch, db, admin, collegeId) => {
+    if (result.failureCount === 0 || !collegeId) return;
 
     try {
         const failedTokens = [];
@@ -174,7 +174,9 @@ const cleanupStaleTokens = async (result, tokensBatch, db, admin) => {
 
         const cleanupPromises = failedTokens.map(async (staleToken) => {
             try {
-                const staleStudentSnap = await db.collection('students')
+                // If we have collegeId, scoped search is faster. If not, this becomes complex.
+                // For now, we assume this is called with context or we check the root users.
+                const staleStudentSnap = await getCollegeCollection(collegeId, 'students')
                     .where('fcmToken', '==', staleToken)
                     .limit(5)
                     .get();
@@ -182,7 +184,7 @@ const cleanupStaleTokens = async (result, tokensBatch, db, admin) => {
                     batch.update(doc.ref, { fcmToken: admin.firestore.FieldValue.delete() });
                 });
 
-                const staleUserSnap = await db.collection('users')
+                const staleUserSnap = await getCollegeCollection(collegeId, 'users')
                     .where('fcmToken', '==', staleToken)
                     .limit(5)
                     .get();
@@ -212,7 +214,7 @@ const checkProximityAndNotify = async (busId, location, collegeId, routeId) => {
 
     try {
         // 1. Query by busId first to avoid composite index requirement
-        const studentsRef = db.collection('students');
+        const studentsRef = getCollegeCollection(collegeId, 'students');
         const [assignedSnap, favoriteSnap] = await Promise.all([
             studentsRef.where('assignedBusId', '==', busId).get(),
             studentsRef.where('favoriteBusIds', 'array-contains', busId).get()
@@ -276,7 +278,7 @@ const checkProximityAndNotify = async (busId, location, collegeId, routeId) => {
                 console.error('[Proximity] FCM error:', fcmErr.message);
             }
 
-            await db.collection('notifications').add({
+            await getCollegeCollection(collegeId, 'notifications').add({
                 type: 'BUS_PROXIMITY',
                 busId,
                 collegeId,
@@ -299,7 +301,7 @@ const sendStopArrivalNotification = async (tripId, busId, collegeId, routeId, st
         console.log(`[Notification] Bus arrived at stop "${stopName}" (${stopId}) on route ${routeId}`);
 
         // Query by busId first to avoid composite index requirement
-        const studentsRef = db.collection('students');
+        const studentsRef = getCollegeCollection(collegeId, 'students');
         const [assignedSnap, favoriteSnap] = await Promise.all([
             studentsRef.where('assignedBusId', '==', busId).get(),
             studentsRef.where('favoriteBusIds', 'array-contains', busId).get()
@@ -369,7 +371,7 @@ const sendStopEventNotification = async (tripId, busId, collegeId, stopId, stopN
 
         // Prevent duplicate sends
         if (arrivalDocId) {
-            const doc = await db.collection('stopArrivals').doc(arrivalDocId).get();
+            const doc = await getCollegeCollection(collegeId, 'stopArrivals').doc(arrivalDocId).get();
             if (doc.exists && doc.data().fcmSent === true) {
                 console.log(`[StopEvent] FCM already sent for: ${arrivalDocId}`);
                 return;
@@ -398,7 +400,7 @@ const sendStopEventNotification = async (tripId, busId, collegeId, stopId, stopN
         if (Array.isArray(targetStudentIds) && targetStudentIds.length > 0) {
             console.log(`[StopEvent] Targeted query for ${targetStudentIds.length} specific students`);
             // Fetch students by ID directly
-            const studentPromises = targetStudentIds.map(id => db.collection('students').doc(id).get());
+            const studentPromises = targetStudentIds.map(id => getCollegeCollection(collegeId, 'students').doc(id).get());
             const studentDocs = await Promise.all(studentPromises);
             studentDocs.forEach(doc => {
                 if (doc.exists && doc.data().collegeId === collegeId) {
@@ -407,7 +409,7 @@ const sendStopEventNotification = async (tripId, busId, collegeId, stopId, stopN
             });
         } else {
             // Standard broadcast logic (Assigned students + Favorited students)
-            const studentsRef = db.collection('students');
+            const studentsRef = getCollegeCollection(collegeId, 'students');
             const [assignedSnap, favoriteSnap] = await Promise.all([
                 studentsRef.where('assignedBusId', '==', busId).get(),
                 studentsRef.where('favoriteBusIds', 'array-contains', busId).get()
@@ -458,7 +460,7 @@ const sendStopEventNotification = async (tripId, busId, collegeId, stopId, stopN
         }
 
         // Write to notifications collection for admin Live Alerts panel
-        await db.collection('notifications').add({
+        await getCollegeCollection(collegeId, 'notifications').add({
             type, busId, tripId, collegeId, stopId, stopName,
             message: body,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -481,13 +483,13 @@ const sendStopEventNotification = async (tripId, busId, collegeId, stopId, stopN
 
         if (arrivalDocId) {
             // Update existing doc
-            await db.collection('stopArrivals').doc(arrivalDocId).update({
+            await getCollegeCollection(collegeId, 'stopArrivals').doc(arrivalDocId).update({
                 ...arrivalData,
                 fcmSent: true,
             });
         } else {
             // Create new doc so student app Firestore listener picks it up
-            const newDoc = await db.collection('stopArrivals').add(arrivalData);
+            const newDoc = await getCollegeCollection(collegeId, 'stopArrivals').add(arrivalData);
             console.log(`[StopEvent] Created stopArrivals doc: ${newDoc.id}`);
         }
 
@@ -499,9 +501,9 @@ const sendStopEventNotification = async (tripId, busId, collegeId, stopId, stopN
 /**
  * NEW: Notify specific student when driver marks attendance tick
  */
-const sendStudentAttendanceNotification = async ({ studentId, busId, direction, isChecked, busNumber, tripId }) => {
+const sendStudentAttendanceNotification = async ({ studentId, busId, direction, isChecked, busNumber, tripId, collegeId }) => {
     try {
-        const studentDoc = await db.collection('students').doc(studentId).get();
+        const studentDoc = await getCollegeCollection(collegeId, 'students').doc(studentId).get();
         if (!studentDoc.exists) return;
 
         const student = studentDoc.data();
@@ -547,7 +549,7 @@ const sendTripEndedNotification = async (tripId, busId, collegeId) => {
         // Get bus number for the notification body
         let busNumber = busId;
         try {
-            const busDoc = await db.collection('buses').doc(busId).get();
+            const busDoc = await getCollegeCollection(collegeId, 'buses').doc(busId).get();
             if (busDoc.exists) {
                 const d = busDoc.data();
                 busNumber = d.busNumber || d.number || busId;
@@ -555,11 +557,11 @@ const sendTripEndedNotification = async (tripId, busId, collegeId) => {
         } catch (_) { }
 
         // Query by assigned OR favorite (no collegeId to avoid composite index)
-        const studentsRef = db.collection('students');
+        const studentsRef = getCollegeCollection(collegeId, 'students');
         const [assignedSnap, favoriteSnap, tripDoc] = await Promise.all([
             studentsRef.where('assignedBusId', '==', busId).get(),
             studentsRef.where('favoriteBusIds', 'array-contains', busId).get(),
-            db.collection('trips').doc(tripId).get()
+            getCollegeCollection(collegeId, 'trips').doc(tripId).get()
         ]);
 
         const tripData = tripDoc.exists ? tripDoc.data() : {};
@@ -602,7 +604,7 @@ const sendTripEndedNotification = async (tripId, busId, collegeId) => {
                 const attendanceId = `${dateKey}__${busId}__${tripData.direction || 'pickup'}__${studentId}`;
                 absenteeChecks.push((async () => {
                     try {
-                        const attDoc = await db.collection('attendance').doc(attendanceId).get();
+                        const attDoc = await getCollegeCollection(collegeId, 'attendance').doc(attendanceId).get();
                         if (attDoc.exists && attDoc.data().absentNotifiedAt) {
                             return; // Already notified
                         }
@@ -610,7 +612,7 @@ const sendTripEndedNotification = async (tripId, busId, collegeId) => {
                         if (token && typeof token === 'string' && token.length > 10) {
                             tokensAbsentee.push(token);
                             attendanceUpdates.push({
-                                ref: db.collection('attendance').doc(attendanceId),
+                                ref: getCollegeCollection(collegeId, 'attendance').doc(attendanceId),
                                 data: { absentNotifiedAt: admin.firestore.FieldValue.serverTimestamp() }
                             });
                         }
@@ -670,7 +672,7 @@ const sendTripEndedNotification = async (tripId, busId, collegeId) => {
         }
 
         // Log to notifications collection
-        await db.collection('notifications').add({
+        await getCollegeCollection(collegeId, 'notifications').add({
             type: 'TRIP_ENDED',
             busId, tripId, collegeId,
             message: body,

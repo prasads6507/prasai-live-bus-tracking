@@ -1,4 +1,4 @@
-const { db, admin, initializationError, messaging } = require('../config/firebase');
+const { db, admin, initializationError, messaging, getCollegeCollection } = require('../config/firebase');
 
 // Early check middleware-like guard for this controller
 const checkInit = (res) => {
@@ -18,12 +18,13 @@ const { checkProximityAndNotify, sendTripEndedNotification, sendStudentAttendanc
 // @route   GET /api/driver/buses
 // @access  Private (Driver)
 // Helper to populate route names
-const populateBusRoutes = async (buses) => {
+const populateBusRoutes = async (collegeId, buses) => {
     try {
+        if (!collegeId) return buses;
         const routeIds = [...new Set(buses.filter(b => b.assignedRouteId).map(b => b.assignedRouteId))];
         if (routeIds.length === 0) return buses;
 
-        const routesSnapshot = await db.collection('routes').where(admin.firestore.FieldPath.documentId(), 'in', routeIds).get();
+        const routesSnapshot = await getCollegeCollection(collegeId, 'routes').where(admin.firestore.FieldPath.documentId(), 'in', routeIds).get();
         const routesMap = {};
         routesSnapshot.docs.forEach(doc => {
             routesMap[doc.id] = doc.data().routeName || doc.data().route_name || doc.data().name || 'Unknown Route';
@@ -43,17 +44,14 @@ const populateBusRoutes = async (buses) => {
 // @route   GET /api/driver/buses
 // @access  Private (Driver)
 async function getDriverBuses(req, res) {
+    if (!checkInit(res)) return;
+
     try {
-
-
-        const busesSnapshot = await db.collection('buses')
-            .where('collegeId', '==', req.collegeId)
+        const snapshot = await getCollegeCollection(req.collegeId, 'buses')
             .where('assignedDriverId', '==', req.user.id)
             .get();
 
-
-
-        let buses = busesSnapshot.docs.map(doc => ({
+        let buses = snapshot.docs.map(doc => ({
             _id: doc.id,
             ...doc.data()
         }));
@@ -80,15 +78,12 @@ async function searchDriverBuses(req, res) {
         const { q } = req.query;
         if (!q) return res.status(400).json({ success: false, message: 'Query required' });
 
-
-
         // Note: Firestore doesn't support native partial text search strings easily.
         // We will fetch all buses for the college (usually manageable size) and filter in memory,
         // OR use a specific "busNumber" match if possible.
         // For better experience, we'll fetch all and filter since bus fleets are usually < 100.
 
-        const busesSnapshot = await db.collection('buses')
-            .where('collegeId', '==', req.collegeId)
+        const busesSnapshot = await getCollegeCollection(req.collegeId, 'buses')
             .get();
 
         let buses = busesSnapshot.docs.map(doc => ({
@@ -123,10 +118,11 @@ async function searchDriverBuses(req, res) {
 // @access  Private (Driver)
 async function updateBusLocation(req, res) {
     try {
-        const { busId } = req.params;
         const { latitude, longitude, speed, heading } = req.body;
+        const busId = req.params.busId;
+        const timestamp = new Date();
 
-        const busRef = db.collection('buses').doc(busId);
+        const busRef = getCollegeCollection(req.collegeId, 'buses').doc(busId);
 
         await db.runTransaction(async (transaction) => {
             const busDoc = await transaction.get(busRef);
@@ -135,9 +131,11 @@ async function updateBusLocation(req, res) {
                 throw new Error('Bus not found');
             }
 
-
-
             const busData = busDoc.data();
+            if (busData.collegeId !== req.collegeId) {
+                console.warn(`[GPS UNAUTHORIZED] Driver ${req.user.id} attempted to update bus ${busId} in different college`);
+                throw new Error('Unauthorized');
+            }
             const isActiveTrip = !!busData.activeTripId;
             const newStatus = isActiveTrip ? 'ON_ROUTE' : (busData.status === 'MAINTENANCE' ? 'MAINTENANCE' : 'IDLE');
 
@@ -161,7 +159,6 @@ async function updateBusLocation(req, res) {
                 updateData.currentSpeed = speedMph;    // Alias for some UIs
                 updateData.speed = speedMph;           // Legacy
             }
-
 
             if (latitude !== undefined && longitude !== undefined) {
                 const newPoint = {
@@ -209,12 +206,10 @@ async function endTrip(req, res) {
     const { tripId } = req.params;
     const { busId } = req.body;
 
-
-
     if (!busId) return res.status(400).json({ success: false, message: 'Bus ID required' });
 
     try {
-        const tripRef = db.collection('trips').doc(tripId);
+        const tripRef = getCollegeCollection(req.collegeId, 'trips').doc(tripId);
         const tripDoc = await tripRef.get();
 
         if (!tripDoc.exists) {
@@ -235,7 +230,7 @@ async function endTrip(req, res) {
         }
 
         const batch = db.batch();
-        const busRef = db.collection('buses').doc(busId);
+        const busRef = getCollegeCollection(req.collegeId, 'buses').doc(busId);
 
         // 1. Update Trip Status (Canonical: COMPLETED)
         const endTime = new Date();
@@ -273,7 +268,6 @@ async function endTrip(req, res) {
 
         await batch.commit();
 
-
         // Notify students whose favorite bus this was (Awaited for Vercel reliability)
         await sendTripEndedNotification(tripId, busId, tripData.collegeId || req.collegeId)
             .catch(err => console.error('[endTrip] Trip ended notification failed:', err));
@@ -295,8 +289,7 @@ async function startTrip(req, res) {
         const tripDirection = direction || 'pickup'; // 'pickup' or 'dropoff'
 
         // 0. GUARDIAN: Ensure driver doesn't have another active trip already
-        const activeTripsQuery = await db.collection('trips')
-            .where('collegeId', '==', req.collegeId)
+        const activeTripsQuery = await getCollegeCollection(req.collegeId, 'trips')
             .where('driverId', '==', req.user.id)
             .where('status', '==', 'ACTIVE')
             .get();
@@ -310,7 +303,7 @@ async function startTrip(req, res) {
         }
 
         // Verify bus exists and belongs to college
-        const busRef = db.collection('buses').doc(busId);
+        const busRef = getCollegeCollection(req.collegeId, 'buses').doc(busId);
         const busDoc = await busRef.get();
 
         if (!busDoc.exists) {
@@ -323,12 +316,11 @@ async function startTrip(req, res) {
         }
 
         // Fetch driver details to get name
-        const userDoc = await db.collection('users').doc(req.user.id).get();
+        const userDoc = await getCollegeCollection(req.collegeId, 'users').doc(req.user.id).get();
         const driverName = userDoc.exists ? userDoc.data().name : 'Unknown Driver';
 
         // Fetch students assigned to this bus to map to stops for targeted skip notifications
-        const studentsSnapshot = await db.collection('students')
-            .where('collegeId', '==', req.collegeId)
+        const studentsSnapshot = await getCollegeCollection(req.collegeId, 'students')
             .where('assignedBusId', '==', busId)
             .get();
 
@@ -347,7 +339,7 @@ async function startTrip(req, res) {
         let stopsSnapshot = [];
 
         if (effectiveRouteId) {
-            const stopsQuery = await db.collection('stops')
+            const stopsQuery = await getCollegeCollection(req.collegeId, 'stops')
                 .where('routeId', '==', effectiveRouteId)
                 .get();
 
@@ -393,7 +385,7 @@ async function startTrip(req, res) {
 
         // Use a Batch for Atomic Operations
         const batch = db.batch();
-        const tripRef = db.collection('trips').doc(tripId);
+        const tripRef = getCollegeCollection(req.collegeId, 'trips').doc(tripId);
 
         // 1. Create Trip Doc with stopsSnapshot + stopProgress + eta
         batch.set(tripRef, {
@@ -432,8 +424,6 @@ async function startTrip(req, res) {
 
         await batch.commit();
 
-
-
         // NOTE: Bus Started notification is sent by Flutter via /trip-started-notify endpoint.
         // Sending it here too would cause duplicate notifications. Do NOT re-add.
         res.status(201).json({ success: true, message: 'Trip started', tripId, stopsCount: stopsSnapshot.length, direction: tripDirection });
@@ -447,6 +437,33 @@ async function startTrip(req, res) {
 // @route   POST /api/driver/trip/end/:busId
 // @access  Private (Driver)
 
+// @desc    Get bus details
+// @route   GET /api/driver/buses/:busId
+// @access  Private (Driver)
+const getBusDetails = async (req, res) => {
+    const { busId } = req.params;
+    if (!checkInit(res)) return;
+
+    try {
+        const busDoc = await getCollegeCollection(req.collegeId, 'buses').doc(busId).get();
+
+        if (!busDoc.exists) {
+            return res.status(404).json({ success: false, message: 'Bus not found' });
+        }
+
+        if (busDoc.data().collegeId !== req.collegeId) {
+            return res.status(403).json({ success: false, message: 'Unauthorized college access' });
+        }
+
+        let bus = { _id: busDoc.id, ...busDoc.data() };
+        bus = (await populateBusRoutes([bus]))[0]; // Populate route name for single bus
+
+        res.status(200).json({ success: true, data: bus });
+    } catch (error) {
+        console.error('Error fetching bus details:', error);
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+    }
+};
 
 // @desc    Save trip history point (every 1 minute)
 // @route   POST /api/driver/trip/history/:busId
@@ -456,10 +473,8 @@ async function saveTripHistory(req, res) {
         const { busId } = req.params;
         const { tripId, latitude, longitude, speed, heading, timestamp } = req.body;
 
-
-
         // Verify bus exists and belongs to college
-        const busRef = db.collection('buses').doc(busId);
+        const busRef = getCollegeCollection(req.collegeId, 'buses').doc(busId);
         const busDoc = await busRef.get();
 
         if (!busDoc.exists) {
@@ -470,7 +485,7 @@ async function saveTripHistory(req, res) {
             return res.status(403).json({ success: false, message: 'Unauthorized college access' });
         }
 
-        const tripRef = db.collection('trips').doc(tripId);
+        const tripRef = getCollegeCollection(req.collegeId, 'trips').doc(tripId);
 
         // C-3 FIX: Use arrayUnion + increment instead of read-then-rewrite.
         // Old approach: read full path array + write [existing..., newPoint] = O(n²) data transfer.
@@ -516,7 +531,7 @@ async function historyUpload(req, res) {
             return res.status(400).json({ success: false, message: 'tripId is required' });
         }
 
-        const tripRef = db.collection('trips').doc(tripId);
+        const tripRef = getCollegeCollection(req.collegeId, 'trips').doc(tripId);
         const tripDoc = await tripRef.get();
 
         if (!tripDoc.exists) {
@@ -557,7 +572,7 @@ async function historyUpload(req, res) {
         if (attendance && Array.isArray(attendance) && attendance.length > 0) {
             const uniqueIds = [...new Set(attendance)];
             const studentDocs = await Promise.all(
-                uniqueIds.map(id => db.collection('students').doc(id).get())
+                uniqueIds.map(id => getCollegeCollection(req.collegeId, 'students').doc(id).get())
             );
 
             const batch = db.batch();
@@ -578,7 +593,7 @@ async function historyUpload(req, res) {
 
                 const datePrefix = new Date().toISOString().split('T')[0];
                 const attendanceId = `${datePrefix}__${tripData.busId}__${direction}__${studentId}`;
-                const attendanceRef = db.collection('attendance').doc(attendanceId);
+                const attendanceRef = getCollegeCollection(req.collegeId, 'attendance').doc(attendanceId);
 
                 // Check if specialized status already exists (e.g., dropped_off_neighbor)
                 // We do a batch-friendly check by using a map or similar if we were optimized,
@@ -638,8 +653,7 @@ async function historyUpload(req, res) {
         // ── B. NOT_BOARDED: always run regardless of whether attendance was empty ──
         // FIX: moved out of the `if (attendance.length > 0)` block so it always fires.
         try {
-            const allBusStudents = await db.collection('students')
-                .where('collegeId', '==', req.collegeId)
+            const allBusStudents = await getCollegeCollection(req.collegeId, 'students')
                 .where('assignedBusId', '==', tripData.busId)
                 .get();
 
@@ -666,7 +680,7 @@ async function historyUpload(req, res) {
                 const studentData = doc.data();
                 const datePrefix = new Date().toISOString().split('T')[0];
                 const attendanceId = `${datePrefix}__${tripData.busId}__${direction}__${studentId}`;
-                const attendanceRef = db.collection('attendance').doc(attendanceId);
+                const attendanceRef = getCollegeCollection(req.collegeId, 'attendance').doc(attendanceId);
 
                 // Only create if it doesn't exist or overwrite with not_boarded?
                 // Actually, if we are ending the trip, these are the students who DID NOT show up.
@@ -755,30 +769,28 @@ async function checkProximity(req, res) {
 // @desc    Mark student as picked up
 // @route   POST /api/driver/trips/:tripId/attendance/pickup
 // @access  Private (Driver)
-async function markPickup(req, res) {
+const markPickup = async (req, res) => {
+    const { tripId } = req.params;
+    const { studentId } = req.body;
+    if (!checkInit(res)) return;
+
     try {
-        const { tripId } = req.params;
-        const { studentId } = req.body;
+        const tripData = (await getCollegeCollection(req.collegeId, 'trips').doc(tripId).get()).data();
+        if (!tripData) return res.status(404).json({ success: false, message: 'Trip not found' });
 
-        if (!studentId) return res.status(400).json({ success: false, message: 'Student ID required' });
-
-        const tripRef = db.collection('trips').doc(tripId);
-        const tripDoc = await tripRef.get();
-
-        if (!tripDoc.exists) return res.status(404).json({ success: false, message: 'Trip not found' });
-
-        const tripData = tripDoc.data();
         if (tripData.driverId !== req.user.id) {
             return res.status(403).json({ success: false, message: 'Unauthorized trip access' });
         }
 
+        if (!studentId) return res.status(400).json({ success: false, message: 'Student ID required' });
+
         // Get student details for the record
-        const studentDoc = await db.collection('students').doc(studentId).get();
+        const studentDoc = await getCollegeCollection(req.collegeId, 'students').doc(studentId).get();
         const studentName = studentDoc.exists ? studentDoc.data().name : 'Unknown Student';
 
         const datePrefix = new Date().toISOString().split('T')[0];
         const attendanceId = `${datePrefix}__${tripData.busId}__pickup__${studentId}`;
-        const attendanceRef = db.collection('attendance').doc(attendanceId);
+        const attendanceRef = getCollegeCollection(req.collegeId, 'attendance').doc(attendanceId);
 
         const serverTimestamp = admin.firestore.FieldValue.serverTimestamp();
 
@@ -807,7 +819,7 @@ async function markPickup(req, res) {
             }
 
             transaction.set(attendanceRef, attendanceData, { merge: true });
-            transaction.update(tripRef, {
+            transaction.update(getCollegeCollection(req.collegeId, 'trips').doc(tripId), {
                 pickedUpStudents: admin.firestore.FieldValue.arrayUnion(studentId),
                 updatedAt: serverTimestamp
             });
@@ -835,30 +847,28 @@ async function markPickup(req, res) {
 // @desc    Mark student as dropped off
 // @route   POST /api/driver/trips/:tripId/attendance/dropoff
 // @access  Private (Driver)
-async function markDropoff(req, res) {
+const markDropoff = async (req, res) => {
+    const { tripId } = req.params;
+    const { studentId } = req.body;
+    if (!checkInit(res)) return;
+
     try {
-        const { tripId } = req.params;
-        const { studentId } = req.body;
+        const tripData = (await getCollegeCollection(req.collegeId, 'trips').doc(tripId).get()).data();
+        if (!tripData) return res.status(404).json({ success: false, message: 'Trip not found' });
 
-        if (!studentId) return res.status(400).json({ success: false, message: 'Student ID required' });
-
-        const tripRef = db.collection('trips').doc(tripId);
-        const tripDoc = await tripRef.get();
-
-        if (!tripDoc.exists) return res.status(404).json({ success: false, message: 'Trip not found' });
-
-        const tripData = tripDoc.data();
         if (tripData.driverId !== req.user.id) {
             return res.status(403).json({ success: false, message: 'Unauthorized trip access' });
         }
 
+        if (!studentId) return res.status(400).json({ success: false, message: 'Student ID required' });
+
         // FIX: Fetch student name (was missing in original markDropoff)
-        const studentDoc = await db.collection('students').doc(studentId).get();
+        const studentDoc = await getCollegeCollection(req.collegeId, 'students').doc(studentId).get();
         const studentName = studentDoc.exists ? studentDoc.data().name : 'Unknown Student';
 
         const datePrefix = new Date().toISOString().split('T')[0];
         const attendanceId = `${datePrefix}__${tripData.busId}__dropoff__${studentId}`;
-        const attendanceRef = db.collection('attendance').doc(attendanceId);
+        const attendanceRef = getCollegeCollection(req.collegeId, 'attendance').doc(attendanceId);
         const serverTimestamp = admin.firestore.Timestamp.fromDate(new Date());
 
         let handledPreviously = false;
@@ -883,7 +893,7 @@ async function markDropoff(req, res) {
                 collegeId: req.collegeId,
                 driverId: req.user.id
             }, { merge: true });
-            transaction.update(tripRef, {
+            transaction.update(getCollegeCollection(req.collegeId, 'trips').doc(tripId), {
                 droppedOffStudents: admin.firestore.FieldValue.arrayUnion(studentId),
                 updatedAt: serverTimestamp
             });
@@ -911,16 +921,16 @@ async function markDropoff(req, res) {
 // @desc    Get all attendance records for a trip
 // @route   GET /api/driver/trips/:tripId/attendance
 // @access  Private (Driver)
-async function getTripAttendance(req, res) {
-    try {
-        const { tripId } = req.params;
+const getTripAttendance = async (req, res) => {
+    const { tripId } = req.params;
+    if (!checkInit(res)) return;
 
-        const attendanceSnapshot = await db.collection('attendance')
+    try {
+        const snapshot = await getCollegeCollection(req.collegeId, 'attendance')
             .where('tripId', '==', tripId)
-            .where('collegeId', '==', req.collegeId)
             .get();
 
-        const attendance = attendanceSnapshot.docs.map(doc => ({
+        const attendance = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
         }));
@@ -948,8 +958,7 @@ async function getTodayAttendance(req, res) {
 
         // Fetch records for this bus. We filter in-memory to catch legacy docs 
         // that might miss 'createdAt' or 'direction' fields but are from today.
-        const attendanceSnapshot = await db.collection('attendance')
-            .where('collegeId', '==', req.collegeId)
+        const attendanceSnapshot = await getCollegeCollection(req.collegeId, 'attendance')
             .where('busId', '==', busId)
             .where('direction', '==', direction) // Hardened: DB-level filter
             .get();
@@ -1000,16 +1009,12 @@ async function getTodayAttendance(req, res) {
 // @desc    Get students assigned to a specific bus (for drivers)
 // @route   GET /api/driver/buses/:busId/students
 // @access  Private (Driver)
-async function getBusStudents(req, res) {
+const getBusStudents = async (req, res) => {
+    const { busId } = req.params;
+    if (!checkInit(res)) return;
+
     try {
-        const { busId } = req.params;
-        const collegeId = req.collegeId;
-
-        if (!busId) return res.status(400).json({ success: false, message: 'Bus ID required' });
-
-        // Fetch students who have assignedBusId === busId
-        const snapshot = await db.collection('students')
-            .where('collegeId', '==', collegeId)
+        const snapshot = await getCollegeCollection(req.collegeId, 'students')
             .where('assignedBusId', '==', busId)
             .get();
 
@@ -1045,11 +1050,11 @@ async function generateHandoverOTP(req, res) {
 
         if (!studentId) return res.status(400).json({ success: false, message: 'Student ID required' });
 
-        const tripRef = db.collection('trips').doc(tripId);
+        const tripRef = getCollegeCollection(req.collegeId, 'trips').doc(tripId);
         const tripDoc = await tripRef.get();
         if (!tripDoc.exists) return res.status(404).json({ success: false, message: 'Trip not found' });
 
-        const studentDoc = await db.collection('students').doc(studentId).get();
+        const studentDoc = await getCollegeCollection(req.collegeId, 'students').doc(studentId).get();
         if (!studentDoc.exists) return res.status(404).json({ success: false, message: 'Student not found' });
 
         const studentData = studentDoc.data();
@@ -1059,7 +1064,7 @@ async function generateHandoverOTP(req, res) {
 
         // Store OTP in a new collection 'handoffs'
         const handoffId = `${tripId}_${studentId}`;
-        await db.collection('handoffs').doc(handoffId).set({
+        await getCollegeCollection(req.collegeId, 'handoffs').doc(handoffId).set({
             tripId,
             studentId,
             studentName: studentData.name || 'Unknown Student',
@@ -1093,7 +1098,7 @@ async function generateHandoverOTP(req, res) {
             await messaging.send(message).catch(err => console.error('[HandoverOTP] FCM failed:', err));
 
             // Store in user_notifications for the bell icon in student app
-            await db.collection('user_notifications').add({
+            await getCollegeCollection(req.collegeId, 'user_notifications').add({
                 studentId,
                 title,
                 body,
@@ -1123,7 +1128,7 @@ async function verifyHandoverOTP(req, res) {
         if (!studentId || !otp) return res.status(400).json({ success: false, message: 'Student ID and OTP are required' });
 
         const handoffId = `${tripId}_${studentId}`;
-        const handoffRef = db.collection('handoffs').doc(handoffId);
+        const handoffRef = getCollegeCollection(req.collegeId, 'handoffs').doc(handoffId);
         const handoffDoc = await handoffRef.get();
 
         if (!handoffDoc.exists) return res.status(404).json({ success: false, message: 'Handoff session not found' });
@@ -1148,7 +1153,7 @@ async function verifyHandoverOTP(req, res) {
         const datePrefix = new Date().toISOString().split('T')[0];
         // Use busId from handoffData for consistent attendance grouping
         const attendanceId = `${datePrefix}__${handoffData.busId}__dropoff__${studentId}`;
-        const attendanceRef = db.collection('attendance').doc(attendanceId);
+        const attendanceRef = getCollegeCollection(req.collegeId, 'attendance').doc(attendanceId);
 
         await db.runTransaction(async (transaction) => {
             transaction.update(handoffRef, {

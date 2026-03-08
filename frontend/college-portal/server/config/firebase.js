@@ -110,10 +110,27 @@ try {
     console.error('[Firebase Init Error]', error); // Log full error object
 }
 
+/**
+ * Helper to get a college-scoped collection reference
+ * Structure: /colleges/{collegeId}/{collectionName}
+ */
+const getCollegeCollection = (collegeId, collectionName) => {
+    if (!db) {
+        console.error(`[Firebase] Attempted to access collection ${collectionName} but DB is not initialized.`);
+        throw new Error('Database not initialized');
+    }
+    if (!collegeId) {
+        console.error(`[Firebase] Attempted to access collection ${collectionName} without a collegeId.`);
+        throw new Error('College ID required for this operation');
+    }
+    return db.collection('colleges').doc(collegeId).collection(collectionName);
+};
+
 module.exports = {
     admin,
     db,
     auth,
+    getCollegeCollection,
     initializationError,
     messaging: admin.apps.length ? admin.messaging() : null
 };

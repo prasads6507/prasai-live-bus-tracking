@@ -6,6 +6,8 @@ import '../../features/driver/services/background_tracking_service.dart';
 class TrackingLifecycleManager {
   static Stream<bool> isTripActive(String collegeId, String busId) {
     return FirebaseFirestore.instance
+        .collection('colleges')
+        .doc(collegeId)
         .collection('buses')
         .doc(busId)
         .snapshots()

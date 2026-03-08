@@ -73,7 +73,14 @@ class _NotificationCard extends ConsumerWidget {
         child: const Icon(Icons.delete_outline, color: Colors.white),
       ),
       onDismissed: (_) {
-        ref.read(firestoreProvider).collection('user_notifications').doc(notification.id).delete();
+        final collegeId = ref.read(selectedCollegeIdProvider);
+        if (collegeId == null) return;
+        ref.read(firestoreProvider)
+            .collection('colleges')
+            .doc(collegeId)
+            .collection('user_notifications')
+            .doc(notification.id)
+            .delete();
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
@@ -139,7 +146,14 @@ class _NotificationCard extends ConsumerWidget {
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
                       onPressed: () {
-                        ref.read(firestoreProvider).collection('user_notifications').doc(notification.id).delete();
+                        final collegeId = ref.read(selectedCollegeIdProvider);
+                        if (collegeId == null) return;
+                        ref.read(firestoreProvider)
+                            .collection('colleges')
+                            .doc(collegeId)
+                            .collection('user_notifications')
+                            .doc(notification.id)
+                            .delete();
                       },
                     ),
                   ],
@@ -183,7 +197,11 @@ class _NotificationCard extends ConsumerWidget {
                 alignment: Alignment.centerRight,
                 child: TextButton(
                   onPressed: () {
+                    final collegeId = ref.read(selectedCollegeIdProvider);
+                    if (collegeId == null) return;
                     ref.read(firestoreProvider)
+                        .collection('colleges')
+                        .doc(collegeId)
                         .collection('user_notifications')
                         .doc(notification.id)
                         .update({'read': true});

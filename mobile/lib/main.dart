@@ -116,7 +116,10 @@ class _MyAppState extends ConsumerState<MyApp> {
       debugPrint('[FCM] Session restored, ensuring token is registered...');
 
       try {
+        // 1. Try scoped users (Admin/Driver)
         var userDoc = await FirebaseFirestore.instance
+            .collection('colleges')
+            .doc(collegeId)
             .collection('users')
             .doc(user.uid)
             .get();
@@ -125,12 +128,24 @@ class _MyAppState extends ConsumerState<MyApp> {
         if (userDoc.exists) {
           role = userDoc.data()?['role'] ?? 'user';
         } else {
+          // 2. Try scoped students
           userDoc = await FirebaseFirestore.instance
+              .collection('colleges')
+              .doc(collegeId)
               .collection('students')
               .doc(user.uid)
               .get();
           if (userDoc.exists) {
             role = 'student';
+          } else {
+            // 3. Fallback to global users (Legacy Owner)
+            userDoc = await FirebaseFirestore.instance
+                .collection('users')
+                .doc(user.uid)
+                .get();
+            if (userDoc.exists) {
+              role = userDoc.data()?['role'] ?? 'owner';
+            }
           }
         }
 

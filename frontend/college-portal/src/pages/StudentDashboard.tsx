@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Bus, LogOut, User, MapPin, Search, Star, X, Crosshair, AlertCircle, ArrowLeft, Clock } from 'lucide-react';
 import { validateSlug, getStudentRoutes } from '../services/api';
 import { getStreetName } from '../services/geocoding';
-import { doc, updateDoc, serverTimestamp, collection, query, where, onSnapshot } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp, collection, query, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import MapLibreMapComponent from '../components/MapLibreMapComponent';
 import useNotification from '../hooks/useNotification';
@@ -117,7 +117,7 @@ const StudentDashboard = () => {
         if (!collegeId) return;
 
         setLoading(true);
-        const qBuses = query(collection(db, 'buses'), where('collegeId', '==', collegeId));
+        const qBuses = query(collection(db, 'colleges', collegeId, 'buses'));
 
         const unsubscribeBuses = onSnapshot(qBuses, async (snapshot) => {
             const updatedBuses = snapshot.docs.map(doc => ({
@@ -173,8 +173,8 @@ const StudentDashboard = () => {
                     try {
                         const address = await getStreetName(latitude, longitude);
 
-                        // Update student document with last known location
-                        const studentRef = doc(db, 'students', user._id);
+                        // Update student document with last known location (Hierarchical)
+                        const studentRef = doc(db, 'colleges', collegeId!, 'students', user._id);
                         await updateDoc(studentRef, {
                             lastLocation: { latitude, longitude },
                             lastLocationAddress: address,

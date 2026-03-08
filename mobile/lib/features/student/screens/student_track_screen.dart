@@ -212,9 +212,9 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
           if (bus.activeTripId != null) {
             if (_currentTripId != bus.activeTripId) {
               _currentTripId = bus.activeTripId;
-              _subscribeTripProgress(bus.activeTripId!);
+              _subscribeTripProgress(collegeId, bus.activeTripId!);
               _setupLifecycleListener(collegeId, bus.id);
-              _setupNotificationListener(bus.activeTripId!);
+              _setupNotificationListener(collegeId, bus.activeTripId!);
             }
           } else {
             // Trip ended - Kill all GPS/Tracking
@@ -247,9 +247,11 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
     });
   }
 
-  void _setupNotificationListener(String tripId) {
+  void _setupNotificationListener(String collegeId, String tripId) {
     _notifSubscription?.cancel();
     _notifSubscription = FirebaseFirestore.instance
+        .collection('colleges')
+        .doc(collegeId)
         .collection('stopArrivals')
         .where('tripId', isEqualTo: tripId)
         .orderBy('timestamp', descending: true)
@@ -280,9 +282,11 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
 
 
 
-  void _subscribeTripProgress(String tripId) {
+  void _subscribeTripProgress(String collegeId, String tripId) {
     _tripSubscription?.cancel();
     _tripSubscription = FirebaseFirestore.instance
+        .collection('colleges')
+        .doc(collegeId)
         .collection('trips')
         .doc(tripId)
         .snapshots()

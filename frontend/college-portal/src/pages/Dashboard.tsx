@@ -109,8 +109,8 @@ const Dashboard = () => {
 
         console.log('Setting up real-time bus subscription for college:', currentCollegeId);
 
-        // Real-time listener for buses (Replaces 30s polling)
-        const qBuses = query(collection(db, 'buses'), where('collegeId', '==', currentCollegeId));
+        // Real-time listener for buses (Hierarchical)
+        const qBuses = query(collection(db, 'colleges', currentCollegeId, 'buses'));
         const unsubscribeBuses = onSnapshot(qBuses, (snapshot) => {
             const updatedBuses = snapshot.docs.map(doc => ({
                 _id: doc.id,
@@ -121,8 +121,8 @@ const Dashboard = () => {
             console.error('[Dashboard] Buses snapshot listener failed:', err);
         });
 
-        // Listen for real-time updates to 'routes' collection
-        const qRoutes = query(collection(db, 'routes'), where('collegeId', '==', currentCollegeId));
+        // Listen for real-time updates to 'routes' sub-collection
+        const qRoutes = query(collection(db, 'colleges', currentCollegeId, 'routes'));
         const unsubscribeRoutes = onSnapshot(qRoutes, (snapshot) => {
             const updatedRoutes = snapshot.docs.map(doc => ({
                 _id: doc.id,
@@ -133,10 +133,9 @@ const Dashboard = () => {
             console.error('[Dashboard] Routes snapshot listener failed:', err);
         });
 
-        // Listen for real-time notifications (Phase 4.4)
+        // Listen for real-time notifications (Scoped)
         const qNotifications = query(
-            collection(db, 'notifications'),
-            where('collegeId', '==', currentCollegeId),
+            collection(db, 'colleges', currentCollegeId, 'notifications'),
             orderBy('createdAt', 'desc'),
             limit(5)
         );
@@ -215,7 +214,7 @@ const Dashboard = () => {
     return (
         <Layout activeItem="dashboard">
             <div className="p-4 md:p-6 lg:p-8 min-h-full">
-                <motion.div 
+                <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     className="max-w-[1600px] mx-auto space-y-4 md:space-y-6"
@@ -267,7 +266,7 @@ const Dashboard = () => {
                     {/* Main Content Area: Map & Alerts Side-by-Side on Desktop */}
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                         {/* Map Section */}
-                        <Card 
+                        <Card
                             initial={{ opacity: 0, scale: 0.98 }}
                             animate={{ opacity: 1, scale: 1 }}
                             transition={{ delay: 0.2 }}
@@ -304,7 +303,7 @@ const Dashboard = () => {
                         </Card>
 
                         {/* Recent Alerts / Quick Notifications */}
-                        <motion.div 
+                        <motion.div
                             initial={{ opacity: 0, x: 20 }}
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ delay: 0.3 }}
@@ -321,8 +320,8 @@ const Dashboard = () => {
                                 <div className="space-y-4">
                                     {notifications.length > 0 ? (
                                         notifications.map((note, idx) => (
-                                            <motion.div 
-                                                key={note._id} 
+                                            <motion.div
+                                                key={note._id}
                                                 initial={{ opacity: 0, x: -10 }}
                                                 animate={{ opacity: 1, x: 0 }}
                                                 transition={{ delay: 0.4 + (idx * 0.1) }}
@@ -381,7 +380,7 @@ const Dashboard = () => {
 };
 
 const StatCard = ({ title, value, total, icon, className = '', iconBg = 'bg-slate-50', accentColor = 'bg-emerald-600' }: any) => (
-    <Card 
+    <Card
         glass={false}
         whileHover={{ y: -4, boxShadow: '0 20px 40px -15px rgba(0,0,0,0.05)' }}
         className={`flex items-center justify-between group transition-all cursor-default ${className} border border-slate-100/50`}
@@ -433,16 +432,15 @@ const BusCard = ({ bus, address }: { bus: any, address?: string }) => {
     const speedMph = Math.round(bus.speedMph ?? bus.currentSpeed ?? bus.speed ?? bus.speedMPH ?? 0);
 
     return (
-        <Card 
+        <Card
             glass={false}
             whileHover={{ y: -4, boxShadow: '0 20px 40px -15px rgba(0,0,0,0.08)' }}
             className="transition-all group relative overflow-hidden h-full flex flex-col border border-slate-100/50"
         >
             <div className="flex items-start justify-between mb-4 relative z-10 w-full">
                 <div className="flex items-center gap-4">
-                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black text-sm tracking-tighter shadow-sm border transition-colors ${
-                        bus.status === 'ON_ROUTE' ? 'bg-green-50 text-green-700 border-green-100' : 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                    }`}>
+                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black text-sm tracking-tighter shadow-sm border transition-colors ${bus.status === 'ON_ROUTE' ? 'bg-green-50 text-green-700 border-green-100' : 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                        }`}>
                         {bus.busNumber?.slice(-2) || '00'}
                     </div>
                     <div>
@@ -453,12 +451,11 @@ const BusCard = ({ bus, address }: { bus: any, address?: string }) => {
                         </p>
                     </div>
                 </div>
-                <div className={`px-2.5 py-1 rounded-full text-[9px] font-black tracking-[0.05em] uppercase border transition-all ${
-                    isLiveBus(bus) ? 'bg-green-100/50 text-green-700 border-green-200' :
-                    bus.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                    bus.status === 'MAINTENANCE' ? 'bg-orange-50 text-orange-700 border-orange-200' :
-                    'bg-slate-50 text-slate-500 border-slate-200'
-                }`}>
+                <div className={`px-2.5 py-1 rounded-full text-[9px] font-black tracking-[0.05em] uppercase border transition-all ${isLiveBus(bus) ? 'bg-green-100/50 text-green-700 border-green-200' :
+                        bus.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                            bus.status === 'MAINTENANCE' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                                'bg-slate-50 text-slate-500 border-slate-200'
+                    }`}>
                     {isLiveBus(bus) ? (
                         <span className="flex items-center gap-1.5">
                             <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
@@ -467,7 +464,7 @@ const BusCard = ({ bus, address }: { bus: any, address?: string }) => {
                     ) : bus.status || 'OFFLINE'}
                 </div>
             </div>
-            
+
             <div className="space-y-4 relative z-10 flex-1">
                 {bus.status === 'ON_ROUTE' && getBusLatLng(bus) ? (
                     <div className="flex flex-col gap-3 bg-slate-50/70 p-4 rounded-[24px] border border-slate-100/80">
@@ -500,7 +497,7 @@ const BusCard = ({ bus, address }: { bus: any, address?: string }) => {
                     <div className={`w-1.5 h-1.5 rounded-full ${stale ? 'bg-slate-300' : 'bg-green-500'} shadow-sm`}></div>
                     {getRelativeTime(lastUpdateIso ?? '')}
                 </span>
-                
+
                 <button className="text-[10px] font-extrabold text-emerald-600 hover:text-emerald-800 uppercase tracking-widest flex items-center gap-1 transition-colors">
                     Details
                     <ArrowRight size={12} />

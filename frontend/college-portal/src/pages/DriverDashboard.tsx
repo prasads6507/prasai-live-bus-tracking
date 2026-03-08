@@ -46,6 +46,8 @@ const DriverDashboard = () => {
     const [lastSentTime, setLastSentTime] = useState<string>('');
     const [currentStreetName, setCurrentStreetName] = useState<string>('');
 
+    const collegeId = localStorage.getItem('current_college_id');
+
     const watchIdRef = useRef<number | null>(null);
     const lastUpdateRef = useRef<number>(0);
     const lastHistorySaveRef = useRef<number>(0); // Track when we last saved to history
@@ -85,7 +87,8 @@ const DriverDashboard = () => {
             }
 
             try {
-                const q = query(collection(db, 'stops'), where('routeId', '==', selectedBus.assignedRouteId));
+                if (!collegeId) return;
+                const q = query(collection(db, 'colleges', collegeId, 'stops'), where('routeId', '==', selectedBus.assignedRouteId));
                 const snapshot = await getDocs(q);
                 const fetchedStops = snapshot.docs.map(doc => ({ _id: doc.id, ...doc.data() }));
                 // Sort by order/sequence if available, assuming order field exists
@@ -117,9 +120,9 @@ const DriverDashboard = () => {
                     // Update local state to avoid repeated writes
                     setCompletedStops(prev => new Set(prev).add(stop.stopId || stop._id));
 
-                    // Write completion to Firestore (Trip History)
+                    // Write completion to Firestore (Hierarchical Trip History)
                     try {
-                        const stopRef = doc(db, 'trips', tripId, 'stops', stop.stopId || stop._id);
+                        const stopRef = doc(db, 'colleges', collegeId!, 'trips', tripId, 'stops', stop.stopId || stop._id);
                         await setDoc(stopRef, {
                             stopId: stop.stopId || stop._id,
                             stopName: stop.stopName,
@@ -127,8 +130,8 @@ const DriverDashboard = () => {
                             status: 'COMPLETED'
                         });
 
-                        // Sync to BUS document for real-time student view
-                        const busRef = doc(db, 'buses', selectedBusId);
+                        // Sync to BUS document for real-time student view (Hierarchical)
+                        const busRef = doc(db, 'colleges', collegeId!, 'buses', selectedBusId);
                         const updatedCompletedStops = Array.from(new Set([...Array.from(completedStops), stop.stopId || stop._id]));
                         await updateDoc(busRef, {
                             completedStops: updatedCompletedStops
@@ -312,9 +315,9 @@ const DriverDashboard = () => {
                     getStreetName(latitude, longitude).then(street => setCurrentStreetName(street));
                 }
 
-                // Update location in Firestore every ~3 seconds
+                // Update location in Firestore every ~3 seconds (Hierarchical)
                 if (now - lastUpdateRef.current > 3000) {
-                    const busRef = doc(db, 'buses', busId);
+                    const busRef = doc(db, 'colleges', collegeId!, 'buses', busId);
                     updateDoc(busRef, {
                         status: 'ON_ROUTE',
                         activeTripId: currentTripId,
@@ -448,8 +451,8 @@ const DriverDashboard = () => {
         const targetBusId = busId || selectedBusId;
         if (!targetBusId) return;
         try {
-            // Direct Firestore update for status changes (minimal writes)
-            const busRef = doc(db, 'buses', targetBusId);
+            // Direct Firestore update for status changes (minimal writes) - Hierarchical
+            const busRef = doc(db, 'colleges', collegeId!, 'buses', targetBusId);
             await updateDoc(busRef, {
                 status,
                 lastUpdated: new Date().toISOString()

@@ -147,18 +147,22 @@ final assignedBusProvider = StreamProvider<Bus?>((ref) {
 
 final activeTripIdProvider = StreamProvider<String?>((ref) {
   final assignedBus = ref.watch(assignedBusProvider).value;
-  if (assignedBus == null) return Stream.value(null);
+  final collegeId = ref.watch(selectedCollegeIdProvider);
+  if (assignedBus == null || collegeId == null) return Stream.value(null);
 
   final firestore = ref.watch(firestoreProvider);
-  return firestore.collection('buses').doc(assignedBus.id).snapshots().map((snapshot) {
+  return firestore.collection('colleges').doc(collegeId).collection('buses').doc(assignedBus.id).snapshots().map((snapshot) {
     if (!snapshot.exists) return null;
     return snapshot.data()?['activeTripId'] as String?;
   });
 });
 
 final tripProvider = StreamProvider.family<Map<String, dynamic>?, String>((ref, tripId) {
+  final collegeId = ref.watch(selectedCollegeIdProvider);
+  if (collegeId == null) return Stream.value(null);
+  
   final firestore = ref.watch(firestoreProvider);
-  return firestore.collection('trips').doc(tripId).snapshots().map((snapshot) {
+  return firestore.collection('colleges').doc(collegeId).collection('trips').doc(tripId).snapshots().map((snapshot) {
     return snapshot.data();
   });
 });
@@ -186,10 +190,13 @@ final busStudentsProvider = FutureProvider.family<List<UserProfile>, String>((re
 
 final userNotificationsProvider = StreamProvider<List<UserNotification>>((ref) {
   final user = ref.watch(authStateProvider).value;
-  if (user == null) return Stream.value([]);
+  final collegeId = ref.watch(selectedCollegeIdProvider);
+  if (user == null || collegeId == null) return Stream.value([]);
 
   final firestore = ref.watch(firestoreProvider);
   return firestore
+      .collection('colleges')
+      .doc(collegeId)
       .collection('user_notifications')
       .where('studentId', isEqualTo: user.uid)
       .orderBy('createdAt', descending: true)

@@ -1062,7 +1062,12 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
       final tripId = prefs.getString('track_trip_id');
       if (tripId == null) return;
 
-      final tripDoc = await FirebaseFirestore.instance.collection('trips').doc(tripId).get();
+      final tripDoc = await FirebaseFirestore.instance
+          .collection('colleges')
+          .doc(widget.collegeId)
+          .collection('trips')
+          .doc(tripId)
+          .get();
       if (!tripDoc.exists) return;
 
       final data = tripDoc.data()!;
