@@ -175,7 +175,7 @@ const registerOwner = async (req, res) => {
         const newUser = {
             userId,
             name,
-            email,
+            email: normalizedEmail,
             passwordHash,
             role: 'OWNER',
             collegeId: 'OWNER_GLOBAL',

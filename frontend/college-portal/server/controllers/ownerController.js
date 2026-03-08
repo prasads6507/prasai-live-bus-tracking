@@ -27,6 +27,7 @@ const createCollege = async (req, res) => {
         password,
         phone
     } = req.body;
+    const normalizedFacultyEmail = (facultyEmail || '').toLowerCase().trim();
 
     try {
         const collegeId = slug;
@@ -40,7 +41,7 @@ const createCollege = async (req, res) => {
         }
 
         // 2. Check if faculty email is already taken
-        const userSnapshot = await db.collectionGroup('users').where('email', '==', facultyEmail).get();
+        const userSnapshot = await db.collectionGroup('users').where('email', '==', normalizedFacultyEmail).get();
         if (!userSnapshot.empty) {
             return res.status(400).json({ message: 'Faculty Email already exists.' });
         }
@@ -52,7 +53,7 @@ const createCollege = async (req, res) => {
             branch,
             address,
             slug,
-            contactEmail: facultyEmail,
+            contactEmail: normalizedFacultyEmail,
             contactPhone: phone,
             status: 'ACTIVE',
             createdAt: new Date().toISOString()
@@ -68,7 +69,7 @@ const createCollege = async (req, res) => {
             userId,
             collegeId,
             name: facultyName,
-            email: facultyEmail,
+            email: normalizedFacultyEmail,
             phone,
             passwordHash,
             role: 'SUPER_ADMIN', // Primary contact is now Super Admin
@@ -145,9 +146,10 @@ const updateCollegeStatus = async (req, res) => {
 
 const createCollegeAdmin = async (req, res) => {
     const { collegeId, name, email, password, phone } = req.body;
+    const normalizedEmail = (email || '').toLowerCase().trim();
 
     try {
-        const userQuery = await db.collectionGroup('users').where('email', '==', email).get();
+        const userQuery = await db.collectionGroup('users').where('email', '==', normalizedEmail).get();
         if (!userQuery.empty) {
             return res.status(400).json({ message: 'User already exists' });
         }
@@ -163,7 +165,7 @@ const createCollegeAdmin = async (req, res) => {
             userId,
             collegeId,
             name,
-            email,
+            email: normalizedEmail,
             phone,
             passwordHash,
             role: 'COLLEGE_ADMIN',
@@ -194,7 +196,7 @@ const updateCollegeAdmin = async (req, res) => {
 
         const updates = {};
         if (name) updates.name = name;
-        if (email) updates.email = email;
+        if (email) updates.email = (email || '').toLowerCase().trim();
         if (phone) updates.phone = phone;
         if (req.body.role) updates.role = req.body.role; // Allow role update
 
@@ -257,34 +259,28 @@ const deleteCollegeAdmin = async (req, res) => {
 
 const getCollegeAdmins = async (req, res) => {
     try {
-        // Fetch both COLLEGE_ADMIN and SUPER_ADMIN across all colleges
-        const adminsSnap = await db.collectionGroup('users').where('role', 'in', ['COLLEGE_ADMIN', 'SUPER_ADMIN']).get();
-        const admins = adminsSnap.docs.map(doc => doc.data());
-        console.log(`[GET_ADMINS] Found ${admins.length} administrators (COLLEGE_ADMIN + SUPER_ADMIN)`);
+        const collegesSnap = await db.collection('colleges').get();
+        const enriched = [];
 
-        if (admins.length === 0) {
-            const totalUsersSamples = await db.collectionGroup('users').limit(5).get();
-            console.log(`[DEBUG] Total users sample count: ${totalUsersSamples.size}`);
-            totalUsersSamples.forEach(u => console.log(`[DEBUG] User Role Found: ${u.data().role}`));
+        for (const collegeDoc of collegesSnap.docs) {
+            const collegeId = collegeDoc.id;
+            const collegeData = collegeDoc.data();
+
+            const adminsSnap = await getCollegeCollection(collegeId, 'users')
+                .where('role', 'in', ['COLLEGE_ADMIN', 'SUPER_ADMIN'])
+                .get();
+
+            adminsSnap.docs.forEach(doc => {
+                enriched.push({
+                    ...doc.data(),
+                    collegeId,
+                    collegeName: collegeData.collegeName || collegeId,
+                    collegeStatus: collegeData.status || 'ACTIVE'
+                });
+            });
         }
 
-        // Enrich with College Name & Status - manual join
-        const collegesSnap = await db.collection('colleges').get();
-        const collegeMap = {};
-        collegesSnap.forEach(doc => {
-            const data = doc.data();
-            collegeMap[doc.id] = {
-                name: data.collegeName,
-                status: data.status
-            };
-        });
-
-        const enriched = admins.map(a => ({
-            ...a,
-            collegeName: collegeMap[a.collegeId]?.name || a.collegeId || 'Unassigned',
-            collegeStatus: collegeMap[a.collegeId]?.status || 'ACTIVE'
-        }));
-
+        console.log(`[GET_ADMINS] Found ${enriched.length} administrators via sequential lookup`);
         res.json(enriched);
     } catch (error) {
         console.error('[GET_ADMINS_ERROR]', error);
@@ -300,18 +296,20 @@ const getDashboardStats = async (req, res) => {
         let totalBuses = 0;
         let totalStudents = 0;
 
-        try {
-            // New count() aggregation
-            const busesSnap = await db.collectionGroup('buses').count().get();
-            totalBuses = busesSnap.data().count;
-            const usersSnap = await db.collectionGroup('students').count().get();
-            totalStudents = usersSnap.data().count;
-        } catch (e) {
-            console.log("Count aggregation not supported, falling back to basic size...");
-            const bSnap = await db.collectionGroup('buses').get();
-            totalBuses = bSnap.size;
-            const uSnap = await db.collectionGroup('students').get();
-            totalStudents = uSnap.size;
+        // Iterate colleges to get counts without collectionGroup indexes
+        for (const collegeDoc of collegesSnap.docs) {
+            const cid = collegeDoc.id;
+            try {
+                const bCount = await getCollegeCollection(cid, 'buses').count().get();
+                totalBuses += bCount.data().count;
+                const sCount = await getCollegeCollection(cid, 'students').count().get();
+                totalStudents += sCount.data().count;
+            } catch (e) {
+                const bQ = await getCollegeCollection(cid, 'buses').get();
+                totalBuses += bQ.size;
+                const sQ = await getCollegeCollection(cid, 'students').get();
+                totalStudents += sQ.size;
+            }
         }
 
         res.json({

@@ -25,10 +25,11 @@ const createStudent = async (req, res) => {
         if (!name || !registerNumber || !email) {
             return res.status(400).json({ message: 'Name, Register Number, and Email are required' });
         }
+        const normalizedEmail = String(email || '').toLowerCase().trim();
 
         // Check if student with this email or register number already exists in THIS college
         const existingByEmail = await getCollegeCollection(req.collegeId, 'students')
-            .where('email', '==', email)
+            .where('email', '==', normalizedEmail)
             .get();
         if (!existingByEmail.empty) {
             return res.status(400).json({ success: false, message: 'Student with this email already exists in this college' });
@@ -42,7 +43,7 @@ const createStudent = async (req, res) => {
         }
 
         // Check if email exists in users collection (Driver/Admin) in THIS college
-        const userSnapshot = await getCollegeCollection(req.collegeId, 'users').where('email', '==', email).limit(1).get();
+        const userSnapshot = await getCollegeCollection(req.collegeId, 'users').where('email', '==', normalizedEmail).limit(1).get();
         if (!userSnapshot.empty) {
             const userData = userSnapshot.docs[0].data();
             return res.status(400).json({ message: `This email is already registered as a ${userData.role} in this college.` });
@@ -56,7 +57,7 @@ const createStudent = async (req, res) => {
             name: String(name || '').trim(),
             registerNumber: String(registerNumber || '').trim(),
             rollNumber: String(rollNumber || '').trim(),
-            email: String(email || '').toLowerCase().trim(),
+            email: normalizedEmail,
             phone: String(phone || '').trim(),
             passwordHash: null, // Will be set on first login
             isFirstLogin: true,
@@ -191,20 +192,21 @@ const createBulkStudents = async (req, res) => {
         // Get existing students for duplicate check within THIS college
         const existingSnapshot = await getCollegeCollection(req.collegeId, 'students')
             .get();
-        const existingEmails = new Set(existingSnapshot.docs.map(d => d.data().email));
-        const existingRegNos = new Set(existingSnapshot.docs.map(d => d.data().registerNumber));
+        const existingEmails = new Set(existingSnapshot.docs.map(d => (d.data().email || '').toLowerCase().trim()));
+        const existingRegNos = new Set(existingSnapshot.docs.map(d => String(d.data().registerNumber || '').trim()));
 
         for (const student of students) {
             try {
                 const { name, registerNumber, rollNumber, email, phone } = student;
+                const normalizedEmail = (email || '').toLowerCase().trim();
 
                 if (!name || !registerNumber || !email) {
-                    results.errors.push({ student, error: 'Missing required fields (name, registerNumber, email)' });
+                    results.errors.push({ student, error: 'Name, Register Number, and Email are required' });
                     continue;
                 }
 
-                if (existingEmails.has(email)) {
-                    results.errors.push({ student, error: `Email ${email} already exists in this college` });
+                if (existingEmails.has(normalizedEmail)) {
+                    results.errors.push({ student, error: 'This email is already registered in this college.' });
                     continue;
                 }
 
@@ -214,7 +216,7 @@ const createBulkStudents = async (req, res) => {
                 }
 
                 // Check if email exists in users collection (Driver/Admin)
-                const userSnapshot = await getCollegeCollection(req.collegeId, 'users').where('email', '==', email).limit(1).get();
+                const userSnapshot = await getCollegeCollection(req.collegeId, 'users').where('email', '==', normalizedEmail).limit(1).get();
                 if (!userSnapshot.empty) {
                     const userData = userSnapshot.docs[0].data();
                     results.errors.push({ student, error: `Email ${email} is already registered as a ${userData.role}.` });
@@ -228,7 +230,7 @@ const createBulkStudents = async (req, res) => {
                     name: String(name || '').trim(),
                     registerNumber: String(registerNumber || '').trim(),
                     rollNumber: String(rollNumber || '').trim(),
-                    email: String(email || '').toLowerCase().trim(),
+                    email: normalizedEmail,
                     phone: String(phone || '').trim(),
                     passwordHash: null,
                     isFirstLogin: true,

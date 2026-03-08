@@ -302,14 +302,15 @@ const createBulkUsers = async (req, res) => {
                 }
 
                 // 1. Create in Firebase Auth first (for login compatibility)
+                const normalizedEmail = (user.email || '').toLowerCase().trim();
                 const authUser = await admin.auth().createUser({
-                    email: user.email,
+                    email: normalizedEmail,
                     password: user.phone.toString(),
                     displayName: user.name
                 }).catch(async (err) => {
                     if (err.code === 'auth/email-already-exists') {
                         // If email exists in Auth, try to get the user to link it
-                        return await admin.auth().getUserByEmail(user.email);
+                        return await admin.auth().getUserByEmail(normalizedEmail);
                     }
                     throw err;
                 });
@@ -322,7 +323,7 @@ const createBulkUsers = async (req, res) => {
                     userId,
                     collegeId: req.collegeId,
                     name: user.name,
-                    email: user.email,
+                    email: normalizedEmail,
                     phone: user.phone,
                     passwordHash,
                     role,
@@ -363,22 +364,24 @@ const createUser = async (req, res) => {
         return res.status(400).json({ message: 'Invalid role for college admin creation' });
     }
 
+    const normalizedEmail = (email || '').toLowerCase().trim();
+
     try {
         // Check if email exists in the college's users collection
-        const existingUserSnapshot = await getCollegeCollection(req.collegeId, 'users').where('email', '==', email).limit(1).get();
+        const existingUserSnapshot = await getCollegeCollection(req.collegeId, 'users').where('email', '==', normalizedEmail).limit(1).get();
         if (!existingUserSnapshot.empty) {
             return res.status(400).json({ message: 'This email is already registered for this college.' });
         }
 
         // 1. Create in Firebase Auth (ensures login works on mobile)
         const authUser = await admin.auth().createUser({
-            email,
+            email: normalizedEmail,
             password,
             displayName: name
         }).catch(async (err) => {
             if (err.code === 'auth/email-already-exists') {
                 // If email exists in Auth, try to get the user to link it
-                return await admin.auth().getUserByEmail(email);
+                return await admin.auth().getUserByEmail(normalizedEmail);
             }
             throw err;
         });
@@ -391,7 +394,7 @@ const createUser = async (req, res) => {
             userId,
             collegeId: req.collegeId,
             name,
-            email,
+            email: normalizedEmail,
             phone,
             passwordHash,
             role,
@@ -458,7 +461,7 @@ const updateUser = async (req, res) => {
 
         const updateData = {};
         if (name) updateData.name = name;
-        if (email) updateData.email = email;
+        if (email) updateData.email = (email || '').toLowerCase().trim();
         if (phone !== undefined) updateData.phone = phone;
         if (status !== undefined) updateData.status = status;
         updateData.updatedAt = new Date().toISOString();
@@ -1107,13 +1110,14 @@ const createCollegeAdmin = async (req, res) => {
         }
 
         const { name, email, phone, password, collegeId } = req.body;
+        const normalizedEmail = (email || '').toLowerCase().trim();
 
         if (!name || !email || !password) {
             return res.status(400).json({ message: 'Name, email, and password are required' });
         }
 
         // Check if email already exists
-        const existingUser = await getCollegeCollection(req.collegeId, 'users').where('email', '==', email).get();
+        const existingUser = await getCollegeCollection(req.collegeId, 'users').where('email', '==', normalizedEmail).get();
         if (!existingUser.empty) {
             return res.status(400).json({ message: 'Email already in use' });
         }
@@ -1125,7 +1129,7 @@ const createCollegeAdmin = async (req, res) => {
         const newAdmin = {
             userId,
             name,
-            email,
+            email: normalizedEmail,
             phone: phone || '',
             passwordHash,
             role: 'COLLEGE_ADMIN',
@@ -1177,7 +1181,7 @@ const updateCollegeAdmin = async (req, res) => {
 
         const updateData = { updatedAt: new Date().toISOString() };
         if (name) updateData.name = name;
-        if (email) updateData.email = email;
+        if (email) updateData.email = (email || '').toLowerCase().trim();
         if (phone !== undefined) updateData.phone = phone;
         if (role && (role === 'COLLEGE_ADMIN' || role === 'SUPER_ADMIN')) {
             updateData.role = role;
