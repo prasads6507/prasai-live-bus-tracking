@@ -56,7 +56,7 @@ const loginUser = async (req, res) => {
         // 2. Search in Hierarchy if collegeId is known
         if (collegeId) {
             // Check Scoped Users (Admin, Driver)
-            const scopedUserSnap = await getCollegeCollection(collegeId, 'users').where('email', '==', email).limit(1).get();
+            const scopedUserSnap = await getCollegeCollection(collegeId, 'users').where('email', '==', normalizedEmail).limit(1).get();
             if (!scopedUserSnap.empty) {
                 userData = scopedUserSnap.docs[0].data();
                 loginType = 'USER';
@@ -72,7 +72,7 @@ const loginUser = async (req, res) => {
 
         // 3. Fallback: Search GLOBAL Users (Owners) and cross-tenant users if still not found
         if (!userData) {
-            const globalUserSnap = await db.collectionGroup('users').where('email', '==', email).limit(1).get();
+            const globalUserSnap = await db.collectionGroup('users').where('email', '==', normalizedEmail).limit(1).get();
             if (!globalUserSnap.empty) {
                 const docSnap = globalUserSnap.docs[0];
                 userData = docSnap.data();
@@ -159,9 +159,10 @@ const loginUser = async (req, res) => {
 // @access  Public (Should ideally be protected by a secret)
 const registerOwner = async (req, res) => {
     const { name, email, password } = req.body;
+    const normalizedEmail = (email || '').toLowerCase().trim();
 
     try {
-        const userQuery = await db.collectionGroup('users').where('email', '==', email).limit(1).get();
+        const userQuery = await db.collectionGroup('users').where('email', '==', normalizedEmail).limit(1).get();
 
         if (!userQuery.empty) { // Corrected logic: if userQuery is NOT empty, user exists
             return res.status(400).json({ message: 'User already exists' });
@@ -249,9 +250,10 @@ const googleLogin = async (req, res) => {
         // Verify Firebase ID Token
         const decodedToken = await admin.auth().verifyIdToken(token);
         const { email, name, uid } = decodedToken;
+        const normalizedEmail = (email || '').toLowerCase().trim();
 
         const usersRef = db.collection('users');
-        const snapshot = await usersRef.where('email', '==', email).limit(1).get();
+        const snapshot = await db.collectionGroup('users').where('email', '==', normalizedEmail).limit(1).get();
 
         let userData;
         let userId;

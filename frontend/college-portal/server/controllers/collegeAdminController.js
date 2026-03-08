@@ -537,7 +537,6 @@ const assignDriver = async (req, res) => {
 const getAssignments = async (req, res) => {
     try {
         const snapshot = await getCollegeCollection(req.collegeId, 'assignments')
-            .where('collegeId', '==', req.collegeId)
             .get();
         const assignments = snapshot.docs.map(doc => ({ _id: doc.id, ...doc.data() }));
         res.json(assignments);
@@ -560,14 +559,14 @@ const getTripHistory = async (req, res) => {
         let trips = [];
 
         // 1. First, get trips from ROOT collection (new format)
-        const rootTripsSnapshot = await getCollegeCollection(req.collegeId, 'trips')
-            .where('collegeId', '==', req.collegeId)
+        const snapshot = await getCollegeCollection(req.collegeId, 'trips')
+            .orderBy('startTime', 'desc')
             .limit(100)
             .get();
 
-        console.log('Found trips in root collection:', rootTripsSnapshot.size);
+        console.log('Found trips in root collection:', snapshot.size);
 
-        rootTripsSnapshot.docs.forEach(doc => {
+        snapshot.docs.forEach(doc => {
             const data = doc.data();
             trips.push({
                 _id: doc.id,
@@ -588,7 +587,6 @@ const getTripHistory = async (req, res) => {
 
         // 2. Also get trips from subcollections (old format)
         const busesSnapshot = await getCollegeCollection(req.collegeId, 'buses')
-            .where('collegeId', '==', req.collegeId)
             .get();
 
         console.log('Found buses:', busesSnapshot.size);
@@ -653,7 +651,6 @@ const updateTrip = async (req, res) => {
         // If not found in root, search subcollections
         if (!tripDoc.exists) {
             const busesSnapshot = await getCollegeCollection(req.collegeId, 'buses')
-                .where('collegeId', '==', req.collegeId)
                 .get();
 
             for (const busDoc of busesSnapshot.docs) {
@@ -714,7 +711,6 @@ const deleteTrip = async (req, res) => {
         // If not found in root, search subcollections
         if (!tripDoc.exists) {
             const busesSnapshot = await getCollegeCollection(req.collegeId, 'buses')
-                .where('collegeId', '==', req.collegeId)
                 .get();
 
             for (const busDoc of busesSnapshot.docs) {
@@ -763,7 +759,6 @@ const adminEndTrip = async (req, res) => {
         // If not found in root, search subcollections
         if (!tripDoc.exists) {
             const busesSnapshot = await getCollegeCollection(req.collegeId, 'buses')
-                .where('collegeId', '==', req.collegeId)
                 .get();
 
             for (const busDoc of busesSnapshot.docs) {
@@ -913,7 +908,6 @@ const bulkDeleteTrips = async (req, res) => {
 
                 // 2. Search all buses subcollections (legacy support)
                 const busesSnapshot = await getCollegeCollection(req.collegeId, 'buses')
-                    .where('collegeId', '==', req.collegeId)
                     .get();
 
                 for (const busDoc of busesSnapshot.docs) {
@@ -965,7 +959,6 @@ const getTripPath = async (req, res) => {
         // If not found in root, search subcollections (legacy support)
         if (!tripDoc.exists) {
             const busesSnapshot = await getCollegeCollection(req.collegeId, 'buses')
-                .where('collegeId', '==', req.collegeId)
                 .get();
 
             for (const busDoc of busesSnapshot.docs) {
@@ -1087,8 +1080,7 @@ const getCollegeAdmins = async (req, res) => {
         }
 
         const snapshot = await getCollegeCollection(req.collegeId, 'users')
-            .where('collegeId', '==', req.collegeId)
-            .where('role', 'in', ['COLLEGE_ADMIN', 'SUPER_ADMIN'])
+            .where('role', 'in', ['COLLEGE_ADMIN', 'SUPER_ADMIN', 'OWNER'])
             .get();
 
         const admins = snapshot.docs.map(doc => ({
@@ -1284,7 +1276,6 @@ const assignStudentsToStop = async (req, res) => {
 const getStudentAssignments = async (req, res) => {
     try {
         const snapshot = await getCollegeCollection(req.collegeId, 'students')
-            .where('collegeId', '==', req.collegeId)
             .get();
 
         const students = snapshot.docs.map(doc => ({
@@ -1326,7 +1317,6 @@ const getBusStudents = async (req, res) => {
 
         // Fetch students who have assignedBusId === busId
         const snapshot = await getCollegeCollection(req.collegeId, 'students')
-            .where('collegeId', '==', collegeId)
             .where('assignedBusId', '==', busId)
             .get();
 
