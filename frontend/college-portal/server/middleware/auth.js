@@ -40,22 +40,31 @@ const protect = async (req, res, next) => {
 
             // Fallback Lookups
             if (!userData) {
-                // Check root 'users' (Global Owners)
-                const rootDoc = await db.collection('users').doc(uid).get();
-                if (rootDoc.exists) {
-                    userData = rootDoc.data();
-                } else {
-                    // Last Resort: CollectionGroup (Depends on indexes)
-                    const userQuery = await db.collectionGroup('users').where('userId', '==', uid).limit(1).get();
-                    if (!userQuery.empty) {
-                        userData = userQuery.docs[0].data();
+                try {
+                    // Tier 1: Check root 'users' (Global Owners) - Stable, no index needed
+                    const rootDoc = await db.collection('users').doc(uid).get();
+                    if (rootDoc.exists) {
+                        userData = rootDoc.data();
                     } else {
-                        const studentQuery = await db.collectionGroup('students').where('studentId', '==', uid).limit(1).get();
-                        if (!studentQuery.empty) {
-                            userData = studentQuery.docs[0].data();
-                            userData.role = 'STUDENT';
+                        // Tier 2: CollectionGroup (Risk of FAILED_PRECONDITION if index missing)
+                        // Wrap in try-catch to prevent a missing index from crashing the middleware
+                        try {
+                            const userQuery = await db.collectionGroup('users').where('userId', '==', uid).limit(1).get();
+                            if (!userQuery.empty) {
+                                userData = userQuery.docs[0].data();
+                            } else {
+                                const studentQuery = await db.collectionGroup('students').where('studentId', '==', uid).limit(1).get();
+                                if (!studentQuery.empty) {
+                                    userData = studentQuery.docs[0].data();
+                                    userData.role = 'STUDENT';
+                                }
+                            }
+                        } catch (groupError) {
+                            console.warn(`[AuthMiddleware] CollectionGroup lookup failed for UID ${uid}:`, groupError.message);
                         }
                     }
+                } catch (error) {
+                    console.error('[AuthMiddleware] Fallback lookup error:', error.message);
                 }
             }
 

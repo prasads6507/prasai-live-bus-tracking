@@ -20,6 +20,15 @@ const generateToken = (id, role, collegeId) => {
 // @route   POST /api/auth/login
 // @access  Public
 const loginUser = async (req, res) => {
+    // Proactive check for Firebase initialization errors
+    if (initializationError) {
+        console.error('[Login] Aborting: Firebase failed to initialize:', initializationError.message);
+        return res.status(500).json({
+            message: 'Database Configuration Error. Please contact the administrator.',
+            details: initializationError.message
+        });
+    }
+
     const { email, password, orgSlug } = req.body;
     const normalizedEmail = String(email || '').toLowerCase().trim();
 
@@ -70,28 +79,42 @@ const loginUser = async (req, res) => {
             }
         }
 
-        // 3. Fallback: Search GLOBAL Users (Owners) and cross-tenant users if still not found
+        // 3. Fallback: Search cross-tenant users and GLOBAL Users (Owners)
         if (!userData) {
-            const globalUserSnap = await db.collectionGroup('users').where('email', '==', normalizedEmail).limit(1).get();
-            if (!globalUserSnap.empty) {
-                const docSnap = globalUserSnap.docs[0];
-                userData = docSnap.data();
+            try {
+                // FIRST: Check root 'users' collection directly (Stable, no special index needed for Owners)
+                const rootUserSnap = await db.collection('users').where('email', '==', normalizedEmail).limit(1).get();
+                if (!rootUserSnap.empty) {
+                    userData = rootUserSnap.docs[0].data();
+                    loginType = 'USER';
+                    console.log(`[Login] Found global user in root collection: ${normalizedEmail}`);
+                } else {
+                    // SECOND: CollectionGroup as LAST resort (Risk of FAILED_PRECONDITION if index missing)
+                    console.log(`[Login] Checking collectionGroup for ${normalizedEmail}...`);
+                    const globalUserSnap = await db.collectionGroup('users').where('email', '==', normalizedEmail).limit(1).get();
+                    if (!globalUserSnap.empty) {
+                        const docSnap = globalUserSnap.docs[0];
+                        userData = docSnap.data();
+                        loginType = 'USER';
+                        console.log(`[Login] Found user via collectionGroup: ${normalizedEmail}`);
+                    }
+                }
 
-                // If it's a scoped user (has collegeId) but we found them via collectionGroup because no orgSlug was provided
-                if (userData.collegeId) {
+                // Post-find logic
+                if (userData && userData.collegeId) {
                     collegeId = userData.collegeId;
                 }
-                loginType = 'USER';
-                // Security: Global users must be OWNERs (except for migration period)
-                if (userData.role !== 'OWNER' && orgSlug) {
-                    // If they are not owner but logged into a specific slug, they should have been found in the scoped search
-                    // If we found them here, it means they are currently "mixed up" at the root.
-                    // We allow this temporarily for migration, but enforce collegeId match.
+
+                if (userData && loginType === 'USER' && userData.role !== 'OWNER' && orgSlug) {
                     if (userData.collegeId !== collegeId && userData.collegeId !== orgSlug) {
-                        console.warn(`[Login] Organization Mismatch for legacy user ${userData.email}`);
+                        console.warn(`[Login] Organization Mismatch for user ${userData.email}`);
                         return res.status(401).json({ message: 'Invalid Organization for this account.' });
                     }
                 }
+            } catch (queryError) {
+                console.error(`[Login] Global search error (likely missing index):`, queryError.message);
+                // If it failed, it means we definitely can't find the user globally anyway without the index.
+                // We let it proceed to the !userData check below.
             }
         }
 
@@ -162,9 +185,24 @@ const registerOwner = async (req, res) => {
     const normalizedEmail = (email || '').toLowerCase().trim();
 
     try {
-        const userQuery = await db.collectionGroup('users').where('email', '==', normalizedEmail).limit(1).get();
+        // Tiered search for existing user
+        let existingUser = false;
 
-        if (!userQuery.empty) { // Corrected logic: if userQuery is NOT empty, user exists
+        // 1. Check root collection
+        const rootSnap = await db.collection('users').where('email', '==', normalizedEmail).limit(1).get();
+        if (!rootSnap.empty) existingUser = true;
+
+        // 2. Check collectionGroup (Safely)
+        if (!existingUser) {
+            try {
+                const globalSnap = await db.collectionGroup('users').where('email', '==', normalizedEmail).limit(1).get();
+                if (!globalSnap.empty) existingUser = true;
+            } catch (e) {
+                console.warn('[RegisterOwner] CollectionGroup check failed (missing index):', e.message);
+            }
+        }
+
+        if (existingUser) {
             return res.status(400).json({ message: 'User already exists' });
         }
 
@@ -182,7 +220,7 @@ const registerOwner = async (req, res) => {
             createdAt: new Date().toISOString(),
         };
 
-        await usersRef.doc(userId).set(newUser);
+        await db.collection('users').doc(userId).set(newUser);
 
         res.status(201).json({
             _id: userId,
@@ -252,33 +290,43 @@ const googleLogin = async (req, res) => {
         const { email, name, uid } = decodedToken;
         const normalizedEmail = (email || '').toLowerCase().trim();
 
-        const usersRef = db.collection('users');
-        const snapshot = await db.collectionGroup('users').where('email', '==', normalizedEmail).limit(1).get();
+        let userData = null;
+        let userId = null;
 
-        let userData;
-        let userId;
+        // Tiered Search for existing account
+        // 1. Check root 'users' (Stable)
+        let existingUserSnap = await db.collection('users').where('email', '==', normalizedEmail).limit(1).get();
 
-        if (snapshot.empty) {
+        // 2. Fallback to CollectionGroup (Safe check)
+        if (existingUserSnap.empty) {
+            try {
+                const groupSnap = await db.collectionGroup('users').where('email', '==', normalizedEmail).limit(1).get();
+                if (!groupSnap.empty) existingUserSnap = groupSnap;
+            } catch (e) {
+                console.warn('[GoogleLogin] CollectionGroup search failed (likely missing index):', e.message);
+            }
+        }
+
+        if (existingUserSnap.empty) {
             // First time Google login - create user as OWNER by default for this portal
-            // In a real app, you might want to invite users or handle roles differently
             userId = 'owner-google-' + uid;
             userData = {
                 userId,
                 name: name || 'Google User',
-                email,
+                email: normalizedEmail,
                 role: 'OWNER',
                 collegeId: 'OWNER_GLOBAL',
                 createdAt: new Date().toISOString(),
                 authMethod: 'GOOGLE'
             };
-            await usersRef.doc(userId).set(userData);
-            console.log("New User Created via Google:", email);
+            await db.collection('users').doc(userId).set(userData);
+            console.log("New User Created via Google:", normalizedEmail);
         } else {
-            userData = snapshot.docs[0].data();
+            userData = existingUserSnap.docs[0].data();
             userId = userData.userId || userData.studentId;
 
             // Security Check: College Status for existing users
-            if (userData.role !== 'OWNER' && userData.collegeId !== 'OWNER_GLOBAL') {
+            if (userData.role !== 'OWNER' && userData.collegeId && userData.collegeId !== 'OWNER_GLOBAL') {
                 const collegeDoc = await db.collection('colleges').doc(userData.collegeId).get();
                 if (collegeDoc.exists && collegeDoc.data().status === 'SUSPENDED') {
                     return res.status(403).json({ message: 'Your organization account is suspended. Please contact the system administrator.' });
@@ -292,7 +340,7 @@ const googleLogin = async (req, res) => {
             email: userData.email,
             role: userData.role,
             collegeId: userData.collegeId,
-            token: generateToken(userId, userData.role, userData.collegeId),
+            token: generateToken(userId, userData.role, userData.collegeId || 'OWNER_GLOBAL'),
         });
     } catch (error) {
         console.error("Google Login Error:", error);
