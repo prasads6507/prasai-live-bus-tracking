@@ -15,14 +15,23 @@ const protect = async (req, res, next) => {
             const uid = decodedToken.uid;
 
             // 2. Fetch User Profile from Firestore to get role and collegeId
-            // We search in both 'users' and 'students' collections for robustness
+            // Search order: 1. Root users, 2. Scoped users, 3. Scoped students
             let userDoc = await db.collection('users').doc(uid).get();
             let userData = userDoc.exists ? userDoc.data() : null;
 
             if (!userData) {
-                userDoc = await db.collection('students').doc(uid).get();
-                userData = userDoc.exists ? userDoc.data() : null;
-                if (userData) userData.role = 'STUDENT';
+                // Search across all 'users' sub-collections 
+                const userQuery = await db.collectionGroup('users').where('userId', '==', uid).limit(1).get();
+                if (!userQuery.empty) {
+                    userData = userQuery.docs[0].data();
+                } else {
+                    // Search across all 'students' sub-collections
+                    const studentQuery = await db.collectionGroup('students').where('studentId', '==', uid).limit(1).get();
+                    if (!studentQuery.empty) {
+                        userData = studentQuery.docs[0].data();
+                        userData.role = 'STUDENT';
+                    }
+                }
             }
 
             if (!userData) {
