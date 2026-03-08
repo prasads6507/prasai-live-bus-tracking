@@ -1,4 +1,5 @@
 const { auth, db } = require('../config/firebase');
+const jwt = require('jsonwebtoken');
 
 /**
  * Middleware to protect routes and verify Firebase ID tokens.
@@ -14,19 +15,34 @@ const protect = async (req, res, next) => {
         try {
             token = req.headers.authorization.split(' ')[1];
 
-            // 1. Verify Firebase ID Token
-            const decodedToken = await auth.verifyIdToken(token);
-            const uid = decodedToken.uid;
+            let decodedToken;
+            let uid;
+            let role;
+            let collegeId;
 
-            // 2. Fetch User Profile
+            try {
+                // 1. First try verifying as Firebase ID Token (Mobile app sends this)
+                decodedToken = await auth.verifyIdToken(token);
+                uid = decodedToken.uid;
+                role = decodedToken.role;
+                collegeId = decodedToken.collegeId;
+            } catch (err) {
+                // 2. If it fails with 'kid' claim error or similar, it might be our native JWT token (Web portals send this)
+                try {
+                    decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+                    uid = decodedToken.id || decodedToken.userId || decodedToken.studentId;
+                    role = decodedToken.role;
+                    collegeId = decodedToken.collegeId;
+                } catch (jwtErr) {
+                    // Both failed, throw original error
+                    throw err;
+                }
+            }
+
+            // 3. Fetch User Profile
             // Tiered Lookup Strategy:
-            // - Priority 1: Use 'role' and 'collegeId' claims for a direct, indexed hit.
-            // - Priority 2: Check root 'users' for legacy/global OWNER accounts.
-            // - Priority 3: Fallback to collectionGroup if claims are missing.
 
             let userData = null;
-            const role = decodedToken.role;
-            const collegeId = decodedToken.collegeId;
 
             // Direct Scoped Lookup (Performance optimized)
             if (collegeId && role) {
