@@ -400,13 +400,21 @@ class FirestoreDataSource {
       debugPrint('Error in student email/id fallback: $e');
     }
 
-    // 5. TRY USERS COLLECTION BY EMAIL (Handles drivers/admins with UID mismatch)
+    // 5. TRY USERS COLLECTION BY EMAIL (Handles drivers/admins with UID mismatch or legacy root storage)
     try {
       if (email != null && email.isNotEmpty) {
+        // A. Try Scoped first
         final userSnap = await _firestore.collection('colleges').doc(collegeId).collection('users')
             .where('email', isEqualTo: email)
             .limit(1).get();
         if (userSnap.docs.isNotEmpty) return userSnap.docs.first;
+
+        // B. Try Global Root (Crucial for users like ram@gmail.com who are at root)
+        final globalUserSnap = await _firestore.collection('users')
+            .where('email', isEqualTo: email)
+            .where('collegeId', isEqualTo: collegeId)
+            .limit(1).get();
+        if (globalUserSnap.docs.isNotEmpty) return globalUserSnap.docs.first;
       }
     } catch (e) {
       debugPrint('Error in user email fallback: $e');

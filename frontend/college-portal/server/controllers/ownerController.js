@@ -303,10 +303,15 @@ const getCollegeAdmins = async (req, res) => {
 
         // 2. Fetch from GLOBAL ROOT collection (transition phase Fallback)
         // This finds admins like 'ram@gmail.com' who are still at root but have a collegeId
-        const rootAdminsQuery = db.collection('users').where('role', 'in', ['COLLEGE_ADMIN', 'SUPER_ADMIN']);
-        const rootAdminsSnap = (filterId && filterId !== 'ALL')
-            ? await rootAdminsQuery.where('collegeId', '==', filterId).get()
-            : await rootAdminsQuery.get();
+        const roles = ['COLLEGE_ADMIN', 'SUPER_ADMIN'];
+        const rootAdminsQuery = db.collection('users').where('role', 'in', roles);
+
+        let rootAdminsSnap;
+        if (filterId && filterId !== 'ALL') {
+            rootAdminsSnap = await rootAdminsQuery.where('collegeId', '==', filterId).get();
+        } else {
+            rootAdminsSnap = await rootAdminsQuery.get();
+        }
 
         const collegeInfoMap = {}; // Cache to avoid multiple lookups for the same college
 

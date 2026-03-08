@@ -271,9 +271,19 @@ const getMe = async (req, res) => {
             const { passwordHash, ...userWithoutPassword } = userData;
             res.json(userWithoutPassword);
         } else {
-            res.status(404).json({ message: 'User not found' });
+            // 3. Last Resort Fallback: Search by email if UID lookup failed (UID mismatch case)
+            if (req.user.email) {
+                console.log(`[getMe] UID lookup failed for ${userId}. Trying email fallback for ${req.user.email}...`);
+                const emailSnap = await db.collection('users').where('email', '==', req.user.email.toLowerCase().trim()).limit(1).get();
+                if (!emailSnap.empty) {
+                    const { passwordHash, ...userWithoutPassword } = emailSnap.docs[0].data();
+                    return res.json(userWithoutPassword);
+                }
+            }
+            res.status(404).json({ message: 'User profile not found' });
         }
     } catch (error) {
+        console.error('[getMe] Error:', error);
         res.status(500).json({ message: error.message });
     }
 };
