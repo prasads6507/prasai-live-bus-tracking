@@ -417,7 +417,10 @@ const createUser = async (req, res) => {
 };
 
 const getUsersByRole = async (req, res) => {
-    const { role } = req.query; // Changed from req.params to req.query as per common practice for filters
+    const { role } = req.params; // Changed from req.query back to req.params to match route definition
+    if (!role) {
+        return res.status(400).json({ message: 'Role parameter is required' });
+    }
     const filterRole = role.toUpperCase();
 
     try {
