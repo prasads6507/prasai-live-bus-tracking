@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Bus, MapPin, Navigation, Settings, User, Bell, ArrowRight } from 'lucide-react';
-import { collection, query, where, onSnapshot, orderBy, limit } from 'firebase/firestore';
+import { collection, query, onSnapshot, orderBy, limit } from 'firebase/firestore';
 import { db } from '../config/firebase'; // Import Firestore instance
 import { validateSlug, getBuses, getRoutes } from '../services/api';
 import { getStreetName } from '../services/geocoding';
@@ -452,9 +452,9 @@ const BusCard = ({ bus, address }: { bus: any, address?: string }) => {
                     </div>
                 </div>
                 <div className={`px-2.5 py-1 rounded-full text-[9px] font-black tracking-[0.05em] uppercase border transition-all ${isLiveBus(bus) ? 'bg-green-100/50 text-green-700 border-green-200' :
-                        bus.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                            bus.status === 'MAINTENANCE' ? 'bg-orange-50 text-orange-700 border-orange-200' :
-                                'bg-slate-50 text-slate-500 border-slate-200'
+                    bus.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                        bus.status === 'MAINTENANCE' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                            'bg-slate-50 text-slate-500 border-slate-200'
                     }`}>
                     {isLiveBus(bus) ? (
                         <span className="flex items-center gap-1.5">
