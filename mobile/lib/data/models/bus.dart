@@ -3,6 +3,7 @@ import 'location_point.dart';
 
 class Bus {
   final String id;
+  final String collegeId;
   final String busNumber;
   final String plateNumber;
   final String status; // "ACTIVE", "IDLE", "MAINTENANCE"
@@ -27,6 +28,7 @@ class Bus {
 
   Bus({
     required this.id,
+    required this.collegeId,
     required this.busNumber,
     required this.plateNumber,
     required this.status,
@@ -52,8 +54,20 @@ class Bus {
 
   factory Bus.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
+    
+    // Extract collegeId from path: colleges/{collegeId}/buses/{busId}
+    String collegeId = data['collegeId']?.toString() ?? '';
+    if (collegeId.isEmpty && doc.reference.path.contains('colleges/')) {
+      final parts = doc.reference.path.split('/');
+      final idx = parts.indexOf('colleges');
+      if (idx >= 0 && idx + 1 < parts.length) {
+        collegeId = parts[idx + 1];
+      }
+    }
+
     return Bus(
       id: doc.id,
+      collegeId: collegeId,
       busNumber: data['busNumber']?.toString() ?? 'Unknown',
       plateNumber: data['plateNumber']?.toString() ?? 'N/A',
       status: data['status']?.toString() ?? 'ACTIVE',

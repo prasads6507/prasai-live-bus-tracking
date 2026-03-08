@@ -318,7 +318,7 @@ class _StudentTrackScreenState extends ConsumerState<StudentTrackScreen> {
      final tripStream = ref.read(firestoreDataSourceProvider).getActiveTrip(collegeId, busId);
      tripStream.first.then((trip) async {
        if (trip != null) {
-         final route = await ref.read(firestoreDataSourceProvider).getRoute(trip.routeId);
+         final route = await ref.read(firestoreDataSourceProvider).getRoute(collegeId, trip.routeId);
          if (mounted) {
            setState(() => _currentRoute = route);
            _updateMetrics();

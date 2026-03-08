@@ -104,7 +104,6 @@ class FirestoreDataSource {
       throw 'Error finding organization "$slug": $e';
     }
   }
-
   Future<Bus> _populateDriverDetails(Bus bus) async {
     final activeDriverId = bus.currentDriverId ?? bus.driverId;
     if (activeDriverId == null || activeDriverId.isEmpty) return bus;
@@ -122,9 +121,12 @@ class FirestoreDataSource {
         return _mapBusWithDriver(bus, userData);
       }
     } catch (_) {}
+    return bus;
+  }
   Bus _mapBusWithDriver(Bus bus, Map<String, dynamic> userData) {
     return Bus(
       id: bus.id,
+      collegeId: bus.collegeId,
       busNumber: bus.busNumber,
       plateNumber: bus.plateNumber,
       status: bus.status,
@@ -354,7 +356,7 @@ class FirestoreDataSource {
   Future<DocumentSnapshot> getUserInCollege(String collegeId, String uid) async {
     // 1. Try scoped 'users' (Admins, Drivers)
     try {
-      doc = await _firestore.collection('colleges').doc(collegeId).collection('users').doc(uid).get();
+      final doc = await _firestore.collection('colleges').doc(collegeId).collection('users').doc(uid).get();
       if (doc.exists) return doc;
     } catch (e) {
       debugPrint('Error checking scoped users: $e');
@@ -362,7 +364,7 @@ class FirestoreDataSource {
 
     // 2. Try scoped 'students'
     try {
-      doc = await _firestore.collection('colleges').doc(collegeId).collection('students').doc(uid).get();
+      final doc = await _firestore.collection('colleges').doc(collegeId).collection('students').doc(uid).get();
       if (doc.exists) return doc;
     } catch (e) {
       debugPrint('Error checking scoped students: $e');
@@ -370,7 +372,7 @@ class FirestoreDataSource {
 
     // 3. Fallback to global 'users' (Legacy Owner login)
     try {
-      doc = await _firestore.collection('users').doc(uid).get();
+      final doc = await _firestore.collection('users').doc(uid).get();
       if (doc.exists) {
         final data = doc.data() as Map<String, dynamic>?;
         if (data != null && data['collegeId'] == collegeId) return doc;
@@ -379,22 +381,38 @@ class FirestoreDataSource {
       debugPrint('Error checking global users collection: $e');
     }
     
-    // 4. Fallback: search students by field in scoped collection
+    // 4. Fallback: search students by 'studentId' or 'email' in scoped collection
     try {
       final snap = await _firestore.collection('colleges').doc(collegeId).collection('students')
-          .where('studentId', isEqualTo: uid)
+          .where('email', isEqualTo: uid.contains('@') ? uid : '') // If uid passed is actually an email
           .limit(1).get();
           
       if (snap.docs.isNotEmpty) return snap.docs.first;
+
+      // Also try searching by common student record fields
+      final snapById = await _firestore.collection('colleges').doc(collegeId).collection('students')
+          .where('studentId', isEqualTo: uid)
+          .limit(1).get();
+      if (snapById.docs.isNotEmpty) return snapById.docs.first;
+      
     } catch (e) {
-      debugPrint('Error in final student fallback: $e');
+      debugPrint('Error in student email/id fallback: $e');
+    }
+
+    // 5. TRY USERS COLLECTION BY EMAIL (Handles drivers/admins with UID mismatch)
+    try {
+      final userSnap = await _firestore.collection('colleges').doc(collegeId).collection('users')
+          .where('email', isEqualTo: uid.contains('@') ? uid : '')
+          .limit(1).get();
+      if (userSnap.docs.isNotEmpty) return userSnap.docs.first;
+    } catch (e) {
+      debugPrint('Error in user email fallback: $e');
     }
 
     throw 'User record not found for UID: $uid in college: $collegeId. Please check registration status.';
   }
 
   Stream<Trip?> getActiveTrip(String collegeId, String busId) {
-    return _firestore
     return _firestore
         .collection('colleges')
         .doc(collegeId)
@@ -671,7 +689,6 @@ class FirestoreDataSource {
     } catch (e) {
       debugPrint('Error ending trip: $e');
       // If batch fails, try a direct update on the bus to at least unlock it
-      try {
       try {
         await _firestore.collection('colleges').doc(collegeId).collection('buses').doc(busId).update({
           'status': 'IDLE',

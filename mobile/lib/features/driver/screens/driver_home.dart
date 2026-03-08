@@ -476,7 +476,7 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
                   builder: (context, busSnap) {
                     if (!busSnap.hasData || busSnap.data?.assignedRouteId == null) return const SizedBox.shrink();
                     return FutureBuilder<BusRoute?>(
-                      future: ref.read(firestoreDataSourceProvider).getRoute(busSnap.data!.assignedRouteId!),
+                      future: ref.read(firestoreDataSourceProvider).getRoute(collegeId, busSnap.data!.assignedRouteId!),
                       builder: (context, routeSnap) {
                         if (!routeSnap.hasData || routeSnap.data == null) return const SizedBox.shrink();
                         return _buildRouteCard(routeSnap.data!);
@@ -491,7 +491,7 @@ class _DriverHomeScreenState extends ConsumerState<DriverHomeScreen> {
               if (_maintenanceBus?.assignedRouteId != null && _maintenanceBus?.assignedRouteId != profile.assignedBusId) ...[
                 _buildSectionHeader("Replacement Bus's Route"),
                 FutureBuilder<BusRoute?>(
-                  future: ref.read(firestoreDataSourceProvider).getRoute(_maintenanceBus!.assignedRouteId!),
+                  future: ref.read(firestoreDataSourceProvider).getRoute(collegeId, _maintenanceBus!.assignedRouteId!),
                   builder: (context, routeSnap) {
                     if (!routeSnap.hasData || routeSnap.data == null) return const SizedBox.shrink();
                     return _buildRouteCard(routeSnap.data!);
@@ -839,7 +839,7 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
   }
 
   Future<void> _fetchRoute() async {
-    final route = await ref.read(firestoreDataSourceProvider).getRoute(widget.routeId);
+    final route = await ref.read(firestoreDataSourceProvider).getRoute(widget.collegeId, widget.routeId);
     if (mounted) {
       setState(() => _currentRoute = route);
     }
@@ -861,7 +861,7 @@ class _DriverContentState extends ConsumerState<_DriverContent> {
         if (mounted && _currentRoad != road) {
           setState(() => _currentRoad = road);
           try {
-             ref.read(firestoreDataSourceProvider).updateBusRoadName(widget.busId, road);
+             ref.read(firestoreDataSourceProvider).updateBusRoadName(widget.collegeId, widget.busId, road);
           } catch(e) {}
         }
       }

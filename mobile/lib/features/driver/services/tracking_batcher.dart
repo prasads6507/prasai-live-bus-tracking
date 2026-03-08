@@ -49,7 +49,7 @@ class TrackingBatcher {
       // Save each point to trip history for post-trip path preview
       if (_tripId != null && _tripId!.isNotEmpty) {
         for (final point in pointsToSend) {
-          await _firestoreDataSource.saveTripPathPoint(_tripId!, point, _busId);
+          await _firestoreDataSource.saveTripPathPoint(_collegeId, _tripId!, point, _busId);
         }
       }
     } catch (e) {

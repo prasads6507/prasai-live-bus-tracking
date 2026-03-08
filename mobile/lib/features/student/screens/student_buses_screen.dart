@@ -311,7 +311,7 @@ class _StudentBusesScreenState extends ConsumerState<StudentBusesScreen> {
                             }
                             
                             await ref.read(firestoreDataSourceProvider).toggleFavoriteBus(
-                              profile.id, bus.id, !isCurrentlyFav,
+                              collegeId, profile.id, bus.id, !isCurrentlyFav,
                             );
                           }
                         },

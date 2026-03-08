@@ -62,7 +62,7 @@ class TripFinalizer {
         debugPrint("[TripFinalizer] API endTrip success");
       } catch (e) {
         debugPrint("[TripFinalizer] API endTrip failed: $e. Falling back to firestore endTrip.");
-        await firestoreDS.endTrip(tripId, busId);
+        await firestoreDS.endTrip(collegeId, tripId, busId);
         try {
           // Attempt to forcefully trigger the notification API since backend endTrip failed
           await apiDS.notifyTripEnded(

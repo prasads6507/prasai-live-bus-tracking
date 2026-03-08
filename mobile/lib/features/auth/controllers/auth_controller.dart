@@ -128,6 +128,8 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
           ? 'users'
           : 'students';
       await FirebaseFirestore.instance
+          .collection('colleges')
+          .doc(_currentCollegeId!)
           .collection(collection)
           .doc(_currentUid)
           .update({'fcmToken': FieldValue.delete()});
@@ -182,7 +184,11 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
     final collection = (role.toLowerCase() == 'driver' || role.toLowerCase() == 'admin' || role.toLowerCase() == 'user') 
         ? 'users' 
         : 'students';
-    final ref = FirebaseFirestore.instance.collection(collection).doc(uid);
+    final ref = FirebaseFirestore.instance
+        .collection('colleges')
+        .doc(collegeId)
+        .collection(collection)
+        .doc(uid);
     try {
       // Use update to avoid overwriting existing fields like role/name
       await ref.update({

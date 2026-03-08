@@ -55,8 +55,12 @@ class _BusSearchResultTileState extends ConsumerState<BusSearchResultTile> {
     final newStatus = !_isFavorite;
     setState(() => _isFavorite = newStatus);
 
+    final collegeId = ref.read(selectedCollegeIdProvider);
+    if (collegeId == null) return;
+
     try {
       await ref.read(firestoreDataSourceProvider).toggleFavoriteBus(
+        collegeId,
         user.uid,
         widget.busId,
         newStatus,

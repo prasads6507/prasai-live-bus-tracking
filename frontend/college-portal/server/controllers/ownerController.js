@@ -259,25 +259,47 @@ const deleteCollegeAdmin = async (req, res) => {
 
 const getCollegeAdmins = async (req, res) => {
     try {
-        const collegesSnap = await db.collection('colleges').get();
+        const { collegeId: filterId } = req.query;
         const enriched = [];
 
-        for (const collegeDoc of collegesSnap.docs) {
-            const collegeId = collegeDoc.id;
-            const collegeData = collegeDoc.data();
+        // 1. If filterId is provided, perform single targeted lookup
+        if (filterId && filterId !== 'ALL') {
+            const collegeDoc = await db.collection('colleges').doc(filterId).get();
+            if (collegeDoc.exists) {
+                const collegeData = collegeDoc.data();
+                const adminsSnap = await getCollegeCollection(filterId, 'users')
+                    .where('role', 'in', ['COLLEGE_ADMIN', 'SUPER_ADMIN'])
+                    .get();
 
-            const adminsSnap = await getCollegeCollection(collegeId, 'users')
-                .where('role', 'in', ['COLLEGE_ADMIN', 'SUPER_ADMIN'])
-                .get();
-
-            adminsSnap.docs.forEach(doc => {
-                enriched.push({
-                    ...doc.data(),
-                    collegeId,
-                    collegeName: collegeData.collegeName || collegeId,
-                    collegeStatus: collegeData.status || 'ACTIVE'
+                adminsSnap.docs.forEach(doc => {
+                    enriched.push({
+                        ...doc.data(),
+                        collegeId: filterId,
+                        collegeName: collegeData.collegeName || filterId,
+                        collegeStatus: collegeData.status || 'ACTIVE'
+                    });
                 });
-            });
+            }
+        } else {
+            // 2. Fallback to full list if no filter or 'ALL'
+            const collegesSnap = await db.collection('colleges').get();
+            for (const collegeDoc of collegesSnap.docs) {
+                const collegeId = collegeDoc.id;
+                const collegeData = collegeDoc.data();
+
+                const adminsSnap = await getCollegeCollection(collegeId, 'users')
+                    .where('role', 'in', ['COLLEGE_ADMIN', 'SUPER_ADMIN'])
+                    .get();
+
+                adminsSnap.docs.forEach(doc => {
+                    enriched.push({
+                        ...doc.data(),
+                        collegeId,
+                        collegeName: collegeData.collegeName || collegeId,
+                        collegeStatus: collegeData.status || 'ACTIVE'
+                    });
+                });
+            }
         }
 
         console.log(`[GET_ADMINS] Found ${enriched.length} administrators via sequential lookup`);

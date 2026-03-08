@@ -72,7 +72,7 @@ class TrackingRepository {
 
 
   Future<void> endTrip(String collegeId, String? tripId, String busId) async {
-    await _firestoreDataSource.endTrip(tripId, busId);
+    await _firestoreDataSource.endTrip(collegeId, tripId, busId);
     
     if (tripId != null && tripId.isNotEmpty) {
       // Fire and forget — notify students that trip ended
