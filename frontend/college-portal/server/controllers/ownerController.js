@@ -29,6 +29,7 @@ const createCollege = async (req, res) => {
     } = req.body;
 
     try {
+        const collegeId = slug;
         const collegesRef = db.collection('colleges');
         const usersRef = getCollegeCollection(collegeId, 'users');
 
@@ -43,8 +44,6 @@ const createCollege = async (req, res) => {
         if (!userSnapshot.empty) {
             return res.status(400).json({ message: 'Faculty Email already exists.' });
         }
-
-        const collegeId = slug;
 
         // 3. Prepare College Data
         const newCollege = {
