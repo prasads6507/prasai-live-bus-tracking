@@ -507,17 +507,17 @@ const assignDriver = async (req, res) => {
             role: 'DRIVER',
             createdAt: new Date().toISOString()
         };
-        batch.set(getCollegeCollection(req.collegeId, '').doc(assignmentId), assignment);
+        batch.set(getCollegeCollection(req.collegeId, 'assignments').doc(assignmentId), assignment);
 
         // 2. Update Bus Document (cross-link)
-        batch.update(getCollegeCollection(req.collegeId, '').doc(busId), {
+        batch.update(getCollegeCollection(req.collegeId, 'buses').doc(busId), {
             assignedDriverId: userId,
             assignedRouteId: routeId || null,
             status: 'IDLE'
         });
 
         // 3. Update User/Driver Document (cross-link)
-        batch.update(getCollegeCollection(req.collegeId, '').doc(userId), {
+        batch.update(getCollegeCollection(req.collegeId, 'users').doc(userId), {
             busId: busId,
             routeId: routeId || null
         });
@@ -533,7 +533,7 @@ const assignDriver = async (req, res) => {
 
 const getAssignments = async (req, res) => {
     try {
-        const snapshot = await getCollegeCollection(req.collegeId, '')
+        const snapshot = await getCollegeCollection(req.collegeId, 'assignments')
             .where('collegeId', '==', req.collegeId)
             .get();
         const assignments = snapshot.docs.map(doc => ({ _id: doc.id, ...doc.data() }));
@@ -557,7 +557,7 @@ const getTripHistory = async (req, res) => {
         let trips = [];
 
         // 1. First, get trips from ROOT collection (new format)
-        const rootTripsSnapshot = await getCollegeCollection(req.collegeId, '')
+        const rootTripsSnapshot = await getCollegeCollection(req.collegeId, 'trips')
             .where('collegeId', '==', req.collegeId)
             .limit(100)
             .get();
@@ -584,7 +584,7 @@ const getTripHistory = async (req, res) => {
         });
 
         // 2. Also get trips from subcollections (old format)
-        const busesSnapshot = await getCollegeCollection(req.collegeId, '')
+        const busesSnapshot = await getCollegeCollection(req.collegeId, 'buses')
             .where('collegeId', '==', req.collegeId)
             .get();
 
@@ -644,12 +644,12 @@ const updateTrip = async (req, res) => {
         const { startTime, endTime, driverName } = req.body;
 
         // Try ROOT collection first
-        let tripRef = getCollegeCollection(req.collegeId, '').doc(tripId);
+        let tripRef = getCollegeCollection(req.collegeId, 'trips').doc(tripId);
         let tripDoc = await tripRef.get();
 
         // If not found in root, search subcollections
         if (!tripDoc.exists) {
-            const busesSnapshot = await getCollegeCollection(req.collegeId, '')
+            const busesSnapshot = await getCollegeCollection(req.collegeId, 'buses')
                 .where('collegeId', '==', req.collegeId)
                 .get();
 
@@ -705,12 +705,12 @@ const deleteTrip = async (req, res) => {
         const { tripId } = req.params;
 
         // Try ROOT collection first
-        let tripRef = getCollegeCollection(req.collegeId, '').doc(tripId);
+        let tripRef = getCollegeCollection(req.collegeId, 'trips').doc(tripId);
         let tripDoc = await tripRef.get();
 
         // If not found in root, search subcollections
         if (!tripDoc.exists) {
-            const busesSnapshot = await getCollegeCollection(req.collegeId, '')
+            const busesSnapshot = await getCollegeCollection(req.collegeId, 'buses')
                 .where('collegeId', '==', req.collegeId)
                 .get();
 
@@ -753,13 +753,13 @@ const adminEndTrip = async (req, res) => {
         console.log('--- ADMIN END TRIP ---', tripId);
 
         // Try ROOT collection first
-        let tripRef = getCollegeCollection(req.collegeId, '').doc(tripId);
+        let tripRef = getCollegeCollection(req.collegeId, 'trips').doc(tripId);
         let tripDoc = await tripRef.get();
         let busId = null;
 
         // If not found in root, search subcollections
         if (!tripDoc.exists) {
-            const busesSnapshot = await getCollegeCollection(req.collegeId, '')
+            const busesSnapshot = await getCollegeCollection(req.collegeId, 'buses')
                 .where('collegeId', '==', req.collegeId)
                 .get();
 
@@ -803,7 +803,7 @@ const adminEndTrip = async (req, res) => {
 
         // Also update the bus status if we have busId (Standardized Reset)
         if (busId) {
-            const busRef = getCollegeCollection(req.collegeId, '').doc(busId);
+            const busRef = getCollegeCollection(req.collegeId, 'buses').doc(busId);
             const busDoc = await busRef.get();
             if (busDoc.exists && (busDoc.data().currentTripId === tripId || busDoc.data().activeTripId === tripId)) {
                 await busRef.update({
@@ -827,7 +827,7 @@ const adminEndTrip = async (req, res) => {
                 // 4. Notify Driver specifically
                 const driverId = tripData.driverId;
                 if (driverId) {
-                    const driverDoc = await getCollegeCollection(req.collegeId, '').doc(driverId).get();
+                    const driverDoc = await getCollegeCollection(req.collegeId, 'users').doc(driverId).get();
                     const driverToken = driverDoc.exists ? driverDoc.data().fcmToken : null;
 
                     if (driverToken && messaging) {
@@ -896,7 +896,7 @@ const bulkDeleteTrips = async (req, res) => {
                 let deletedCount = 0;
 
                 // 1. Try ROOT collection
-                let tripRef = getCollegeCollection(req.collegeId, '').doc(tripId);
+                let tripRef = getCollegeCollection(req.collegeId, 'trips').doc(tripId);
                 let tripDoc = await tripRef.get();
 
                 if (tripDoc.exists) {
@@ -909,7 +909,7 @@ const bulkDeleteTrips = async (req, res) => {
                 }
 
                 // 2. Search all buses subcollections (legacy support)
-                const busesSnapshot = await getCollegeCollection(req.collegeId, '')
+                const busesSnapshot = await getCollegeCollection(req.collegeId, 'buses')
                     .where('collegeId', '==', req.collegeId)
                     .get();
 
@@ -956,12 +956,12 @@ const getTripPath = async (req, res) => {
         console.log('--- GET TRIP PATH ---', tripId);
 
         // Try ROOT collection first
-        let tripRef = getCollegeCollection(req.collegeId, '').doc(tripId);
+        let tripRef = getCollegeCollection(req.collegeId, 'trips').doc(tripId);
         let tripDoc = await tripRef.get();
 
         // If not found in root, search subcollections (legacy support)
         if (!tripDoc.exists) {
-            const busesSnapshot = await getCollegeCollection(req.collegeId, '')
+            const busesSnapshot = await getCollegeCollection(req.collegeId, 'buses')
                 .where('collegeId', '==', req.collegeId)
                 .get();
 
@@ -1083,7 +1083,7 @@ const getCollegeAdmins = async (req, res) => {
             return res.status(403).json({ message: 'Access denied. Super Admin or Owner privileges required.' });
         }
 
-        const snapshot = await getCollegeCollection(req.collegeId, '')
+        const snapshot = await getCollegeCollection(req.collegeId, 'users')
             .where('collegeId', '==', req.collegeId)
             .where('role', 'in', ['COLLEGE_ADMIN', 'SUPER_ADMIN'])
             .get();
@@ -1118,7 +1118,7 @@ const createCollegeAdmin = async (req, res) => {
         }
 
         // Check if email already exists
-        const existingUser = await getCollegeCollection(req.collegeId, '').where('email', '==', email).get();
+        const existingUser = await getCollegeCollection(req.collegeId, 'users').where('email', '==', email).get();
         if (!existingUser.empty) {
             return res.status(400).json({ message: 'Email already in use' });
         }
@@ -1139,7 +1139,7 @@ const createCollegeAdmin = async (req, res) => {
             createdBy: req.user?.id || req.user?._id || req.user?.userId || 'system'
         };
 
-        await getCollegeCollection(req.collegeId, '').doc(userId).set(newAdmin);
+        await getCollegeCollection(req.collegeId, 'users').doc(userId).set(newAdmin);
 
         res.status(201).json({
             userId,
@@ -1168,7 +1168,7 @@ const updateCollegeAdmin = async (req, res) => {
         const { userId } = req.params;
         const { name, email, phone, password, role } = req.body;
 
-        const userRef = getCollegeCollection(req.collegeId, '').doc(userId);
+        const userRef = getCollegeCollection(req.collegeId, 'users').doc(userId);
         const userDoc = await userRef.get();
 
         if (!userDoc.exists) {
@@ -1219,7 +1219,7 @@ const deleteCollegeAdmin = async (req, res) => {
 
         const { userId } = req.params;
 
-        const userRef = getCollegeCollection(req.collegeId, '').doc(userId);
+        const userRef = getCollegeCollection(req.collegeId, 'users').doc(userId);
         const userDoc = await userRef.get();
 
         if (!userDoc.exists) {
@@ -1258,7 +1258,7 @@ const assignStudentsToStop = async (req, res) => {
         const batch = db.batch();
         for (const a of assignments) {
             if (!a.studentId) continue;
-            const studentRef = getCollegeCollection(req.collegeId, '').doc(a.studentId);
+            const studentRef = getCollegeCollection(req.collegeId, 'students').doc(a.studentId);
             batch.update(studentRef, {
                 assignedBusId: a.busId || null,
                 assignedRouteId: a.routeId || null,
@@ -1280,7 +1280,7 @@ const assignStudentsToStop = async (req, res) => {
 // @access  Private (College Admin)
 const getStudentAssignments = async (req, res) => {
     try {
-        const snapshot = await getCollegeCollection(req.collegeId, '')
+        const snapshot = await getCollegeCollection(req.collegeId, 'students')
             .where('collegeId', '==', req.collegeId)
             .get();
 
@@ -1309,7 +1309,7 @@ const getBusStudents = async (req, res) => {
         const collegeId = req.collegeId;
 
         // Verify the bus belongs to this college
-        const busRef = getCollegeCollection(req.collegeId, '').doc(busId);
+        const busRef = getCollegeCollection(req.collegeId, 'buses').doc(busId);
         const busDoc = await busRef.get();
 
         if (!busDoc.exists) {
@@ -1322,7 +1322,7 @@ const getBusStudents = async (req, res) => {
         const busData = busDoc.data();
 
         // Fetch students who have assignedBusId === busId
-        const snapshot = await getCollegeCollection(req.collegeId, '')
+        const snapshot = await getCollegeCollection(req.collegeId, 'students')
             .where('collegeId', '==', collegeId)
             .where('assignedBusId', '==', busId)
             .get();
@@ -1370,7 +1370,7 @@ const assignStudentsToBusRoute = async (req, res) => {
         }
 
         // Verify the bus belongs to this college
-        const busRef = getCollegeCollection(req.collegeId, '').doc(busId);
+        const busRef = getCollegeCollection(req.collegeId, 'buses').doc(busId);
         const busDoc = await busRef.get();
 
         if (!busDoc.exists) {
@@ -1385,7 +1385,7 @@ const assignStudentsToBusRoute = async (req, res) => {
         for (const a of assignments) {
             if (!a.studentId) continue;
 
-            const studentRef = getCollegeCollection(req.collegeId, '').doc(a.studentId);
+            const studentRef = getCollegeCollection(req.collegeId, 'students').doc(a.studentId);
             // Verify student belongs to same college (optional extra safety check)
             const studentDoc = await studentRef.get();
             if (!studentDoc.exists || studentDoc.data().collegeId !== collegeId) {
