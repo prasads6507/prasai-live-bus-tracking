@@ -30,8 +30,10 @@ class DriverLocationService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.reload();
     bool uploaded = false;
+    final bufferKey = 'trip_history_buffer_$tripId';
+    
     try {
-      final existingBuffer = prefs.getString('trip_history_buffer');
+      final existingBuffer = prefs.getString(bufferKey);
       if (existingBuffer != null && existingBuffer.isNotEmpty) {
         final rawBuffer = List<Map<String, dynamic>>.from(jsonDecode(existingBuffer));
         if (rawBuffer.isNotEmpty) {
@@ -99,12 +101,26 @@ class DriverLocationService {
 
           // 4. Upload to API
           final dio = Dio();
-          final user = FirebaseAuth.instance.currentUser;
-          if (user != null) {
-            final token = await user.getIdToken();
-            if (token != null) {
-              dio.options.headers['Authorization'] = 'Bearer $token';
+          
+          // CRITICAL FIX: Background isolates often have null FirebaseAuth user.
+          // We MUST fallback to the persisted JWT token in SharedPreferences.
+          String? token;
+          try {
+            final user = FirebaseAuth.instance.currentUser;
+            if (user != null) {
+              token = await user.getIdToken();
             }
+          } catch (e) {
+            debugPrint("[History] FirebaseAuth.currentUser fetch error (expected in background): $e");
+          }
+          
+          if (token == null) {
+            token = prefs.getString('auth_token');
+            if (token != null) debugPrint("[History] Using fallback auth_token from SharedPreferences");
+          }
+
+          if (token != null) {
+            dio.options.headers['Authorization'] = 'Bearer $token';
           }
 
           await ApiDataSource(dio, FirebaseFirestore.instance).uploadTripHistory(
@@ -133,13 +149,13 @@ class DriverLocationService {
         uploaded = true;
       }
     } catch (e) {
-      debugPrint("Failed to upload buffered trip history: $e");
+      debugPrint("Failed to upload buffered trip history for $tripId: $e");
       // Mark as pending for retry
       await prefs.setBool('pending_history_upload', true);
       await prefs.setString('pending_history_trip_id', tripId);
     } finally {
       if (uploaded) {
-        await prefs.remove('trip_history_buffer');
+        await prefs.remove(bufferKey);
         await prefs.remove('trip_buffer_count');
         await prefs.remove('prev_lat');
         await prefs.remove('prev_lng');

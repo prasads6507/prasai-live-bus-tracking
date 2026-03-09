@@ -553,8 +553,14 @@ async function historyUpload(req, res) {
             maxSpeedMph: maxSpeedMph || 0,
             avgSpeedMph: avgSpeedMph || 0,
             pointsCount: pointsCount || 0,
+            calculateMetricsLocal: true, // Marker for debugging
             historyUploadedAt: admin.firestore.FieldValue.serverTimestamp(),
         };
+
+        // Sync durationMinutes for admin list views
+        if (durationSeconds) {
+            updateData.durationMinutes = Math.round(durationSeconds / 60);
+        }
 
         // Also store the path array if provided and not too large
         if (path && Array.isArray(path) && path.length <= 5000) {

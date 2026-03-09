@@ -531,6 +531,7 @@ class BackgroundTrackingService {
 
   static Future<void> _bufferPoint(
       SharedPreferences prefs, Position p, int speedMph) async {
+    final tripId = prefs.getString('track_trip_id') ?? 'unknown';
     final newPoint = {
       'lat': p.latitude,
       'lng': p.longitude,
@@ -540,11 +541,12 @@ class BackgroundTrackingService {
       'timestamp': DateTime.now().toIso8601String(),
     };
 
-    final bufferStr = prefs.getString('trip_history_buffer') ?? '[]';
+    final bufferKey = 'trip_history_buffer_$tripId';
+    final bufferStr = prefs.getString(bufferKey) ?? '[]';
     List<dynamic> buffer = jsonDecode(bufferStr);
     buffer.add(newPoint);
     if (buffer.length > 5000) buffer.removeAt(0);
-    await prefs.setString('trip_history_buffer', jsonEncode(buffer));
+    await prefs.setString(bufferKey, jsonEncode(buffer));
   }
 
   static Future<void> _writeToFirestore(
