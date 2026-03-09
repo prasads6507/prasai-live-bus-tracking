@@ -63,6 +63,7 @@ try {
         const privateKeyRaw = process.env.FIREBASE_PRIVATE_KEY || '';
 
         if (projectId && clientEmail && privateKeyRaw) {
+            console.log(`[Firebase] Attempting to initialize with Env Vars. Project: ${projectId}, Email: ${clientEmail}`);
             const privateKey = parsePrivateKey(privateKeyRaw);
             if (privateKey) {
                 serviceAccount = {
@@ -70,44 +71,53 @@ try {
                     clientEmail,
                     privateKey
                 };
-                console.log('[Firebase] Using environment variable credentials');
+                console.log('[Firebase] Env Var credentials parsed successfully');
             } else {
-                console.warn('[Firebase] FIREBASE_PRIVATE_KEY found but failed to parse.');
+                console.warn('[Firebase] Env Var credentials found but Private Key parsing failed (check tags or escaping)');
             }
         }
 
         // 2. Fallback to local JSON files (for local development)
         if (!serviceAccount) {
+            console.log('[Firebase] No valid Env Vars, checking local files...');
             for (const file of serviceAccountFiles) {
                 const fullPath = path.join(__dirname, '..', file);
                 if (fs.existsSync(fullPath)) {
                     try {
                         serviceAccount = require(fullPath);
-                        console.log(`[Firebase] Using service account file: ${file}`);
+                        console.log(`[Firebase] Using JSON file: ${file}`);
                         break;
                     } catch (e) {
-                        console.error(`[Firebase] Failed to load ${file}:`, e.message);
+                        console.error(`[Firebase] Error loading ${file}:`, e.message);
                     }
                 }
             }
         }
 
         if (!serviceAccount) {
-            throw new Error('Missing Firebase Admin configuration: No valid environment variables and no JSON files found.');
+            const missing = [];
+            if (!projectId) missing.push('FIREBASE_PROJECT_ID');
+            if (!clientEmail) missing.push('FIREBASE_CLIENT_EMAIL');
+            if (!privateKeyRaw) missing.push('FIREBASE_PRIVATE_KEY');
+
+            throw new Error(`Firebase Configuration Incomplete. Missing: ${missing.join(', ') || 'No valid source found'}`);
         }
 
         admin.initializeApp({
             credential: admin.credential.cert(serviceAccount)
         });
         const activeProject = serviceAccount.project_id || serviceAccount.projectId;
-        console.log(`[Firebase] Successfully initialized for project: ${activeProject}`);
+        console.log(`[Firebase] Admin SDK Initialized for: ${activeProject}`);
     }
 
     db = admin.firestore();
     auth = admin.auth();
 } catch (error) {
     initializationError = error;
-    console.error('[Firebase Init Error]', error); // Log full error object
+    console.error('[Firebase Critical Error]', {
+        message: error.message,
+        stack: error.stack
+    });
 }
 
 /**
@@ -132,5 +142,6 @@ module.exports = {
     auth,
     getCollegeCollection,
     initializationError,
+    parsePrivateKey,
     messaging: admin.apps.length ? admin.messaging() : null
 };

@@ -1,38 +1,33 @@
-const { db, getCollegeCollection } = require('./config/firebase');
+const { parsePrivateKey } = require('./config/firebase');
+require('dotenv').config();
 
-async function diagnostic() {
-    console.log('--- GLOBAL ROOT USERS ---');
-    const rootUsers = await db.collection('users').get();
-    rootUsers.forEach(doc => {
-        const d = doc.data();
-        console.log(`- ID: ${doc.id} | Email: ${d.email} [${d.role}] (College: ${d.collegeId})`);
-    });
+function test() {
+    console.log('--- Firebase Env Diagnostic ---');
+    console.log('PROJECT_ID:', process.env.FIREBASE_PROJECT_ID || 'MISSING');
+    console.log('CLIENT_EMAIL:', process.env.FIREBASE_CLIENT_EMAIL || 'MISSING');
 
-    console.log('\n--- GLOBAL ROOT STUDENTS ---');
-    const rootStudents = await db.collection('students').get();
-    rootStudents.forEach(doc => {
-        const d = doc.data();
-        console.log(`- ID: ${doc.id} | Email: ${d.email} (College: ${d.collegeId})`);
-    });
+    const rawKey = process.env.FIREBASE_PRIVATE_KEY;
+    console.log('PRIVATE_KEY exists:', !!rawKey);
 
-    console.log('\n--- HIERARCHICAL USERS/STUDENTS BY COLLEGE ---');
-    const colleges = await db.collection('colleges').get();
-    for (const college of colleges.docs) {
-        const cid = college.id;
-        const hUsers = await getCollegeCollection(cid, 'users').get();
-        const hStudents = await getCollegeCollection(cid, 'students').get();
-        console.log(`College: ${cid}`);
-        console.log('  Users:');
-        hUsers.forEach(doc => {
-            const d = doc.data();
-            console.log(`    - ID: ${doc.id} | Email: ${d.email} [${d.role}]`);
-        });
-        console.log('  Students:');
-        hStudents.forEach(doc => {
-            const d = doc.data();
-            console.log(`    - ID: ${doc.id} | Email: ${d.email}`);
-        });
+    if (rawKey) {
+        console.log('PRIVATE_KEY length:', rawKey.length);
+        console.log('PRIVATE_KEY starts with BEGIN tag:', rawKey.trim().startsWith('-----BEGIN PRIVATE KEY-----'));
+
+        const parsed = parsePrivateKey(rawKey);
+        if (parsed) {
+            console.log('✅ PRIVATE_KEY parsed successfully');
+            console.log('Parsed key length:', parsed.length);
+            console.log('Contains real newlines:', parsed.includes('\n'));
+        } else {
+            console.error('❌ PRIVATE_KEY parsing FAILED');
+            // Check for common issues
+            if (rawKey.includes('\\n')) {
+                console.log('Note: Contains literal \\n (expected for .env)');
+            } else if (rawKey.includes('\n')) {
+                console.log('Note: Contains real newlines');
+            }
+        }
     }
 }
 
-diagnostic().catch(console.error);
+test();
