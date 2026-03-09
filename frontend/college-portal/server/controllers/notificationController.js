@@ -503,20 +503,44 @@ const sendStopEventNotification = async (tripId, busId, collegeId, stopId, stopN
  */
 const sendStudentAttendanceNotification = async ({ studentId, busId, direction, isChecked, busNumber, tripId, collegeId }) => {
     try {
-        const studentDoc = await getCollegeCollection(collegeId, 'students').doc(studentId).get();
-        if (!studentDoc.exists) return;
+        if (!studentId || !collegeId) {
+            console.error('[AttendanceNotify] ERROR: Missing studentId or collegeId');
+            return;
+        }
 
-        const student = studentDoc.data();
-        if (!student.fcmToken) return;
+        // 1. Try Scoped Collection first
+        let studentDoc = await getCollegeCollection(collegeId, 'students').doc(studentId).get();
+        let student = studentDoc.exists ? studentDoc.data() : null;
+
+        // 2. Fallback to Root Students collection
+        if (!student) {
+            console.log(`[AttendanceNotify] Student ${studentId} not found in college ${collegeId}. Trying root fallback...`);
+            studentDoc = await db.collection('students').doc(studentId).get();
+            if (studentDoc.exists) {
+                student = studentDoc.data();
+                console.log(`[AttendanceNotify] Student ${studentId} found in ROOT collection.`);
+            }
+        }
+
+        if (!student || !student.fcmToken) {
+            console.log(`[AttendanceNotify] Skip: Student ${studentId} not found or has no FCM token.`);
+            return;
+        }
 
         const title = direction === 'pickup' ? "Safe Boarding ✅" : "Drop-off Complete ✅";
         const body = direction === 'pickup'
-            ? `${student.name || 'Your child'} has boarded Bus ${busNumber} safely.`
-            : `${student.name || 'Your child'} has been dropped off from Bus ${busNumber} safely.`;
+            ? `${student.name || 'Your child'} has boarded Bus ${busNumber || busId} safely.`
+            : `${student.name || 'Your child'} has been dropped off from Bus ${busNumber || busId} safely.`;
 
         const payload = {
             notification: { title, body },
-            data: { type: 'ATTENDANCE', tripId: tripId || '', studentId, action: 'FLUTTER_NOTIFICATION_CLICK' },
+            data: {
+                type: 'ATTENDANCE',
+                tripId: tripId || '',
+                studentId,
+                direction: direction || '',
+                action: 'FLUTTER_NOTIFICATION_CLICK'
+            },
             android: { priority: 'high', notification: { channelId: 'bus_events', sound: 'default' } },
             apns: { payload: { aps: { sound: 'default', badge: 1 } } }
         };
@@ -526,10 +550,10 @@ const sendStudentAttendanceNotification = async ({ studentId, busId, direction, 
             ...payload
         });
 
-        console.log(`[AttendanceNotify] Sent to ${student.name}`);
+        console.log(`[AttendanceNotify] Sent to ${student.name} (${direction})`);
         return result;
     } catch (error) {
-        console.error('[AttendanceNotify] Error:', error.message);
+        console.error('[AttendanceNotify] Execution Error:', error.message);
     }
 };
 

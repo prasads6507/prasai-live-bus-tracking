@@ -737,7 +737,8 @@ async function notifyStudentAttendance(req, res) {
             direction,
             isChecked,
             busNumber,
-            tripId
+            tripId,
+            collegeId: req.collegeId
         });
 
         res.status(200).json({ success: true, message: 'Notification sent' });
@@ -833,7 +834,8 @@ const markPickup = async (req, res) => {
                 direction: 'pickup',
                 isChecked: true,
                 busNumber: tripData.busNumber,
-                tripId
+                tripId,
+                collegeId: req.collegeId
             }).catch(err => console.error('[markPickupNotify] error:', err));
         }
 
@@ -907,7 +909,8 @@ const markDropoff = async (req, res) => {
                 direction: 'dropoff',
                 isChecked: true,
                 busNumber: tripData.busNumber,
-                tripId
+                tripId,
+                collegeId: req.collegeId
             }).catch(err => console.error('[markDropoffNotify] error:', err));
         }
 
