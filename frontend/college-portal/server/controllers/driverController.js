@@ -235,10 +235,22 @@ async function endTrip(req, res) {
         // 1. Update Trip Status (Canonical: COMPLETED)
         const endTime = new Date();
         const startTimeStr = tripData.startTime;
-        let durationMinutes = 0;
-        if (startTimeStr) {
+        let durationMinutes = tripData.durationMinutes || 0;
+
+        // Prefer duration from historyUpload if it already ran (more accurate from device)
+        if (tripData.durationSeconds) {
+            durationMinutes = Math.round(tripData.durationSeconds / 60);
+        } else if (startTimeStr) {
             const startTime = new Date(startTimeStr);
-            durationMinutes = Math.round((endTime - startTime) / 60000);
+            // Ensure we use absolute difference to avoid negative/wonky values from clock drift
+            durationMinutes = Math.round(Math.abs(endTime - startTime) / 60000);
+
+            // EMERGENCY GUARD: If duration is suspiciously close to 4 hours (EDT offset bug)
+            // and the trip was very short (e.g. 0-10 mins expected), cap it.
+            if (durationMinutes >= 235 && durationMinutes <= 245) {
+                console.log(`[DurationGuard] Detected suspicious 4h offset. Prev: ${durationMinutes}. Correcting to ${durationMinutes - 240}`);
+                durationMinutes = durationMinutes - 240;
+            }
         }
 
         batch.update(tripRef, {
@@ -1197,8 +1209,10 @@ async function verifyHandoverOTP(req, res) {
             direction: 'dropoff',
             isChecked: true,
             busNumber: handoffData.busNumber || 'Unknown',
-            tripId: tripId
-        }).catch(err => console.error('[verifyHandoverOTP] Notification error:', err.message));
+            tripId: tripId,
+            collegeId: req.collegeId,
+            status: 'dropped_off_neighbor' // Added for better description
+        }).catch(err => console.error('[HandoverNotify] error:', err));
 
         res.status(200).json({ success: true, message: 'Student handed over successfully' });
     } catch (error) {

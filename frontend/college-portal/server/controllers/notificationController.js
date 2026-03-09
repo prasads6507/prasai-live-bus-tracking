@@ -527,10 +527,21 @@ const sendStudentAttendanceNotification = async ({ studentId, busId, direction, 
             return;
         }
 
-        const title = direction === 'pickup' ? "Safe Boarding ✅" : "Drop-off Complete ✅";
-        const body = direction === 'pickup'
-            ? `${student.name || 'Your child'} has boarded Bus ${busNumber || busId} safely.`
-            : `${student.name || 'Your child'} has been dropped off from Bus ${busNumber || busId} safely.`;
+        const isHandover = studentStatus === 'dropped_off_neighbor';
+
+        let title = direction === 'pickup' ? "Safe Boarding ✅" : "Drop-off Complete ✅";
+        if (isHandover) title = "Handover Complete 🤝";
+
+        let body = "";
+        if (direction === 'pickup') {
+            body = `${student.name || 'Your child'} has boarded Bus ${busNumber || busId} safely.`;
+        } else {
+            if (isHandover) {
+                body = `${student.name || 'Your child'} has been handed over to a neighbor safely from Bus ${busNumber || busId}.`;
+            } else {
+                body = `${student.name || 'Your child'} has been dropped off from Bus ${busNumber || busId} safely.`;
+            }
+        }
 
         const payload = {
             notification: { title, body },
