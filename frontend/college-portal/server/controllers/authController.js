@@ -150,7 +150,8 @@ const loginUser = async (req, res) => {
         const finalCollegeId = userData.collegeId || collegeId;
         const firebaseCustomToken = await auth.createCustomToken(userData.userId || userData.studentId, {
             role: userData.role || 'STUDENT',
-            collegeId: finalCollegeId
+            collegeId: finalCollegeId,
+            email: normalizedEmail
         });
 
         const response = {
@@ -558,7 +559,8 @@ const studentLogin = async (req, res) => {
             // Return token + flag for first login
             const firebaseCustomToken = await auth.createCustomToken(student.studentId, {
                 role: 'STUDENT',
-                collegeId: student.collegeId
+                collegeId: student.collegeId,
+                email: normalizedEmail
             });
             return res.json({
                 _id: student.studentId,
@@ -577,7 +579,8 @@ const studentLogin = async (req, res) => {
             }
             const firebaseCustomToken = await auth.createCustomToken(student.studentId, {
                 role: 'STUDENT',
-                collegeId: student.collegeId
+                collegeId: student.collegeId,
+                email: normalizedEmail
             });
             return res.json({
                 _id: student.studentId,

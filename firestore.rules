@@ -33,13 +33,13 @@ service cloud.firestore {
       // ─── Scoped Sub-collections ────────────────────────────────────
       
       match /users/{uid} {
-        allow read: if isCollegeMember(collegeId) || request.auth.uid == uid;
+        allow read: if isCollegeMember(collegeId) || request.auth.uid == uid || (isAuthenticated() && request.auth.token.email == resource.data.email);
         allow update: if isAuthenticated() && (isOwner() || request.auth.uid == uid);
         allow create, delete: if isOwner();
       }
 
       match /students/{studentId} {
-        allow read: if isCollegeMember(collegeId) || request.auth.uid == studentId;
+        allow read: if isCollegeMember(collegeId) || request.auth.uid == studentId || (isAuthenticated() && request.auth.token.email == resource.data.email);
         allow update: if isAuthenticated() && (isOwner() || request.auth.uid == studentId || (getCollegeId() == collegeId && request.auth.token.role == 'COLLEGE_ADMIN'));
         allow create: if isAuthenticated() && (isOwner() || (getCollegeId() == collegeId && request.auth.token.role == 'COLLEGE_ADMIN'));
         allow delete: if isOwner();
