@@ -501,7 +501,7 @@ const sendStopEventNotification = async (tripId, busId, collegeId, stopId, stopN
 /**
  * NEW: Notify specific student when driver marks attendance tick
  */
-const sendStudentAttendanceNotification = async ({ studentId, busId, direction, isChecked, busNumber, tripId, collegeId }) => {
+const sendStudentAttendanceNotification = async ({ studentId, busId, direction, isChecked, busNumber, tripId, collegeId, status }) => {
     try {
         if (!studentId || !collegeId) {
             console.error('[AttendanceNotify] ERROR: Missing studentId or collegeId');
@@ -527,7 +527,7 @@ const sendStudentAttendanceNotification = async ({ studentId, busId, direction, 
             return;
         }
 
-        const isHandover = studentStatus === 'dropped_off_neighbor';
+        const isHandover = status === 'dropped_off_neighbor';
 
         let title = direction === 'pickup' ? "Safe Boarding ✅" : "Drop-off Complete ✅";
         if (isHandover) title = "Handover Complete 🤝";
